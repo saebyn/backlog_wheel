@@ -13,8 +13,8 @@ The MVP is a local Phoenix LiveView app that can manage games, choose eligible g
 - Slice 2: Games CRUD - complete
 - Slice 3: Backlog workflow and curation - complete
 - Slice 4: Wheel candidates and spin history domain - complete
-- Slice 5: Stream-friendly animated wheel - in progress
-- Slice 6: Polish, history, backup, and tests
+- Slice 5: Stream-friendly animated wheel - complete
+- Slice 6: Polish, history, and tests - in progress
 
 ## Development Environment
 
@@ -56,7 +56,7 @@ Or run it inside IEx:
 iex -S mix phx.server
 ```
 
-Visit http://localhost:4000 in your browser. The games CRUD page is available at http://localhost:4000/games, and the basic wheel page is available at http://localhost:4000/wheel.
+Visit http://localhost:4000 in your browser. The games CRUD page is available at http://localhost:4000/games, the wheel page is available at http://localhost:4000/wheel, and spin history is available at http://localhost:4000/history.
 
 ## Steam Import
 
@@ -93,8 +93,7 @@ mix precommit
 
 ## Near-Term Roadmap
 
-- Slice 5: Build the stream-friendly animated wheel.
-- Slice 6: Add polish, history views, backup workflow, and broader tests.
+- Slice 6: Add focused polish, history views, and broader tests.
 
 ## Out Of Scope For Slice 2
 

@@ -80,6 +80,18 @@ defmodule BacklogWheel.Backlog do
   end
 
   @doc """
+  Gets a single spin.
+  """
+  def get_spin!(id), do: Repo.get!(Spin, id)
+
+  @doc """
+  Deletes a spin history entry.
+  """
+  def delete_spin(%Spin{} = spin) do
+    Repo.delete(spin)
+  end
+
+  @doc """
   Selects one wheel candidate uniformly at random and records the spin.
   """
   def spin_wheel do

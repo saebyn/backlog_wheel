@@ -6,8 +6,6 @@ defmodule BacklogWheel.Steam.Client do
   Valve docs do not consistently list it. Treat it as optional metadata.
   """
 
-  require Logger
-
   @owned_games_url "https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/"
 
   def configured? do
@@ -18,7 +16,6 @@ defmodule BacklogWheel.Steam.Client do
     with {:ok, api_key} <- fetch_config(:api_key, steam_api_key()),
          {:ok, steam_id} <- fetch_config(:steam_id64, steam_id64()),
          {:ok, %{status: 200, body: body}} <- request_owned_games(api_key, steam_id) do
-      Logger.debug(fn -> "Steam GetOwnedGames response: #{inspect(body, pretty: true)}" end)
       {:ok, normalize_owned_games(body)}
     else
       {:ok, %{status: status}} -> {:error, {:steam_http_error, status}}

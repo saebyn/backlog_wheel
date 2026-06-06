@@ -128,9 +128,9 @@ defmodule BacklogWheelWeb.WheelLive do
               {if @spinning?, do: "Spinning...", else: "Spin Wheel"}
             </.button>
 
-            <section class="min-h-0 flex-1 space-y-3 overflow-hidden">
+            <section class="min-h-0 flex-1 space-y-3">
               <h2 class="text-xl font-bold">Recent Spins</h2>
-              <div id="spin-history" class="max-h-[38vh] space-y-2 overflow-auto pr-1">
+              <div id="spin-history" class="space-y-2">
                 <p :if={@recent_spins == []} class="rounded-xl bg-base-200 p-4 text-base-content/70">
                   No spins yet.
                 </p>

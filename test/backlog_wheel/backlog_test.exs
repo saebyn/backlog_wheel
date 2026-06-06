@@ -120,6 +120,14 @@ defmodule BacklogWheel.BacklogTest do
       assert recent_spin.game.id == game.id
     end
 
+    test "delete_spin/1 deletes a spin history entry" do
+      game = game_fixture(%{include_in_wheel: true})
+      {:ok, spin} = Backlog.create_spin(%{game_id: game.id, spun_at: ~U[2026-06-06 12:00:00Z]})
+
+      assert {:ok, _spin} = Backlog.delete_spin(spin)
+      assert Backlog.list_recent_spins() == []
+    end
+
     test "spin_wheel/0 returns an error when there are no candidates" do
       game_fixture(%{include_in_wheel: false})
 

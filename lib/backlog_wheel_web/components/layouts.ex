@@ -40,8 +40,10 @@ defmodule BacklogWheelWeb.Layouts do
     <header class="navbar px-4 sm:px-6 lg:px-8">
       <div class="flex-1">
         <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
+          <span class="flex size-9 items-center justify-center rounded-xl bg-primary text-sm font-black text-primary-content shadow-sm">
+            BW
+          </span>
+          <span class="text-sm font-semibold">Backlog Wheel</span>
         </a>
       </div>
       <div class="flex-none">
@@ -51,6 +53,9 @@ defmodule BacklogWheelWeb.Layouts do
           </li>
           <li>
             <.link navigate={~p"/games"} class="btn btn-ghost">Games</.link>
+          </li>
+          <li>
+            <.link navigate={~p"/history"} class="btn btn-ghost">History</.link>
           </li>
           <li>
             <.theme_toggle />
