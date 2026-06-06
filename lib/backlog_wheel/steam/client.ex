@@ -38,6 +38,7 @@ defmodule BacklogWheel.Steam.Client do
     %{
       appid: appid,
       name: name,
+      image_url: steam_icon_url(appid, game["img_icon_url"]),
       last_played_at: normalize_last_played_at(game["rtime_last_played"])
     }
   end
@@ -60,6 +61,12 @@ defmodule BacklogWheel.Steam.Client do
   end
 
   defp normalize_last_played_at(_unix_timestamp), do: nil
+
+  defp steam_icon_url(_appid, icon_hash) when icon_hash in [nil, ""], do: nil
+
+  defp steam_icon_url(appid, icon_hash) do
+    "https://media.steampowered.com/steamcommunity/public/images/apps/#{appid}/#{icon_hash}.jpg"
+  end
 
   defp request_owned_games(api_key, steam_id) do
     Req.get(@owned_games_url,

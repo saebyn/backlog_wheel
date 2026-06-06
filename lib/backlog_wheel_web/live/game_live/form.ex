@@ -17,6 +17,19 @@ defmodule BacklogWheelWeb.GameLive.Form do
         <.input field={@form[:title]} type="text" label="Title" />
         <.input field={@form[:platform]} type="text" label="Platform" />
         <.input field={@form[:external_id]} type="text" label="External ID" />
+        <.input field={@form[:image_url]} type="url" label="Image URL" />
+        <div
+          :if={@form[:image_url].value not in [nil, ""]}
+          id="game-image-preview"
+          class="mb-4 flex items-center gap-3 rounded-2xl border border-base-300 bg-base-100 p-3"
+        >
+          <img
+            src={@form[:image_url].value}
+            alt="Game image preview"
+            class="size-16 rounded-xl object-cover"
+          />
+          <p class="text-sm text-base-content/70">Image preview</p>
+        </div>
         <.input field={@form[:include_in_wheel]} type="checkbox" label="Include in wheel" />
         <.input field={@form[:played_on_stream]} type="checkbox" label="Played on stream" />
         <.input field={@form[:last_played_at]} type="datetime-local" label="Last played at" />

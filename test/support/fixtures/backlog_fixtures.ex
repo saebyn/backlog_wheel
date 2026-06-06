@@ -12,6 +12,7 @@ defmodule BacklogWheel.BacklogFixtures do
       attrs
       |> Enum.into(%{
         external_id: "some external_id",
+        image_url: "https://example.com/some-image.jpg",
         include_in_wheel: true,
         last_played_at: ~U[2026-06-05 17:55:00Z],
         platform: "some platform",

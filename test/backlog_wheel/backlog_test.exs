@@ -209,12 +209,18 @@ defmodule BacklogWheel.BacklogTest do
     test "import_steam_games/1 imports new Steam games included on the wheel" do
       assert {:ok, %{imported: 2, updated: 0, skipped: 0, errors: []}} =
                Backlog.import_steam_games([
-                 %{appid: 10, name: "Counter-Strike", last_played_at: ~U[2024-06-01 00:00:00Z]},
+                 %{
+                   appid: 10,
+                   name: "Counter-Strike",
+                   image_url: "https://example.com/counter-strike.jpg",
+                   last_played_at: ~U[2024-06-01 00:00:00Z]
+                 },
                  %{appid: 70, name: "Half-Life"}
                ])
 
       assert %Game{} = counter_strike = Backlog.get_game_by_platform_external_id("steam", "10")
       assert counter_strike.title == "Counter-Strike"
+      assert counter_strike.image_url == "https://example.com/counter-strike.jpg"
       assert counter_strike.include_in_wheel == true
       assert counter_strike.last_played_at == ~U[2024-06-01 00:00:00Z]
 
@@ -259,6 +265,25 @@ defmodule BacklogWheel.BacklogTest do
       assert %Game{} = game = Backlog.get_game!(existing.id)
       assert game.title == "My Edited Title"
       assert game.last_played_at == ~U[2024-06-01 00:00:00Z]
+    end
+
+    test "import_steam_games/1 updates image URL for existing Steam games" do
+      existing =
+        game_fixture(%{
+          title: "My Edited Title",
+          platform: "steam",
+          external_id: "10",
+          image_url: nil
+        })
+
+      assert {:ok, %{imported: 0, updated: 1, skipped: 0, errors: []}} =
+               Backlog.import_steam_games([
+                 %{appid: 10, name: "Counter-Strike", image_url: "https://example.com/icon.jpg"}
+               ])
+
+      assert %Game{} = game = Backlog.get_game!(existing.id)
+      assert game.title == "My Edited Title"
+      assert game.image_url == "https://example.com/icon.jpg"
     end
 
     test "import_steam_games/1 skips existing Steam games when Steam has no last played time" do

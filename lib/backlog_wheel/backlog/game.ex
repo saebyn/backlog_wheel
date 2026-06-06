@@ -8,6 +8,7 @@ defmodule BacklogWheel.Backlog.Game do
     field :title, :string
     field :platform, :string, default: "manual"
     field :external_id, :string
+    field :image_url, :string
     field :include_in_wheel, :boolean, default: false
     field :played_on_stream, :boolean, default: false
     field :last_played_at, :utc_datetime
@@ -24,6 +25,7 @@ defmodule BacklogWheel.Backlog.Game do
       :title,
       :platform,
       :external_id,
+      :image_url,
       :include_in_wheel,
       :played_on_stream,
       :last_played_at

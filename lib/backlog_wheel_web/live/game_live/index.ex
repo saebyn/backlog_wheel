@@ -99,7 +99,20 @@ defmodule BacklogWheelWeb.GameLive.Index do
         rows={@streams.games}
         row_click={fn {_id, game} -> JS.navigate(~p"/games/#{game}") end}
       >
-        <:col :let={{_id, game}} label="Title">{game.title}</:col>
+        <:col :let={{_id, game}} label="Game">
+          <div class="flex items-center gap-3">
+            <div class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-base-300 bg-base-200">
+              <img
+                :if={game.image_url}
+                src={game.image_url}
+                alt={game.title}
+                class="h-full w-full object-cover"
+              />
+              <.icon :if={!game.image_url} name="hero-photo" class="size-6 text-base-content/40" />
+            </div>
+            <span class="font-semibold">{game.title}</span>
+          </div>
+        </:col>
         <:col :let={{_id, game}} label="Platform">{game.platform}</:col>
         <:col :let={{_id, game}} label="External">{game.external_id}</:col>
         <:col :let={{_id, game}} label="Wheel candidate">

@@ -174,15 +174,19 @@ defmodule BacklogWheel.Backlog do
 
     case get_game_by_platform_external_id("steam", external_id) do
       %Game{} = game ->
-        case Map.get(game_attrs, :last_played_at) do
-          nil ->
-            {:ok, :skipped}
+        update_attrs =
+          game_attrs
+          |> Map.take([:last_played_at, :image_url])
+          |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+          |> Map.new()
 
-          last_played_at ->
-            case update_game(game, %{last_played_at: last_played_at}) do
-              {:ok, _game} -> {:ok, :updated}
-              {:error, changeset} -> {:error, %{appid: external_id, errors: changeset.errors}}
-            end
+        if update_attrs == %{} do
+          {:ok, :skipped}
+        else
+          case update_game(game, update_attrs) do
+            {:ok, _game} -> {:ok, :updated}
+            {:error, changeset} -> {:error, %{appid: external_id, errors: changeset.errors}}
+          end
         end
 
       nil ->
@@ -190,6 +194,7 @@ defmodule BacklogWheel.Backlog do
                title: name,
                platform: "steam",
                external_id: external_id,
+               image_url: Map.get(game_attrs, :image_url),
                include_in_wheel: true,
                last_played_at: Map.get(game_attrs, :last_played_at)
              }) do

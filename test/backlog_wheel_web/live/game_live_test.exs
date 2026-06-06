@@ -8,6 +8,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
     title: "some title",
     platform: "some platform",
     external_id: "some other external_id",
+    image_url: "https://example.com/create-image.jpg",
     include_in_wheel: true,
     played_on_stream: true,
     last_played_at: "2026-06-05T17:55:00Z"
@@ -16,6 +17,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
     title: "some updated title",
     platform: "some updated platform",
     external_id: "some updated external_id",
+    image_url: "https://example.com/update-image.jpg",
     include_in_wheel: false,
     played_on_stream: false,
     last_played_at: "2026-06-06T17:55:00Z"
@@ -24,6 +26,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
     title: nil,
     platform: nil,
     external_id: nil,
+    image_url: nil,
     include_in_wheel: false,
     played_on_stream: false,
     last_played_at: nil
@@ -42,6 +45,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
 
       assert html =~ "Listing Games"
       assert html =~ game.title
+      assert html =~ game.image_url
       assert html =~ "Import Steam"
     end
 
@@ -69,6 +73,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
       html = render(index_live)
       assert html =~ "Game created successfully"
       assert html =~ "some title"
+      assert html =~ "https://example.com/create-image.jpg"
     end
 
     test "updates game in listing", %{conn: conn, game: game} do
@@ -95,6 +100,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
       html = render(index_live)
       assert html =~ "Game updated successfully"
       assert html =~ "some updated title"
+      assert html =~ "https://example.com/update-image.jpg"
     end
 
     test "deletes game in listing", %{conn: conn, game: game} do
@@ -172,6 +178,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
                |> follow_redirect(conn, ~p"/games/#{game}/edit?return_to=show")
 
       assert render(form_live) =~ "Edit Game"
+      assert render(form_live) =~ "Image preview"
 
       assert form_live
              |> form("#game-form", game: @invalid_attrs)
@@ -186,6 +193,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
       html = render(show_live)
       assert html =~ "Game updated successfully"
       assert html =~ "some updated title"
+      assert html =~ "https://example.com/update-image.jpg"
     end
   end
 

@@ -31,6 +31,8 @@ defmodule BacklogWheelWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
 
+  attr :wide, :boolean, default: false, doc: "use the full viewport width for the content"
+
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -60,8 +62,8 @@ defmodule BacklogWheelWeb.Layouts do
       </div>
     </header>
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-2xl space-y-4">
+    <main class={if(@wide, do: "px-4 py-6 sm:px-6 lg:px-8", else: "px-4 py-20 sm:px-6 lg:px-8")}>
+      <div class={if(@wide, do: "mx-auto w-full space-y-4", else: "mx-auto max-w-2xl space-y-4")}>
         {render_slot(@inner_block)}
       </div>
     </main>
