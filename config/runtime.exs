@@ -23,6 +23,10 @@ end
 config :backlog_wheel, BacklogWheelWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+config :backlog_wheel,
+  steam_api_key: System.get_env("STEAM_API_KEY"),
+  steam_id64: System.get_env("STEAM_ID64")
+
 if config_env() == :prod do
   database_path =
     System.get_env("DATABASE_PATH") ||

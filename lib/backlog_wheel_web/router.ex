@@ -18,6 +18,11 @@ defmodule BacklogWheelWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    live "/games", GameLive.Index, :index
+    live "/games/import/steam", GameLive.SteamImport, :index
+    live "/games/new", GameLive.Form, :new
+    live "/games/:id", GameLive.Show, :show
+    live "/games/:id/edit", GameLive.Form, :edit
   end
 
   # Other scopes may use custom stacks.
