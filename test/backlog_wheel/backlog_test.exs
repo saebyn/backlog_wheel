@@ -20,6 +20,68 @@ defmodule BacklogWheel.BacklogTest do
       assert Backlog.get_game!(game.id) == game
     end
 
+    test "list_games/1 searches, filters, and sorts games" do
+      game_fixture(%{
+        title: "Apex Legends",
+        platform: "steam",
+        external_id: "1172470",
+        include_in_wheel: true,
+        played_on_stream: false,
+        last_played_at: ~U[2024-06-01 00:00:00Z]
+      })
+
+      game_fixture(%{
+        title: "Baldur's Gate 3",
+        platform: "steam",
+        external_id: "1086940",
+        include_in_wheel: false,
+        played_on_stream: true,
+        last_played_at: ~U[2025-06-01 00:00:00Z]
+      })
+
+      assert [%Game{title: "Apex Legends"}] =
+               Backlog.list_games(%{"q" => "apex", "filter" => "wheel", "sort" => "title"})
+
+      assert [%Game{title: "Baldur's Gate 3"}, %Game{title: "Apex Legends"}] =
+               Backlog.list_games(%{"filter" => "steam", "sort" => "last_played"})
+    end
+
+    test "game_counts/0 returns curation summary counts" do
+      game_fixture(%{external_id: "one", include_in_wheel: true, played_on_stream: false})
+      game_fixture(%{external_id: "two", include_in_wheel: false, played_on_stream: true})
+
+      assert Backlog.game_counts() == %{
+               total: 2,
+               wheel: 1,
+               excluded: 1,
+               played: 1,
+               unplayed: 1
+             }
+    end
+
+    test "update_visible_games_include_in_wheel/2 updates matching games" do
+      steam_game =
+        game_fixture(%{
+          title: "Steam Game",
+          platform: "steam",
+          external_id: "1",
+          include_in_wheel: false
+        })
+
+      manual_game =
+        game_fixture(%{
+          title: "Manual Game",
+          platform: "manual",
+          external_id: "2",
+          include_in_wheel: false
+        })
+
+      assert {1, _} = Backlog.update_visible_games_include_in_wheel(%{"filter" => "steam"}, true)
+
+      assert Backlog.get_game!(steam_game.id).include_in_wheel == true
+      assert Backlog.get_game!(manual_game.id).include_in_wheel == false
+    end
+
     test "create_game/1 with valid data creates a game" do
       valid_attrs = %{
         title: "some title",
@@ -88,6 +150,16 @@ defmodule BacklogWheel.BacklogTest do
 
       assert {:ok, %Game{} = game} = Backlog.toggle_game_include_in_wheel(game)
       assert game.include_in_wheel == false
+    end
+
+    test "toggle_game_played_on_stream/1 toggles stream play status" do
+      game = game_fixture(%{played_on_stream: false})
+
+      assert {:ok, %Game{} = game} = Backlog.toggle_game_played_on_stream(game)
+      assert game.played_on_stream == true
+
+      assert {:ok, %Game{} = game} = Backlog.toggle_game_played_on_stream(game)
+      assert game.played_on_stream == false
     end
 
     test "import_steam_games/1 imports new Steam games included on the wheel" do

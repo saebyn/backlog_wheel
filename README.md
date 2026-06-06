@@ -11,7 +11,7 @@ The MVP is a local Phoenix LiveView app that can manage games, choose eligible g
 - Slice 0: Project directory and Nix direnv development environment - complete
 - Slice 1: Phoenix app generated and running - complete
 - Slice 2: Games CRUD - complete
-- Slice 3: Backlog workflow and bulk import
+- Slice 3: Backlog workflow and curation
 - Slice 4: Wheel candidates and spin history domain
 - Slice 5: Stream-friendly animated wheel
 - Slice 6: Polish, history, backup, and tests
@@ -93,7 +93,7 @@ mix precommit
 
 ## Near-Term Roadmap
 
-- Slice 3: Add backlog workflow improvements and bulk import.
+- Slice 3: Add backlog workflow improvements and curation tools.
 - Slice 4: Add wheel candidate queries and spin history domain objects.
 - Slice 5: Build the stream-friendly animated wheel.
 - Slice 6: Add polish, history views, backup workflow, and broader tests.

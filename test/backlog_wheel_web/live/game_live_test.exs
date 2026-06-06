@@ -111,6 +111,45 @@ defmodule BacklogWheelWeb.GameLiveTest do
       assert index_live |> element("#games-#{game.id} button", "Included") |> render_click()
       assert has_element?(index_live, "#games-#{game.id} button", "Excluded")
     end
+
+    test "toggles played on stream in listing", %{conn: conn, game: game} do
+      {:ok, index_live, _html} = live(conn, ~p"/games")
+
+      assert has_element?(index_live, "#games-#{game.id} button", "Played")
+      assert index_live |> element("#games-#{game.id} button", "Played") |> render_click()
+      assert has_element?(index_live, "#games-#{game.id} button", "Unplayed")
+    end
+
+    test "searches and filters games", %{conn: conn, game: game} do
+      excluded_game =
+        game_fixture(%{
+          title: "Portal 2",
+          external_id: "portal-2",
+          include_in_wheel: false
+        })
+
+      {:ok, index_live, _html} = live(conn, ~p"/games")
+
+      assert index_live
+             |> form("#game-curation-form", filters: %{q: "Portal", sort: "title"})
+             |> render_change()
+
+      assert has_element?(index_live, "#games-#{excluded_game.id}")
+      refute has_element?(index_live, "#games-#{game.id}")
+
+      assert index_live |> element("#game-filter-pills button", "Excluded") |> render_click()
+      assert has_element?(index_live, "#games-#{excluded_game.id}")
+    end
+
+    test "bulk updates visible wheel inclusion", %{conn: conn, game: game} do
+      {:ok, index_live, _html} = live(conn, ~p"/games")
+
+      assert index_live |> element("#exclude-visible-games") |> render_click()
+      assert has_element?(index_live, "#games-#{game.id} button", "Excluded")
+
+      assert index_live |> element("#include-visible-games") |> render_click()
+      assert has_element?(index_live, "#games-#{game.id} button", "Included")
+    end
   end
 
   describe "Show" do

@@ -17,8 +17,34 @@ defmodule BacklogWheel.Backlog do
       [%Game{}, ...]
 
   """
-  def list_games do
-    Repo.all(Game)
+  def list_games(filters \\ %{}) do
+    filters
+    |> game_query()
+    |> order_games(filters)
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns summary counts for backlog curation.
+  """
+  def game_counts do
+    %{
+      total: Repo.aggregate(Game, :count, :id),
+      wheel: Game |> where([game], game.include_in_wheel) |> Repo.aggregate(:count, :id),
+      excluded: Game |> where([game], not game.include_in_wheel) |> Repo.aggregate(:count, :id),
+      played: Game |> where([game], game.played_on_stream) |> Repo.aggregate(:count, :id),
+      unplayed: Game |> where([game], not game.played_on_stream) |> Repo.aggregate(:count, :id)
+    }
+  end
+
+  @doc """
+  Updates wheel inclusion for games matching the given filters.
+  """
+  def update_visible_games_include_in_wheel(filters, include_in_wheel)
+      when is_boolean(include_in_wheel) do
+    filters
+    |> game_query()
+    |> Repo.update_all(set: [include_in_wheel: include_in_wheel])
   end
 
   @doc """
@@ -152,6 +178,13 @@ defmodule BacklogWheel.Backlog do
   end
 
   @doc """
+  Toggles whether a game has been played on stream.
+  """
+  def toggle_game_played_on_stream(%Game{} = game) do
+    update_game(game, %{played_on_stream: not game.played_on_stream})
+  end
+
+  @doc """
   Deletes a game.
 
   ## Examples
@@ -178,5 +211,52 @@ defmodule BacklogWheel.Backlog do
   """
   def change_game(%Game{} = game, attrs \\ %{}) do
     Game.changeset(game, attrs)
+  end
+
+  defp game_query(filters) do
+    Game
+    |> filter_by_search(Map.get(filters, "q", ""))
+    |> filter_by_kind(Map.get(filters, "filter", "all"))
+  end
+
+  defp filter_by_search(query, query_text) when is_binary(query_text) do
+    query_text = String.trim(query_text)
+
+    if query_text == "" do
+      query
+    else
+      pattern = "%#{String.downcase(query_text)}%"
+      where(query, [game], fragment("lower(?) LIKE ?", game.title, ^pattern))
+    end
+  end
+
+  defp filter_by_search(query, _query_text), do: query
+
+  defp filter_by_kind(query, "wheel"), do: where(query, [game], game.include_in_wheel)
+  defp filter_by_kind(query, "excluded"), do: where(query, [game], not game.include_in_wheel)
+  defp filter_by_kind(query, "played"), do: where(query, [game], game.played_on_stream)
+  defp filter_by_kind(query, "unplayed"), do: where(query, [game], not game.played_on_stream)
+  defp filter_by_kind(query, "steam"), do: where(query, [game], game.platform == "steam")
+  defp filter_by_kind(query, "manual"), do: where(query, [game], game.platform == "manual")
+  defp filter_by_kind(query, _filter), do: query
+
+  defp order_games(query, %{"sort" => "last_played"}) do
+    order_by(query, [game], desc: game.last_played_at, asc: game.title)
+  end
+
+  defp order_games(query, %{"sort" => "recently_added"}) do
+    order_by(query, [game], desc: game.inserted_at, asc: game.title)
+  end
+
+  defp order_games(query, %{"sort" => "platform"}) do
+    order_by(query, [game], asc: game.platform, asc: game.title)
+  end
+
+  defp order_games(query, %{"sort" => "wheel"}) do
+    order_by(query, [game], desc: game.include_in_wheel, asc: game.title)
+  end
+
+  defp order_games(query, _filters) do
+    order_by(query, [game], asc: game.title)
   end
 end
