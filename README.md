@@ -20,6 +20,12 @@ The MVP is a local Phoenix LiveView app that can manage games, choose eligible g
 
 This project is developed on NixOS with `nix-direnv`.
 
+Copy example.envrc to .envrc and edit it as needed:
+
+```sh
+cp example.envrc .envrc
+```
+
 To enter the development environment:
 
 ```sh
@@ -56,7 +62,7 @@ Or run it inside IEx:
 iex -S mix phx.server
 ```
 
-Visit http://localhost:4000 in your browser. The games CRUD page is available at http://localhost:4000/games, the wheel page is available at http://localhost:4000/wheel, and spin history is available at http://localhost:4000/history.
+Visit <http://localhost:4000> in your browser. The games CRUD page is available at <http://localhost:4000/games>, the wheel page is available at <http://localhost:4000/wheel>, and spin history is available at <http://localhost:4000/history>.
 
 ## Steam Import
 
@@ -67,7 +73,7 @@ export STEAM_API_KEY="your-steam-web-api-key"
 export STEAM_ID64="your-steam-id64"
 ```
 
-Then visit http://localhost:4000/games/import/steam and click `Import Steam Library`.
+Then visit <http://localhost:4000/games/import/steam> and click `Import Steam Library`.
 
 Import behavior:
 
