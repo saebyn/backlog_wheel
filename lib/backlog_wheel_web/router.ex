@@ -18,6 +18,7 @@ defmodule BacklogWheelWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    live "/wheel", WheelLive, :show
     live "/games", GameLive.Index, :index
     live "/games/import/steam", GameLive.SteamImport, :index
     live "/games/new", GameLive.Form, :new

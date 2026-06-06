@@ -6,7 +6,7 @@ defmodule BacklogWheel.Backlog do
   import Ecto.Query, warn: false
   alias BacklogWheel.Repo
 
-  alias BacklogWheel.Backlog.Game
+  alias BacklogWheel.Backlog.{Game, Spin}
 
   @doc """
   Returns the list of games.
@@ -45,6 +45,56 @@ defmodule BacklogWheel.Backlog do
     filters
     |> game_query()
     |> Repo.update_all(set: [include_in_wheel: include_in_wheel])
+  end
+
+  @doc """
+  Returns games currently eligible for the wheel.
+
+  Played-on-stream games remain eligible when included on the wheel.
+  """
+  def list_wheel_candidates do
+    Game
+    |> where([game], game.include_in_wheel)
+    |> order_by([game], asc: game.title)
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns recent recorded spins.
+  """
+  def list_recent_spins(limit \\ 10) do
+    Spin
+    |> preload(:game)
+    |> order_by([spin], desc: spin.spun_at)
+    |> limit(^limit)
+    |> Repo.all()
+  end
+
+  @doc """
+  Records a spin for a game.
+  """
+  def create_spin(attrs) do
+    %Spin{}
+    |> Spin.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Selects one wheel candidate uniformly at random and records the spin.
+  """
+  def spin_wheel do
+    case list_wheel_candidates() do
+      [] ->
+        {:error, :no_candidates}
+
+      candidates ->
+        game = Enum.random(candidates)
+
+        case create_spin(%{game_id: game.id, spun_at: DateTime.utc_now(), source: "wheel"}) do
+          {:ok, spin} -> {:ok, %{game: game, spin: Repo.preload(spin, :game)}}
+          {:error, changeset} -> {:error, changeset}
+        end
+    end
   end
 
   @doc """

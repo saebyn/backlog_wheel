@@ -82,6 +82,50 @@ defmodule BacklogWheel.BacklogTest do
       assert Backlog.get_game!(manual_game.id).include_in_wheel == false
     end
 
+    test "list_wheel_candidates/0 returns included games including played games" do
+      played_game =
+        game_fixture(%{
+          title: "Played Candidate",
+          external_id: "played-candidate",
+          include_in_wheel: true,
+          played_on_stream: true
+        })
+
+      unplayed_game =
+        game_fixture(%{
+          title: "Unplayed Candidate",
+          external_id: "unplayed-candidate",
+          include_in_wheel: true,
+          played_on_stream: false
+        })
+
+      game_fixture(%{
+        title: "Excluded Game",
+        external_id: "excluded-game",
+        include_in_wheel: false
+      })
+
+      assert Backlog.list_wheel_candidates() == [played_game, unplayed_game]
+    end
+
+    test "spin_wheel/0 records a spin for a candidate" do
+      game = game_fixture(%{include_in_wheel: true, played_on_stream: true})
+
+      assert {:ok, %{game: selected_game, spin: spin}} = Backlog.spin_wheel()
+      assert selected_game.id == game.id
+      assert spin.game_id == game.id
+      assert spin.source == "wheel"
+      assert %DateTime{} = spin.spun_at
+      assert [recent_spin] = Backlog.list_recent_spins()
+      assert recent_spin.game.id == game.id
+    end
+
+    test "spin_wheel/0 returns an error when there are no candidates" do
+      game_fixture(%{include_in_wheel: false})
+
+      assert {:error, :no_candidates} = Backlog.spin_wheel()
+    end
+
     test "create_game/1 with valid data creates a game" do
       valid_attrs = %{
         title: "some title",

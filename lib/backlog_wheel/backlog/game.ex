@@ -2,6 +2,8 @@ defmodule BacklogWheel.Backlog.Game do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias BacklogWheel.Backlog.Spin
+
   schema "games" do
     field :title, :string
     field :platform, :string, default: "manual"
@@ -9,6 +11,8 @@ defmodule BacklogWheel.Backlog.Game do
     field :include_in_wheel, :boolean, default: false
     field :played_on_stream, :boolean, default: false
     field :last_played_at, :utc_datetime
+
+    has_many :spins, Spin
 
     timestamps(type: :utc_datetime)
   end
