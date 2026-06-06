@@ -6,16 +6,6 @@ Backlog Wheel is a small Phoenix LiveView app for choosing what game to play fro
 
 The MVP is a local Phoenix LiveView app that can manage games, choose eligible games for a future wheel, show a stream-friendly wheel page, spin it, and record the result.
 
-## Slice Status
-
-- Slice 0: Project directory and Nix direnv development environment - complete
-- Slice 1: Phoenix app generated and running - complete
-- Slice 2: Games CRUD - complete
-- Slice 3: Backlog workflow and curation - complete
-- Slice 4: Wheel candidates and spin history domain - complete
-- Slice 5: Stream-friendly animated wheel - complete
-- Slice 6: Polish, history, and tests - in progress
-
 ## Development Environment
 
 This project is developed on NixOS with `nix-direnv`.
@@ -97,18 +87,3 @@ Run the project precommit alias:
 mix precommit
 ```
 
-## Near-Term Roadmap
-
-- Slice 6: Add focused polish, history views, and broader tests.
-
-## Out Of Scope For Slice 2
-
-- Wheel UI
-- Weighted odds
-- Steam import
-- Twitch integration
-- Discord integration
-- Viewer voting
-- Weekly elimination rounds
-- Authentication or accounts
-- Tags
