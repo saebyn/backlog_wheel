@@ -5,7 +5,7 @@ defmodule BacklogWheel.Voting.VotingSession do
   alias BacklogWheel.Communities.Community
   alias BacklogWheel.Voting.VotingSessionGame
 
-  @statuses ["draft", "open", "closed"]
+  @statuses ["draft", "open", "locked", "closed", "cancelled"]
 
   schema "voting_sessions" do
     field :status, :string, default: "draft"

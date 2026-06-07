@@ -18,6 +18,19 @@ defmodule BacklogWheel.Voting do
   }
 
   @doc """
+  Returns voting sessions for the default community.
+  """
+  def list_voting_sessions do
+    default_community_id = default_community_id()
+
+    VotingSession
+    |> where([session], session.community_id == ^default_community_id)
+    |> order_by([session], desc: session.inserted_at, desc: session.id)
+    |> Repo.all()
+    |> Repo.preload(voting_session_games: :game)
+  end
+
+  @doc """
   Gets a voting session with its game pool.
   """
   def get_voting_session!(id) do
@@ -33,6 +46,16 @@ defmodule BacklogWheel.Voting do
     %VotingSession{community_id: default_community_id()}
     |> VotingSession.changeset(attrs)
     |> Repo.insert()
+  end
+
+  @doc """
+  Updates a voting session status.
+  """
+  def update_voting_session_status(%VotingSession{} = voting_session, status)
+      when is_binary(status) do
+    voting_session
+    |> VotingSession.changeset(%{status: status})
+    |> Repo.update()
   end
 
   @doc """
@@ -60,6 +83,26 @@ defmodule BacklogWheel.Voting do
     %VotingSessionGame{voting_session_id: voting_session.id, game_id: game.id}
     |> VotingSessionGame.changeset(attrs)
     |> Repo.insert()
+  end
+
+  @doc """
+  Removes a game from a voting session pool.
+  """
+  def remove_game_from_session(%VotingSessionGame{} = voting_session_game) do
+    Repo.delete(voting_session_game)
+  end
+
+  @doc """
+  Returns games that can still be added to a voting session pool.
+  """
+  def list_available_games_for_session(%VotingSession{} = voting_session) do
+    existing_game_ids = existing_session_game_ids(voting_session)
+
+    Game
+    |> where([game], game.community_id == ^voting_session.community_id)
+    |> maybe_exclude_game_ids(existing_game_ids)
+    |> order_by([game], asc: game.title)
+    |> Repo.all()
   end
 
   @doc """
@@ -91,12 +134,7 @@ defmodule BacklogWheel.Voting do
   Populates a voting session pool from the current wheel-eligible games.
   """
   def populate_session_from_wheel_candidates(%VotingSession{} = voting_session) do
-    existing_game_ids =
-      VotingSessionGame
-      |> where([pool_item], pool_item.voting_session_id == ^voting_session.id)
-      |> select([pool_item], pool_item.game_id)
-      |> Repo.all()
-      |> MapSet.new()
+    existing_game_ids = existing_session_game_ids(voting_session) |> MapSet.new()
 
     voting_session
     |> list_populatable_wheel_games()
@@ -129,5 +167,18 @@ defmodule BacklogWheel.Voting do
     |> where([game], game.include_in_wheel)
     |> order_by([game], asc: game.title)
     |> Repo.all()
+  end
+
+  defp existing_session_game_ids(%VotingSession{} = voting_session) do
+    VotingSessionGame
+    |> where([pool_item], pool_item.voting_session_id == ^voting_session.id)
+    |> select([pool_item], pool_item.game_id)
+    |> Repo.all()
+  end
+
+  defp maybe_exclude_game_ids(query, []), do: query
+
+  defp maybe_exclude_game_ids(query, game_ids) do
+    where(query, [game], game.id not in ^game_ids)
   end
 end

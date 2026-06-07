@@ -20,6 +20,7 @@ defmodule BacklogWheelWeb.Router do
     get "/", PageController, :home
     live "/wheel", WheelLive, :show
     live "/history", SpinHistoryLive, :index
+    live "/voting", VotingSessionLive.Index, :index
     live "/games", GameLive.Index, :index
     live "/games/import/steam", GameLive.SteamImport, :index
     live "/games/new", GameLive.Form, :new
