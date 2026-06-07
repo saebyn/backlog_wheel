@@ -168,9 +168,11 @@ defmodule BacklogWheel.Voting do
       entry ->
         case Backlog.create_spin(%{
                game_id: entry.game.id,
+               voting_session_id: voting_session.id,
                spun_at: DateTime.utc_now(),
                source: "voting_session",
-               notes: "Voting session #{voting_session.id}; final weight #{entry.weight}"
+               notes: "Voting session #{voting_session.id}; final weight #{entry.weight}",
+               snapshot: spin_snapshot(voting_session, entries, entry)
              }) do
           {:ok, spin} -> {:ok, %{game: entry.game, spin: Repo.preload(spin, :game), entry: entry}}
           {:error, changeset} -> {:error, changeset}
@@ -243,6 +245,30 @@ defmodule BacklogWheel.Voting do
   end
 
   defp reload_voting_session!(%VotingSession{id: id}), do: get_voting_session!(id)
+
+  defp spin_snapshot(%VotingSession{} = voting_session, entries, winning_entry) do
+    total_weight = Enum.reduce(entries, 0, &(&1.weight + &2))
+
+    %{
+      "source" => "voting_session",
+      "voting_session_id" => voting_session.id,
+      "winning_game_id" => winning_entry.game.id,
+      "winning_voting_session_game_id" => winning_entry.pool_item.id,
+      "total_weight" => total_weight,
+      "entries" => Enum.map(entries, &snapshot_entry/1)
+    }
+  end
+
+  defp snapshot_entry(entry) do
+    %{
+      "game_id" => entry.game.id,
+      "voting_session_game_id" => entry.pool_item.id,
+      "title" => entry.title,
+      "base_weight" => entry.base_weight,
+      "boost_total" => entry.boost_total,
+      "final_weight" => entry.weight
+    }
+  end
 
   @doc """
   Populates a voting session pool from the current wheel-eligible games.

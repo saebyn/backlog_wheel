@@ -351,5 +351,46 @@ defmodule BacklogWheel.VotingTest do
       assert spin.source == "voting_session"
       assert spin.notes =~ "Voting session #{voting_session.id}"
     end
+
+    test "spin_voting_session_wheel/1 snapshots entries and final weights" do
+      voting_session = voting_session_fixture()
+      first_game = game_fixture(%{title: "Snapshot Winner"})
+      second_game = game_fixture(%{title: "Snapshot Other", external_id: "snapshot-other"})
+      first_pool_item = voting_session_game_fixture(voting_session, first_game, %{base_weight: 2})
+
+      second_pool_item =
+        voting_session_game_fixture(voting_session, second_game, %{base_weight: 1})
+
+      voting_boost_fixture(first_pool_item, nil, %{strength: 3})
+      voting_boost_fixture(second_pool_item, nil, %{strength: 1})
+
+      assert {:ok, %{spin: spin}} = Voting.spin_voting_session_wheel(voting_session)
+
+      assert spin.voting_session_id == voting_session.id
+      assert spin.snapshot["source"] == "voting_session"
+      assert spin.snapshot["voting_session_id"] == voting_session.id
+      assert spin.snapshot["total_weight"] == 7
+      assert spin.snapshot["winning_game_id"] == spin.game_id
+
+      assert [first_entry, second_entry] = spin.snapshot["entries"]
+
+      assert first_entry == %{
+               "game_id" => first_game.id,
+               "voting_session_game_id" => first_pool_item.id,
+               "title" => "Snapshot Winner",
+               "base_weight" => 2,
+               "boost_total" => 3,
+               "final_weight" => 5
+             }
+
+      assert second_entry == %{
+               "game_id" => second_game.id,
+               "voting_session_game_id" => second_pool_item.id,
+               "title" => "Snapshot Other",
+               "base_weight" => 1,
+               "boost_total" => 1,
+               "final_weight" => 2
+             }
+    end
   end
 end

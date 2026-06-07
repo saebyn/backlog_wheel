@@ -65,7 +65,7 @@ defmodule BacklogWheel.Backlog do
   """
   def list_recent_spins(limit \\ 10) do
     Spin
-    |> preload(:game)
+    |> preload([:game, :voting_session])
     |> order_by([spin], desc: spin.spun_at)
     |> limit(^limit)
     |> Repo.all()
@@ -103,7 +103,12 @@ defmodule BacklogWheel.Backlog do
       candidates ->
         game = Enum.random(candidates)
 
-        case create_spin(%{game_id: game.id, spun_at: DateTime.utc_now(), source: "wheel"}) do
+        case create_spin(%{
+               game_id: game.id,
+               spun_at: DateTime.utc_now(),
+               source: "wheel",
+               snapshot: wheel_spin_snapshot(candidates, game)
+             }) do
           {:ok, spin} -> {:ok, %{game: game, spin: Repo.preload(spin, :game)}}
           {:error, changeset} -> {:error, changeset}
         end
@@ -330,5 +335,24 @@ defmodule BacklogWheel.Backlog do
 
   defp order_games(query, _filters) do
     order_by(query, [game], asc: game.title)
+  end
+
+  defp wheel_spin_snapshot(candidates, winning_game) do
+    %{
+      "source" => "wheel",
+      "winning_game_id" => winning_game.id,
+      "total_weight" => length(candidates),
+      "entries" => Enum.map(candidates, &wheel_spin_snapshot_entry/1)
+    }
+  end
+
+  defp wheel_spin_snapshot_entry(game) do
+    %{
+      "game_id" => game.id,
+      "title" => game.title,
+      "base_weight" => 1,
+      "boost_total" => 0,
+      "final_weight" => 1
+    }
   end
 end

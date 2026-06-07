@@ -49,6 +49,25 @@ defmodule BacklogWheelWeb.SpinHistoryLive do
               </span>
               · {spin.source}
             </p>
+            <div
+              :if={winner_snapshot_entry(spin)}
+              id={"spin-snapshot-summary-#{spin.id}"}
+              class="mt-3 rounded-xl bg-base-200 p-3 text-sm"
+            >
+              <% winner_entry = winner_snapshot_entry(spin) %>
+              <% total_weight = snapshot_total_weight(spin) %>
+              <p class="font-semibold text-base-content/80">
+                Winner weight: {winner_entry["final_weight"]} of {total_weight} ({winner_odds_percent(
+                  winner_entry,
+                  total_weight
+                )}%)
+              </p>
+              <p class="mt-1 text-xs text-base-content/60">
+                Base {winner_entry["base_weight"]} + boosts {winner_entry["boost_total"]} · {snapshot_entry_count(
+                  spin
+                )} entries snapshotted
+              </p>
+            </div>
           </div>
 
           <.link
@@ -84,5 +103,29 @@ defmodule BacklogWheelWeb.SpinHistoryLive do
 
   defp refresh_spins(socket) do
     assign(socket, :spins, Backlog.list_recent_spins(100))
+  end
+
+  defp winner_snapshot_entry(%{
+         snapshot: %{"entries" => entries, "winning_game_id" => winning_game_id}
+       })
+       when is_list(entries) do
+    Enum.find(entries, &(&1["game_id"] == winning_game_id))
+  end
+
+  defp winner_snapshot_entry(_spin), do: nil
+
+  defp snapshot_total_weight(%{snapshot: %{"total_weight" => total_weight}}), do: total_weight
+  defp snapshot_total_weight(_spin), do: 0
+
+  defp snapshot_entry_count(%{snapshot: %{"entries" => entries}}) when is_list(entries),
+    do: length(entries)
+
+  defp snapshot_entry_count(_spin), do: 0
+
+  defp winner_odds_percent(_winner_entry, 0), do: "0.0"
+
+  defp winner_odds_percent(winner_entry, total_weight) do
+    (winner_entry["final_weight"] / total_weight * 100)
+    |> :erlang.float_to_binary(decimals: 1)
   end
 end
