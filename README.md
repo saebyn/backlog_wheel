@@ -1,10 +1,6 @@
 # Backlog Wheel
 
-Backlog Wheel is a small Phoenix LiveView app for choosing what game to play from a personal backlog. The first version is a local stream tool: maintain a backlog, mark games as wheel candidates, spin an equal-probability wheel, and eventually record the result.
-
-## Current MVP Goal
-
-The MVP is a local Phoenix LiveView app that can manage games, choose eligible games for a future wheel, show a stream-friendly wheel page, spin it, and record the result.
+Backlog Wheel is a small Phoenix LiveView app for choosing what game to play from a personal backlog. The first version is a local stream tool: maintain a backlog, mark games as wheel candidates, spin a wheel, and record the result.
 
 ## Development Environment
 
@@ -23,6 +19,8 @@ direnv allow
 ```
 
 If the shell is already allowed, entering the project directory should load the environment automatically.
+
+If you aren't on NixOS, you may wish to follow the instructions at https://phoenix.hexdocs.pm/installation.html
 
 ## Setup
 
