@@ -28,8 +28,11 @@ defmodule BacklogWheelWeb.WheelLive do
             class="relative flex min-h-[70vh] items-center justify-center overflow-hidden rounded-[2rem] border border-base-300 bg-radial-[at_50%_50%] from-base-100 via-base-200 to-base-300 shadow-2xl"
           >
             <div class="relative aspect-square w-[min(92vw,calc(100vh-9rem))] max-w-[78rem] rounded-full will-change-transform">
-              <div class="pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 -translate-y-1">
-                <div class="h-0 w-0 border-x-[1.5rem] border-t-[3.25rem] border-x-transparent border-t-primary drop-shadow-lg">
+              <div class="pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 -translate-y-5">
+                <div
+                  data-wheel-pointer
+                  class="h-0 w-0 border-x-[1.05rem] border-t-[3.25rem] border-x-transparent border-t-primary drop-shadow-[0_0.6rem_0.45rem_rgba(0,0,0,0.38)]"
+                >
                 </div>
               </div>
 
