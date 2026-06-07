@@ -3,6 +3,7 @@ defmodule BacklogWheel.Communities.Community do
   import Ecto.Changeset
 
   alias BacklogWheel.Backlog.{Game, Spin}
+  alias BacklogWheel.Voting.VotingSession
 
   schema "communities" do
     field :name, :string
@@ -10,6 +11,7 @@ defmodule BacklogWheel.Communities.Community do
 
     has_many :games, Game
     has_many :spins, Spin
+    has_many :voting_sessions, VotingSession
 
     timestamps(type: :utc_datetime)
   end

@@ -4,6 +4,7 @@ defmodule BacklogWheel.Backlog.Game do
 
   alias BacklogWheel.Backlog.Spin
   alias BacklogWheel.Communities.Community
+  alias BacklogWheel.Voting.VotingSessionGame
 
   schema "games" do
     field :title, :string
@@ -16,6 +17,7 @@ defmodule BacklogWheel.Backlog.Game do
 
     belongs_to :community, Community
     has_many :spins, Spin
+    has_many :voting_session_games, VotingSessionGame
 
     timestamps(type: :utc_datetime)
   end
