@@ -22,4 +22,48 @@ defmodule BacklogWheel.VotingFixtures do
 
     voting_session_game
   end
+
+  @doc """
+  Generate a viewer.
+  """
+  def viewer_fixture(attrs \\ %{}) do
+    {:ok, viewer} =
+      attrs
+      |> Enum.into(%{display_name: "some viewer"})
+      |> BacklogWheel.Voting.create_viewer()
+
+    viewer
+  end
+
+  @doc """
+  Generate a viewer identity.
+  """
+  def viewer_identity_fixture(viewer, attrs \\ %{}) do
+    {:ok, viewer_identity} =
+      attrs
+      |> Enum.into(%{
+        display_name: "some identity",
+        platform: "local",
+        platform_user_id: "some-id"
+      })
+      |> then(&BacklogWheel.Voting.add_identity_to_viewer(viewer, &1))
+
+    viewer_identity
+  end
+
+  @doc """
+  Generate a voting boost.
+  """
+  def voting_boost_fixture(voting_session_game, viewer \\ nil, attrs \\ %{}) do
+    attrs = Enum.into(attrs, %{source: "local", strength: 1})
+
+    {:ok, voting_boost} =
+      if viewer do
+        BacklogWheel.Voting.record_boost(voting_session_game, viewer, attrs)
+      else
+        BacklogWheel.Voting.record_boost(voting_session_game, attrs)
+      end
+
+    voting_boost
+  end
 end

@@ -4,7 +4,14 @@ defmodule BacklogWheel.VotingTest do
   alias BacklogWheel.Communities
   alias BacklogWheel.Backlog
   alias BacklogWheel.Voting
-  alias BacklogWheel.Voting.{VotingSession, VotingSessionGame}
+
+  alias BacklogWheel.Voting.{
+    Viewer,
+    ViewerIdentity,
+    VotingBoost,
+    VotingSession,
+    VotingSessionGame
+  }
 
   import BacklogWheel.BacklogFixtures
   import BacklogWheel.VotingFixtures
@@ -168,6 +175,131 @@ defmodule BacklogWheel.VotingTest do
 
       assert Backlog.get_game!(eligible_game.id).include_in_wheel == true
       assert Backlog.get_game!(excluded_game.id).include_in_wheel == false
+    end
+  end
+
+  describe "viewers" do
+    test "create_viewer/1 creates a viewer for the default community" do
+      default_community = Communities.get_default_community!()
+
+      assert {:ok, %Viewer{} = viewer} = Voting.create_viewer(%{display_name: "Viewer One"})
+      assert viewer.community_id == default_community.id
+      assert viewer.display_name == "Viewer One"
+    end
+
+    test "add_identity_to_viewer/2 lets a viewer have platform identities" do
+      viewer = viewer_fixture(%{display_name: "Identity Viewer"})
+
+      assert {:ok, %ViewerIdentity{} = local_identity} =
+               Voting.add_identity_to_viewer(viewer, %{
+                 platform: "local",
+                 platform_user_id: "local-viewer",
+                 display_name: "Local Viewer"
+               })
+
+      assert {:ok, %ViewerIdentity{} = twitch_identity} =
+               Voting.add_identity_to_viewer(viewer, %{
+                 platform: "twitch",
+                 platform_user_id: "12345",
+                 display_name: "TwitchViewer"
+               })
+
+      assert local_identity.viewer_id == viewer.id
+      assert local_identity.community_id == viewer.community_id
+      assert twitch_identity.viewer_id == viewer.id
+      assert twitch_identity.community_id == viewer.community_id
+    end
+
+    test "add_identity_to_viewer/2 prevents duplicate platform identities in a community" do
+      viewer = viewer_fixture(%{display_name: "First Viewer"})
+      other_viewer = viewer_fixture(%{display_name: "Second Viewer"})
+      viewer_identity_fixture(viewer, %{platform: "twitch", platform_user_id: "duplicate-id"})
+
+      assert {:error, changeset} =
+               Voting.add_identity_to_viewer(other_viewer, %{
+                 platform: "twitch",
+                 platform_user_id: "duplicate-id"
+               })
+
+      assert %{community_id: ["has already been taken"]} = errors_on(changeset)
+    end
+  end
+
+  describe "voting_boosts" do
+    test "record_boost/3 records a positive boost against a session game" do
+      voting_session_game = voting_session_game_fixture(voting_session_fixture(), game_fixture())
+      viewer = viewer_fixture(%{display_name: "Boost Viewer"})
+
+      assert {:ok, %VotingBoost{} = voting_boost} =
+               Voting.record_boost(voting_session_game, viewer, %{
+                 strength: 5,
+                 source: "twitch",
+                 external_event_id: "event-1"
+               })
+
+      assert voting_boost.voting_session_game_id == voting_session_game.id
+      assert voting_boost.viewer_id == viewer.id
+      assert voting_boost.strength == 5
+      assert voting_boost.source == "twitch"
+      assert voting_boost.external_event_id == "event-1"
+    end
+
+    test "record_boost/2 can record a local admin boost without a viewer" do
+      voting_session_game = voting_session_game_fixture(voting_session_fixture(), game_fixture())
+
+      assert {:ok, %VotingBoost{} = voting_boost} =
+               Voting.record_boost(voting_session_game, %{strength: 2, source: "local"})
+
+      assert voting_boost.viewer_id == nil
+      assert voting_boost.strength == 2
+      assert voting_boost.source == "local"
+    end
+
+    test "record_boost/3 rejects non-positive strengths" do
+      voting_session_game = voting_session_game_fixture(voting_session_fixture(), game_fixture())
+      viewer = viewer_fixture(%{display_name: "Negative Viewer"})
+
+      assert {:error, changeset} =
+               Voting.record_boost(voting_session_game, viewer, %{strength: -1, source: "twitch"})
+
+      assert %{strength: ["must be greater than 0"]} = errors_on(changeset)
+    end
+
+    test "record_boost/3 is idempotent for duplicate external events" do
+      voting_session_game = voting_session_game_fixture(voting_session_fixture(), game_fixture())
+      viewer = viewer_fixture(%{display_name: "Idempotent Viewer"})
+
+      assert {:ok, first_boost} =
+               Voting.record_boost(voting_session_game, viewer, %{
+                 strength: 3,
+                 source: "twitch",
+                 external_event_id: "event-2"
+               })
+
+      assert {:ok, second_boost} =
+               Voting.record_boost(voting_session_game, viewer, %{
+                 strength: 99,
+                 source: "twitch",
+                 external_event_id: "event-2"
+               })
+
+      assert first_boost.id == second_boost.id
+      assert first_boost.strength == second_boost.strength
+      assert Repo.aggregate(VotingBoost, :count, :id) == 1
+    end
+
+    test "record_boost/3 allows repeated boosts without an external event id" do
+      voting_session_game = voting_session_game_fixture(voting_session_fixture(), game_fixture())
+      viewer = viewer_fixture(%{display_name: "Repeat Viewer"})
+
+      assert {:ok, first_boost} =
+               Voting.record_boost(voting_session_game, viewer, %{strength: 1, source: "local"})
+
+      assert {:ok, second_boost} =
+               Voting.record_boost(voting_session_game, viewer, %{strength: 1, source: "local"})
+
+      assert first_boost.id != second_boost.id
+      assert Repo.aggregate(VotingBoost, :count, :id) == 2
     end
   end
 end

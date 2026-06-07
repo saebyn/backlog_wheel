@@ -8,7 +8,14 @@ defmodule BacklogWheel.Voting do
   alias BacklogWheel.Backlog.Game
   alias BacklogWheel.Communities
   alias BacklogWheel.Repo
-  alias BacklogWheel.Voting.{VotingSession, VotingSessionGame}
+
+  alias BacklogWheel.Voting.{
+    Viewer,
+    ViewerIdentity,
+    VotingBoost,
+    VotingSession,
+    VotingSessionGame
+  }
 
   @doc """
   Gets a voting session with its game pool.
@@ -29,12 +36,55 @@ defmodule BacklogWheel.Voting do
   end
 
   @doc """
+  Creates a viewer for the default community.
+  """
+  def create_viewer(attrs) do
+    %Viewer{community_id: default_community_id()}
+    |> Viewer.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Adds a platform identity to a viewer.
+  """
+  def add_identity_to_viewer(%Viewer{} = viewer, attrs) do
+    %ViewerIdentity{community_id: viewer.community_id, viewer_id: viewer.id}
+    |> ViewerIdentity.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
   Adds a game to a voting session pool.
   """
   def add_game_to_session(%VotingSession{} = voting_session, %Game{} = game, attrs \\ %{}) do
     %VotingSessionGame{voting_session_id: voting_session.id, game_id: game.id}
     |> VotingSessionGame.changeset(attrs)
     |> Repo.insert()
+  end
+
+  @doc """
+  Records a positive boost against a voting session game.
+
+  When `external_event_id` is present, repeated events from the same source are idempotent.
+  """
+  def record_boost(%VotingSessionGame{} = voting_session_game, attrs) do
+    do_record_boost(voting_session_game, nil, attrs)
+  end
+
+  def record_boost(%VotingSessionGame{} = voting_session_game, %Viewer{} = viewer, attrs) do
+    do_record_boost(voting_session_game, viewer.id, attrs)
+  end
+
+  defp do_record_boost(%VotingSessionGame{} = voting_session_game, viewer_id, attrs) do
+    case get_existing_external_boost(attrs) do
+      %VotingBoost{} = voting_boost ->
+        {:ok, voting_boost}
+
+      nil ->
+        %VotingBoost{voting_session_game_id: voting_session_game.id, viewer_id: viewer_id}
+        |> VotingBoost.changeset(attrs)
+        |> Repo.insert()
+    end
   end
 
   @doc """
@@ -60,6 +110,17 @@ defmodule BacklogWheel.Voting do
 
   defp default_community_id do
     Communities.get_or_create_default_community().id
+  end
+
+  defp get_existing_external_boost(attrs) do
+    source = Map.get(attrs, :source) || Map.get(attrs, "source")
+    external_event_id = Map.get(attrs, :external_event_id) || Map.get(attrs, "external_event_id")
+
+    if is_nil(source) or is_nil(external_event_id) do
+      nil
+    else
+      Repo.get_by(VotingBoost, source: source, external_event_id: external_event_id)
+    end
   end
 
   defp list_populatable_wheel_games(%VotingSession{} = voting_session) do
