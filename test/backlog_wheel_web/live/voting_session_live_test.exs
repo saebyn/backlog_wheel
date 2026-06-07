@@ -120,4 +120,19 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
 
     assert path == "/wheel?voting_session_id=#{voting_session.id}"
   end
+
+  test "refreshes selected session weights from pubsub", %{conn: conn} do
+    voting_session = voting_session_fixture()
+    game = game_fixture(%{title: "Externally Boosted Game"})
+    pool_item = voting_session_game_fixture(voting_session, game, %{base_weight: 2})
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    assert has_element?(view, "#pool-game-final-weight-#{pool_item.id}", "2")
+
+    voting_boost_fixture(pool_item, nil, %{strength: 5})
+
+    assert has_element?(view, "#pool-game-boost-total-#{pool_item.id}", "+5")
+    assert has_element?(view, "#pool-game-final-weight-#{pool_item.id}", "7")
+  end
 end

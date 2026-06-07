@@ -302,6 +302,19 @@ defmodule BacklogWheel.VotingTest do
       assert Repo.aggregate(VotingBoost, :count, :id) == 2
     end
 
+    test "record_boost/2 broadcasts voting session changes" do
+      voting_session = voting_session_fixture()
+      voting_session_game = voting_session_game_fixture(voting_session, game_fixture())
+
+      assert :ok = Voting.subscribe_to_voting_session(voting_session)
+
+      assert {:ok, _boost} =
+               Voting.record_boost(voting_session_game, %{strength: 1, source: "local"})
+
+      assert_receive {:voting_session_changed, id}
+      assert id == voting_session.id
+    end
+
     test "voting_session_game_weight/1 calculates final weight from boosts" do
       voting_session_game =
         voting_session_game_fixture(voting_session_fixture(), game_fixture(), %{base_weight: 2})

@@ -25,7 +25,6 @@ defmodule BacklogWheelWeb.WheelLive do
           <div
             id="roulette-wheel-hook"
             phx-hook="RouletteWheel"
-            phx-update="ignore"
             class="relative flex min-h-[70vh] items-center justify-center overflow-hidden rounded-[2rem] border border-base-300 bg-radial-[at_50%_50%] from-base-100 via-base-200 to-base-300 shadow-2xl"
           >
             <div class="relative aspect-square w-[min(92vw,calc(100vh-9rem))] max-w-[78rem] rounded-full will-change-transform">
@@ -266,6 +265,7 @@ defmodule BacklogWheelWeb.WheelLive do
      socket
      |> assign(:page_title, "Wheel")
      |> assign(:selected_session_id, selected_session_id_from_params(params))
+     |> assign(:subscribed_voting_session_id, nil)
      |> assign(:selected_game, nil)
      |> assign(:pending_game, nil)
      |> assign(:pending_spin_id, nil)
@@ -306,6 +306,15 @@ defmodule BacklogWheelWeb.WheelLive do
   @impl true
   def handle_event("dismiss_winner", _params, socket) do
     {:noreply, assign(socket, :selected_game, nil)}
+  end
+
+  @impl true
+  def handle_info({:voting_session_changed, id}, socket) do
+    if socket.assigns.selected_session_id == id do
+      {:noreply, refresh_wheel(socket)}
+    else
+      {:noreply, socket}
+    end
   end
 
   defp spin_selected_session(socket) do
@@ -355,6 +364,22 @@ defmodule BacklogWheelWeb.WheelLive do
     |> assign(:candidate_count, length(candidates))
     |> assign(:total_weight, total_weight(candidates))
     |> assign(:recent_spins, Backlog.list_recent_spins())
+    |> subscribe_to_selected_session()
+  end
+
+  defp subscribe_to_selected_session(socket) do
+    if connected?(socket) &&
+         socket.assigns.subscribed_voting_session_id != socket.assigns.selected_session_id do
+      Voting.unsubscribe_from_voting_session(socket.assigns.subscribed_voting_session_id)
+
+      if socket.assigns.selected_session_id do
+        Voting.subscribe_to_voting_session(socket.assigns.selected_session_id)
+      end
+
+      assign(socket, :subscribed_voting_session_id, socket.assigns.selected_session_id)
+    else
+      socket
+    end
   end
 
   defp selected_session_id_from_params(%{"voting_session_id" => id}) do

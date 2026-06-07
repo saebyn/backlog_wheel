@@ -18,6 +18,29 @@ defmodule BacklogWheel.Voting do
     VotingSessionGame
   }
 
+  @pubsub BacklogWheel.PubSub
+
+  @doc """
+  Subscribes the caller to updates for a voting session.
+  """
+  def subscribe_to_voting_session(%VotingSession{id: id}), do: subscribe_to_voting_session(id)
+
+  def subscribe_to_voting_session(id) when is_integer(id) do
+    Phoenix.PubSub.subscribe(@pubsub, voting_session_topic(id))
+  end
+
+  @doc """
+  Unsubscribes the caller from updates for a voting session.
+  """
+  def unsubscribe_from_voting_session(nil), do: :ok
+
+  def unsubscribe_from_voting_session(%VotingSession{id: id}),
+    do: unsubscribe_from_voting_session(id)
+
+  def unsubscribe_from_voting_session(id) when is_integer(id) do
+    Phoenix.PubSub.unsubscribe(@pubsub, voting_session_topic(id))
+  end
+
   @doc """
   Returns voting sessions for the default community.
   """
@@ -58,6 +81,7 @@ defmodule BacklogWheel.Voting do
     voting_session
     |> VotingSession.changeset(%{status: status})
     |> Repo.update()
+    |> broadcast_voting_session_change()
   end
 
   @doc """
@@ -85,6 +109,7 @@ defmodule BacklogWheel.Voting do
     %VotingSessionGame{voting_session_id: voting_session.id, game_id: game.id}
     |> VotingSessionGame.changeset(attrs)
     |> Repo.insert()
+    |> broadcast_voting_session_change()
   end
 
   @doc """
@@ -92,6 +117,7 @@ defmodule BacklogWheel.Voting do
   """
   def remove_game_from_session(%VotingSessionGame{} = voting_session_game) do
     Repo.delete(voting_session_game)
+    |> broadcast_voting_session_change(voting_session_game.voting_session_id)
   end
 
   @doc """
@@ -189,6 +215,7 @@ defmodule BacklogWheel.Voting do
         %VotingBoost{voting_session_game_id: voting_session_game.id, viewer_id: viewer_id}
         |> VotingBoost.changeset(attrs)
         |> Repo.insert()
+        |> broadcast_voting_session_change(voting_session_game.voting_session_id)
     end
   end
 
@@ -320,5 +347,30 @@ defmodule BacklogWheel.Voting do
 
   defp maybe_exclude_game_ids(query, game_ids) do
     where(query, [game], game.id not in ^game_ids)
+  end
+
+  defp voting_session_topic(id), do: "voting_session:#{id}"
+
+  defp broadcast_voting_session_change({:ok, %VotingSession{id: id}} = result) do
+    broadcast_voting_session_changed(id)
+    result
+  end
+
+  defp broadcast_voting_session_change({:ok, %VotingSessionGame{voting_session_id: id}} = result) do
+    broadcast_voting_session_changed(id)
+    result
+  end
+
+  defp broadcast_voting_session_change({:error, _changeset} = result), do: result
+
+  defp broadcast_voting_session_change({:ok, _struct} = result, id) do
+    broadcast_voting_session_changed(id)
+    result
+  end
+
+  defp broadcast_voting_session_change({:error, _changeset} = result, _id), do: result
+
+  defp broadcast_voting_session_changed(id) do
+    Phoenix.PubSub.broadcast(@pubsub, voting_session_topic(id), {:voting_session_changed, id})
   end
 end

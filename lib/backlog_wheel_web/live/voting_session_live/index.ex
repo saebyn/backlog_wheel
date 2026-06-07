@@ -220,6 +220,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
      socket
      |> assign(:page_title, "Voting Sessions")
      |> assign(:selected_session_id, nil)
+     |> assign(:subscribed_voting_session_id, nil)
      |> refresh()}
   end
 
@@ -279,6 +280,15 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     {:noreply, refresh(socket)}
   end
 
+  @impl true
+  def handle_info({:voting_session_changed, id}, socket) do
+    if socket.assigns.selected_session_id == id do
+      {:noreply, refresh(socket)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   defp refresh(socket) do
     sessions = Voting.list_voting_sessions()
     selected_session = selected_session(sessions, socket.assigns.selected_session_id)
@@ -295,6 +305,22 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     |> stream(:voting_sessions, sessions, reset: true)
     |> stream(:voting_session_pool, pool_items, reset: true)
     |> stream(:available_games, available_games, reset: true)
+    |> subscribe_to_selected_session()
+  end
+
+  defp subscribe_to_selected_session(socket) do
+    if connected?(socket) &&
+         socket.assigns.subscribed_voting_session_id != socket.assigns.selected_session_id do
+      Voting.unsubscribe_from_voting_session(socket.assigns.subscribed_voting_session_id)
+
+      if socket.assigns.selected_session_id do
+        Voting.subscribe_to_voting_session(socket.assigns.selected_session_id)
+      end
+
+      assign(socket, :subscribed_voting_session_id, socket.assigns.selected_session_id)
+    else
+      socket
+    end
   end
 
   defp selected_session([], _selected_session_id), do: nil

@@ -79,4 +79,19 @@ defmodule BacklogWheelWeb.WheelLiveTest do
     assert has_element?(view, "#wheel-weighted-candidates", second_game.title)
     refute has_element?(view, "#wheel-weighted-candidates", first_game.title)
   end
+
+  test "refreshes selected voting session weights from pubsub", %{conn: conn} do
+    voting_session = voting_session_fixture()
+    game = game_fixture(%{title: "Live Boost Game"})
+    pool_item = voting_session_game_fixture(voting_session, game, %{base_weight: 1})
+
+    {:ok, view, _html} = live(conn, ~p"/wheel?voting_session_id=#{voting_session.id}")
+
+    assert has_element?(view, "#wheel-candidate-#{pool_item.id}", "1")
+
+    voting_boost_fixture(pool_item, nil, %{strength: 3})
+
+    assert has_element?(view, "#wheel-candidate-#{pool_item.id}", "4")
+    assert has_element?(view, "#wheel-total-weight", "Total weight: 4")
+  end
 end
