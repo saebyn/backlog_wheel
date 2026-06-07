@@ -7,6 +7,7 @@ defmodule BacklogWheel.Backlog do
   alias BacklogWheel.Repo
 
   alias BacklogWheel.Backlog.{Game, Spin}
+  alias BacklogWheel.Communities
 
   @doc """
   Returns the list of games.
@@ -74,7 +75,7 @@ defmodule BacklogWheel.Backlog do
   Records a spin for a game.
   """
   def create_spin(attrs) do
-    %Spin{}
+    %Spin{community_id: default_community_id()}
     |> Spin.changeset(attrs)
     |> Repo.insert()
   end
@@ -155,7 +156,7 @@ defmodule BacklogWheel.Backlog do
 
   """
   def create_game(attrs) do
-    %Game{}
+    %Game{community_id: default_community_id()}
     |> Game.changeset(attrs)
     |> Repo.insert()
   end
@@ -278,6 +279,10 @@ defmodule BacklogWheel.Backlog do
   """
   def change_game(%Game{} = game, attrs \\ %{}) do
     Game.changeset(game, attrs)
+  end
+
+  defp default_community_id do
+    Communities.get_or_create_default_community().id
   end
 
   defp game_query(filters) do

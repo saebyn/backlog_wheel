@@ -3,6 +3,7 @@ defmodule BacklogWheel.Backlog.Game do
   import Ecto.Changeset
 
   alias BacklogWheel.Backlog.Spin
+  alias BacklogWheel.Communities.Community
 
   schema "games" do
     field :title, :string
@@ -13,6 +14,7 @@ defmodule BacklogWheel.Backlog.Game do
     field :played_on_stream, :boolean, default: false
     field :last_played_at, :utc_datetime
 
+    belongs_to :community, Community
     has_many :spins, Spin
 
     timestamps(type: :utc_datetime)
@@ -30,7 +32,7 @@ defmodule BacklogWheel.Backlog.Game do
       :played_on_stream,
       :last_played_at
     ])
-    |> validate_required([:title])
+    |> validate_required([:title, :community_id])
     |> unique_constraint([:platform, :external_id], name: :games_platform_external_id_index)
   end
 end

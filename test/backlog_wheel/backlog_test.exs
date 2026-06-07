@@ -2,6 +2,7 @@ defmodule BacklogWheel.BacklogTest do
   use BacklogWheel.DataCase
 
   alias BacklogWheel.Backlog
+  alias BacklogWheel.Communities
 
   describe "games" do
     alias BacklogWheel.Backlog.Game
@@ -110,10 +111,12 @@ defmodule BacklogWheel.BacklogTest do
 
     test "spin_wheel/0 records a spin for a candidate" do
       game = game_fixture(%{include_in_wheel: true, played_on_stream: true})
+      default_community = Communities.get_default_community!()
 
       assert {:ok, %{game: selected_game, spin: spin}} = Backlog.spin_wheel()
       assert selected_game.id == game.id
       assert spin.game_id == game.id
+      assert spin.community_id == default_community.id
       assert spin.source == "wheel"
       assert %DateTime{} = spin.spun_at
       assert [recent_spin] = Backlog.list_recent_spins()
@@ -135,6 +138,8 @@ defmodule BacklogWheel.BacklogTest do
     end
 
     test "create_game/1 with valid data creates a game" do
+      default_community = Communities.get_default_community!()
+
       valid_attrs = %{
         title: "some title",
         platform: "some platform",
@@ -148,9 +153,20 @@ defmodule BacklogWheel.BacklogTest do
       assert game.title == "some title"
       assert game.platform == "some platform"
       assert game.external_id == "some external_id"
+      assert game.community_id == default_community.id
       assert game.include_in_wheel == true
       assert game.played_on_stream == true
       assert game.last_played_at == ~U[2026-06-05 17:55:00Z]
+    end
+
+    test "create_spin/1 attaches the default community" do
+      default_community = Communities.get_default_community!()
+      game = game_fixture(%{include_in_wheel: true})
+
+      assert {:ok, spin} =
+               Backlog.create_spin(%{game_id: game.id, spun_at: ~U[2026-06-06 12:00:00Z]})
+
+      assert spin.community_id == default_community.id
     end
 
     test "create_game/1 defaults optional metadata" do
