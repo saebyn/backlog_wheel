@@ -1,45 +1,98 @@
 <Layouts.app flash={@flash}>
-  <section class="space-y-10">
-    <div class="space-y-5">
-      <p class="text-sm font-semibold uppercase tracking-[0.25em] text-base-content/60">
-        Backlog Wheel
-      </p>
-      <h1 class="text-4xl font-black tracking-tight text-base-content sm:text-6xl">
-        Pick the next game without overthinking it.
-      </h1>
-      <p class="max-w-2xl text-lg leading-8 text-base-content/70">
-        Maintain a stream backlog, mark wheel candidates, and build toward a simple equal-probability game picker.
+  <section class="brand-panel relative overflow-hidden rounded-[2rem] p-6 sm:p-10">
+    <div
+      class="glow-drift absolute -right-24 -top-24 size-72 rounded-full bg-primary/20 blur-3xl"
+      aria-hidden="true"
+    />
+    <div
+      class="absolute -bottom-32 -left-24 size-80 rounded-full border border-secondary/20"
+      aria-hidden="true"
+    />
+
+    <div class="relative grid gap-10 lg:grid-cols-[1fr_18rem] lg:items-center">
+      <div class="space-y-7">
+        <div class="inline-flex items-center gap-3 rounded-full border border-base-content/10 bg-base-100/70 px-4 py-2 shadow-sm backdrop-blur">
+          <span class="pointer-pulse h-0 w-0 border-y-[0.45rem] border-l-[0.8rem] border-y-transparent border-l-primary" />
+          <span class="text-xs font-black uppercase tracking-[0.25em] text-base-content/70">
+            Curate the chaos
+          </span>
+        </div>
+
+        <div class="space-y-5">
+          <h1 class="max-w-3xl text-5xl font-black tracking-tight text-base-content text-balance sm:text-7xl">
+            Your backlog is too big. Let the wheel decide.
+          </h1>
+          <p class="max-w-2xl text-lg leading-8 text-base-content/70 sm:text-xl">
+            Curate your stream backlog, build a wheel of candidates, and let a little chaos pick what comes next.
+          </p>
+        </div>
+
+        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <.link
+            navigate={~p"/games"}
+            class="btn btn-primary btn-lg hover-lift"
+            id="home-games-link"
+          >
+            Manage Games
+          </.link>
+          <.link
+            navigate={~p"/wheel"}
+            class="btn btn-secondary btn-lg hover-lift"
+            id="home-wheel-link"
+          >
+            Spin the Wheel
+          </.link>
+        </div>
+      </div>
+
+      <.link
+        navigate={~p"/wheel"}
+        id="home-wheel-preview-link"
+        class="relative mx-auto block aspect-square w-full max-w-72 rounded-full focus:outline-none focus:ring-4 focus:ring-primary/30"
+        aria-label="Open wheel"
+      >
+        <div class="wheel-ring wheel-idle absolute inset-0 rounded-full shadow-2xl" />
+        <div class="absolute inset-8 rounded-full border border-base-content/10 bg-base-100/80 shadow-inner backdrop-blur" />
+        <div class="pointer-pulse absolute left-1/2 top-2 h-0 w-0 -translate-x-1/2 border-x-[1rem] border-t-[2rem] border-x-transparent border-t-primary drop-shadow-lg" />
+        <div class="absolute inset-0 flex items-center justify-center">
+          <div class="rounded-full bg-base-100 px-5 py-3 text-center shadow-xl">
+            <p class="text-xs font-black uppercase tracking-[0.2em] text-base-content/60">
+              Wheel
+            </p>
+            <p class="text-2xl font-black text-primary">Ready</p>
+          </div>
+        </div>
+      </.link>
+    </div>
+  </section>
+
+  <section class="mt-8 grid gap-4 sm:grid-cols-3">
+    <div class="brand-card hover-lift rounded-3xl p-5">
+      <div class="mb-4 flex size-10 items-center justify-center rounded-full bg-primary/15 text-primary">
+        <.icon name="hero-list-bullet" class="size-5" />
+      </div>
+      <h2 class="text-lg font-black">Stop negotiating.</h2>
+      <p class="mt-2 text-sm leading-6 text-base-content/70">
+        Keep candidates tidy, toggle eligibility fast, and skip the debate.
       </p>
     </div>
-
-    <div class="flex flex-col gap-3 sm:flex-row">
-      <.link navigate={~p"/games"} class="btn btn-primary btn-lg" id="home-games-link">
-        Manage Games
-      </.link>
-      <.link navigate={~p"/games/new"} class="btn btn-ghost btn-lg" id="home-new-game-link">
-        Add a Game
-      </.link>
-      <.link navigate={~p"/wheel"} class="btn btn-ghost btn-lg" id="home-wheel-link">
-        Open Wheel
-      </.link>
-      <.link navigate={~p"/history"} class="btn btn-ghost btn-lg" id="home-history-link">
-        View History
-      </.link>
+    <div class="brand-card hover-lift rounded-3xl p-5">
+      <div class="mb-4 flex size-10 items-center justify-center rounded-full bg-secondary/15 text-secondary">
+        <.icon name="hero-arrow-path" class="size-5" />
+      </div>
+      <h2 class="text-lg font-black">Spin before chat committees.</h2>
+      <p class="mt-2 text-sm leading-6 text-base-content/70">
+        Launch a full-screen wheel built for stream-friendly drama.
+      </p>
     </div>
-
-    <div class="grid gap-4 sm:grid-cols-3">
-      <div class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm">
-        <p class="text-sm font-semibold text-base-content/60">Current Slice</p>
-        <p class="mt-2 text-2xl font-bold">History</p>
+    <div class="brand-card hover-lift rounded-3xl p-5">
+      <div class="mb-4 flex size-10 items-center justify-center rounded-full bg-accent/15 text-accent">
+        <.icon name="hero-trophy" class="size-5" />
       </div>
-      <div class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm">
-        <p class="text-sm font-semibold text-base-content/60">Next Slice</p>
-        <p class="mt-2 text-2xl font-bold">Polish</p>
-      </div>
-      <div class="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm">
-        <p class="text-sm font-semibold text-base-content/60">Future Goal</p>
-        <p class="mt-2 text-2xl font-bold">Stream Wheel</p>
-      </div>
+      <h2 class="text-lg font-black">The backlog has spoken.</h2>
+      <p class="mt-2 text-sm leading-6 text-base-content/70">
+        Every result lands in history, probably unfairly, definitely recorded.
+      </p>
     </div>
   </section>
 </Layouts.app>

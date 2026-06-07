@@ -37,31 +37,35 @@ defmodule BacklogWheelWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8">
+    <div class="atmospheric-shell" aria-hidden="true" />
+
+    <header class="navbar sticky top-0 z-30 border-b border-base-content/10 bg-base-100/70 px-4 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
       <div class="flex-1">
         <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <span class="flex size-9 items-center justify-center rounded-xl bg-primary text-sm font-black text-primary-content shadow-sm">
-            BW
+          <span class="wheel-ring flex size-10 items-center justify-center rounded-full p-[2px] shadow-sm">
+            <span class="flex size-full items-center justify-center rounded-full bg-base-100 text-sm font-black text-primary">
+              BW
+            </span>
           </span>
-          <span class="text-sm font-semibold">Backlog Wheel</span>
+          <span class="text-sm font-black tracking-tight">Backlog Wheel</span>
         </a>
       </div>
       <div class="flex-none">
-        <ul class="flex flex-column px-1 space-x-4 items-center">
+        <ul class="flex flex-column items-center gap-2 px-1">
           <li>
-            <.link navigate={~p"/wheel"} class="btn btn-ghost">Wheel</.link>
+            <.link navigate={~p"/wheel"} class="btn btn-ghost hover-lift">Wheel</.link>
           </li>
           <li>
-            <.link navigate={~p"/games"} class="btn btn-ghost">Games</.link>
+            <.link navigate={~p"/games"} class="btn btn-ghost hover-lift">Games</.link>
           </li>
           <li>
-            <.link navigate={~p"/history"} class="btn btn-ghost">History</.link>
+            <.link navigate={~p"/history"} class="btn btn-ghost hover-lift">History</.link>
           </li>
           <li>
             <.theme_toggle />
           </li>
           <li>
-            <.link navigate={~p"/games/new"} class="btn btn-primary">Add Game</.link>
+            <.link navigate={~p"/games/new"} class="btn btn-primary hover-lift">Add Game</.link>
           </li>
         </ul>
       </div>
