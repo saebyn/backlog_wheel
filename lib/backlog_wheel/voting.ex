@@ -6,6 +6,7 @@ defmodule BacklogWheel.Voting do
   import Ecto.Query, warn: false
 
   alias BacklogWheel.Backlog.Game
+  alias BacklogWheel.Backlog
   alias BacklogWheel.Communities
   alias BacklogWheel.Repo
 
@@ -132,6 +133,51 @@ defmodule BacklogWheel.Voting do
     }
   end
 
+  @doc """
+  Returns weighted wheel entries for a voting session.
+
+  Each entry uses `final_weight = base_weight + boost_strength`.
+  """
+  def list_voting_session_wheel_entries(%VotingSession{} = voting_session) do
+    voting_session
+    |> reload_voting_session!()
+    |> Map.fetch!(:voting_session_games)
+    |> Enum.map(fn pool_item ->
+      %{
+        pool_item: pool_item,
+        game: pool_item.game,
+        title: pool_item.game.title,
+        weight: pool_item.final_weight,
+        base_weight: pool_item.base_weight,
+        boost_total: pool_item.boost_total
+      }
+    end)
+    |> Enum.reject(&(&1.weight <= 0))
+  end
+
+  @doc """
+  Selects one game from a voting session pool by final weight and records the spin.
+  """
+  def spin_voting_session_wheel(%VotingSession{} = voting_session) do
+    entries = list_voting_session_wheel_entries(voting_session)
+
+    case select_weighted_entry(entries) do
+      nil ->
+        {:error, :no_candidates}
+
+      entry ->
+        case Backlog.create_spin(%{
+               game_id: entry.game.id,
+               spun_at: DateTime.utc_now(),
+               source: "voting_session",
+               notes: "Voting session #{voting_session.id}; final weight #{entry.weight}"
+             }) do
+          {:ok, spin} -> {:ok, %{game: entry.game, spin: Repo.preload(spin, :game), entry: entry}}
+          {:error, changeset} -> {:error, changeset}
+        end
+    end
+  end
+
   defp do_record_boost(%VotingSessionGame{} = voting_session_game, viewer_id, attrs) do
     case get_existing_external_boost(attrs) do
       %VotingBoost{} = voting_boost ->
@@ -173,6 +219,30 @@ defmodule BacklogWheel.Voting do
     |> Map.put(:boost_total, boost_total)
     |> Map.put(:final_weight, voting_session_game.base_weight + boost_total)
   end
+
+  defp select_weighted_entry([]), do: nil
+
+  defp select_weighted_entry(entries) do
+    total_weight = Enum.reduce(entries, 0, &(&1.weight + &2))
+
+    if total_weight <= 0 do
+      nil
+    else
+      target = :rand.uniform(total_weight)
+
+      Enum.reduce_while(entries, 0, fn entry, accumulated_weight ->
+        accumulated_weight = accumulated_weight + entry.weight
+
+        if target <= accumulated_weight do
+          {:halt, entry}
+        else
+          {:cont, accumulated_weight}
+        end
+      end)
+    end
+  end
+
+  defp reload_voting_session!(%VotingSession{id: id}), do: get_voting_session!(id)
 
   @doc """
   Populates a voting session pool from the current wheel-eligible games.

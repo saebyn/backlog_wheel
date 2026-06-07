@@ -82,6 +82,13 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                   Populate from wheel
                 </.button>
                 <.button
+                  id="spin-selected-voting-session"
+                  navigate={~p"/wheel?#{[voting_session_id: @selected_session.id]}"}
+                  disabled={@pool_size == 0}
+                >
+                  Spin this pool
+                </.button>
+                <.button
                   :for={status <- ["draft", "open", "locked", "closed", "cancelled"]}
                   id={"set-session-#{status}"}
                   phx-click="set_status"

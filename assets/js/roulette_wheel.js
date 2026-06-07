@@ -32,15 +32,14 @@ const RouletteWheel = {
     this.rotor = this.el.querySelector("[data-wheel-rotor]")
     this.pointer = this.el.querySelector("[data-wheel-pointer]")
 
-    this.handleEvent("roulette:spin", ({winnerIndex, segmentCount, spinId, durationMs}) => {
+    this.handleEvent("roulette:spin", ({winnerCenterDegrees, segmentCount, spinId, durationMs}) => {
       if (!this.rotor || segmentCount < 1) return
 
       window.clearTimeout(this.timeout)
       this.stopPointerTicks()
 
       const segmentDegrees = 360 / segmentCount
-      const winnerCenter = winnerIndex * segmentDegrees + segmentDegrees / 2
-      const currentPosition = normalizeDegrees(this.rotation + winnerCenter)
+      const currentPosition = normalizeDegrees(this.rotation + winnerCenterDegrees)
       const landingDelta = normalizeDegrees(360 - currentPosition)
       const fullTurns = 12 * 360
       const startingRotation = this.rotation

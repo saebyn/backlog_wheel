@@ -2,6 +2,7 @@ defmodule BacklogWheelWeb.WheelLive do
   use BacklogWheelWeb, :live_view
 
   alias BacklogWheel.Backlog
+  alias BacklogWheel.Voting
 
   @spin_duration_ms 30_000
   @wheel_colors [
@@ -49,7 +50,7 @@ defmodule BacklogWheelWeb.WheelLive do
                 <g filter="url(#wheel-shadow)">
                   <%= for {candidate, index} <- Enum.with_index(@candidates) do %>
                     <path
-                      d={wedge_path(index, @candidate_count)}
+                      d={wedge_path(candidate)}
                       fill={wheel_color(index)}
                       stroke="rgba(255,255,255,0.72)"
                       stroke-width="0.35"
@@ -62,7 +63,7 @@ defmodule BacklogWheelWeb.WheelLive do
                       font-weight="800"
                       text-anchor="middle"
                       dominant-baseline="middle"
-                      transform={label_transform(index, @candidate_count)}
+                      transform={label_transform(candidate)}
                       class="select-none [paint-order:stroke] [stroke:rgba(0,0,0,0.55)] [stroke-width:0.45px]"
                     >
                       {truncate_title(candidate.title)}
@@ -87,18 +88,77 @@ defmodule BacklogWheelWeb.WheelLive do
                   Candidates
                 </p>
                 <p id="wheel-candidate-count" class="text-3xl font-black">{@candidate_count}</p>
+                <p id="wheel-total-weight" class="text-xs font-semibold text-white/70">
+                  Total weight: {@total_weight}
+                </p>
               </div>
             </div>
           </div>
 
           <aside class="flex flex-col gap-4 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl">
             <.header>
-              Stream Wheel
-              <:subtitle>Thirty-second roulette spin from the current wheel candidates.</:subtitle>
+              Voting Wheel
+              <:subtitle>Thirty-second weighted spin from a voting session pool.</:subtitle>
               <:actions>
-                <.button navigate={~p"/games"}>Curate games</.button>
+                <.button navigate={~p"/voting"}>Manage voting</.button>
               </:actions>
             </.header>
+
+            <section
+              id="wheel-session-selector"
+              class="space-y-2 rounded-2xl border border-base-300 bg-base-200 p-4"
+            >
+              <h2 class="text-lg font-bold">Voting session</h2>
+              <p :if={@voting_sessions == []} class="text-sm text-base-content/70">
+                Create a voting session before spinning the wheel.
+              </p>
+              <div :if={@voting_sessions != []} class="space-y-2">
+                <button
+                  :for={session <- @voting_sessions}
+                  id={"select-wheel-session-#{session.id}"}
+                  type="button"
+                  phx-click="select_session"
+                  phx-value-id={session.id}
+                  class={wheel_session_button_class(session, @selected_session)}
+                >
+                  <span class="font-semibold">Session #{session.id}</span>
+                  <span class="badge badge-ghost capitalize">{session.status}</span>
+                  <span class="text-xs text-base-content/60">
+                    {length(session.voting_session_games)} games
+                  </span>
+                </button>
+              </div>
+            </section>
+
+            <section
+              :if={@selected_session}
+              id="wheel-weight-summary"
+              class="space-y-2 rounded-2xl border border-base-300 bg-base-200 p-4"
+            >
+              <h2 class="text-lg font-bold">Weighted odds</h2>
+              <div id="wheel-weighted-candidates" class="space-y-2">
+                <div
+                  :for={candidate <- @candidates}
+                  id={"wheel-candidate-#{candidate.pool_item.id}"}
+                  class="rounded-xl bg-base-100 p-3"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <p class="font-semibold leading-tight">{candidate.title}</p>
+                    <p class="text-sm font-black text-primary">{candidate.weight}</p>
+                  </div>
+                  <div class="mt-2 h-2 overflow-hidden rounded-full bg-base-300">
+                    <div
+                      class="h-full rounded-full bg-primary"
+                      style={"width: #{candidate_weight_percent(candidate, @total_weight)}%"}
+                    >
+                    </div>
+                  </div>
+                  <p class="mt-1 text-xs text-base-content/60">
+                    Base {candidate.base_weight} + boosts {candidate.boost_total}
+                  </p>
+                </div>
+              </div>
+            </section>
 
             <div
               :if={@spinning?}
@@ -125,7 +185,7 @@ defmodule BacklogWheelWeb.WheelLive do
               id="spin-wheel-button"
               variant="primary"
               phx-click="spin"
-              disabled={@candidate_count == 0 || @spinning?}
+              disabled={!@selected_session || @candidate_count == 0 || @spinning?}
               class="btn btn-primary btn-lg w-full"
             >
               {if @spinning?, do: "Spinning...", else: "Spin Wheel"}
@@ -201,10 +261,11 @@ defmodule BacklogWheelWeb.WheelLive do
   end
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     {:ok,
      socket
      |> assign(:page_title, "Wheel")
+     |> assign(:selected_session_id, selected_session_id_from_params(params))
      |> assign(:selected_game, nil)
      |> assign(:pending_game, nil)
      |> assign(:pending_spin_id, nil)
@@ -214,28 +275,15 @@ defmodule BacklogWheelWeb.WheelLive do
 
   @impl true
   def handle_event("spin", _params, socket) do
-    case Backlog.spin_wheel() do
-      {:ok, %{game: game, spin: spin}} ->
-        winner_index = Enum.find_index(socket.assigns.candidates, &(&1.id == game.id)) || 0
-
-        socket =
-          push_event(socket, "roulette:spin", %{
-            winnerIndex: winner_index,
-            segmentCount: socket.assigns.candidate_count,
-            spinId: spin.id,
-            durationMs: @spin_duration_ms
-          })
-
-        {:noreply,
-         socket
-         |> assign(:selected_game, nil)
-         |> assign(:pending_game, game)
-         |> assign(:pending_spin_id, spin.id)
-         |> assign(:spinning?, true)}
-
-      {:error, :no_candidates} ->
-        {:noreply, put_flash(socket, :error, "Add at least one wheel candidate before spinning")}
+    if is_nil(socket.assigns.selected_session) do
+      {:noreply, put_flash(socket, :error, "Create or select a voting session before spinning")}
+    else
+      spin_selected_session(socket)
     end
+  end
+
+  def handle_event("select_session", %{"id" => id}, socket) do
+    {:noreply, socket |> assign(:selected_session_id, String.to_integer(id)) |> refresh_wheel()}
   end
 
   @impl true
@@ -260,27 +308,107 @@ defmodule BacklogWheelWeb.WheelLive do
     {:noreply, assign(socket, :selected_game, nil)}
   end
 
+  defp spin_selected_session(socket) do
+    case Voting.spin_voting_session_wheel(socket.assigns.selected_session) do
+      {:ok, %{game: game, spin: spin, entry: entry}} ->
+        winner = Enum.find(socket.assigns.candidates, &(&1.pool_item.id == entry.pool_item.id))
+
+        socket =
+          push_event(socket, "roulette:spin", %{
+            winnerCenterDegrees: winner_center_degrees(winner),
+            segmentCount: socket.assigns.candidate_count,
+            spinId: spin.id,
+            durationMs: @spin_duration_ms
+          })
+
+        {:noreply,
+         socket
+         |> assign(:selected_game, nil)
+         |> assign(:pending_game, game)
+         |> assign(:pending_spin_id, spin.id)
+         |> assign(:spinning?, true)}
+
+      {:error, :no_candidates} ->
+        {:noreply,
+         put_flash(socket, :error, "Add at least one game to the voting session before spinning")}
+    end
+  end
+
   defp refresh_wheel(socket) do
-    candidates = Backlog.list_wheel_candidates()
+    voting_sessions = Voting.list_voting_sessions()
+    selected_session = selected_session(voting_sessions, socket.assigns.selected_session_id)
+
+    candidates =
+      if selected_session do
+        selected_session
+        |> Voting.list_voting_session_wheel_entries()
+        |> with_wheel_geometry()
+      else
+        []
+      end
 
     socket
+    |> assign(:voting_sessions, voting_sessions)
+    |> assign(:selected_session, selected_session)
+    |> assign(:selected_session_id, selected_session && selected_session.id)
     |> assign(:candidates, candidates)
     |> assign(:candidate_count, length(candidates))
+    |> assign(:total_weight, total_weight(candidates))
     |> assign(:recent_spins, Backlog.list_recent_spins())
   end
 
-  defp wedge_path(_index, 0), do: ""
-  defp wedge_path(_index, 1), do: "M 50 2 A 48 48 0 1 1 50 98 A 48 48 0 1 1 50 2 Z"
+  defp selected_session_id_from_params(%{"voting_session_id" => id}) do
+    case Integer.parse(id) do
+      {id, ""} -> id
+      _invalid -> nil
+    end
+  end
 
-  defp wedge_path(index, count) do
-    segment = 360 / count
-    start_angle = -90 + index * segment
-    end_angle = start_angle + segment
-    {start_x, start_y} = polar_to_cartesian(50, 50, 48, start_angle)
-    {end_x, end_y} = polar_to_cartesian(50, 50, 48, end_angle)
-    large_arc = if segment > 180, do: 1, else: 0
+  defp selected_session_id_from_params(_params), do: nil
 
-    "M 50 50 L #{point(start_x)} #{point(start_y)} A 48 48 0 #{large_arc} 1 #{point(end_x)} #{point(end_y)} Z"
+  defp selected_session([], _selected_session_id), do: nil
+
+  defp selected_session(sessions, nil), do: hd(sessions)
+
+  defp selected_session(sessions, selected_session_id) do
+    Enum.find(sessions, &(&1.id == selected_session_id)) || hd(sessions)
+  end
+
+  defp with_wheel_geometry(candidates) do
+    total_weight = total_weight(candidates)
+
+    candidates
+    |> Enum.reduce({[], 0}, fn candidate, {candidates, accumulated_weight} ->
+      start_degrees = accumulated_weight / total_weight * 360
+      end_degrees = (accumulated_weight + candidate.weight) / total_weight * 360
+
+      candidate =
+        candidate
+        |> Map.put(:start_degrees, start_degrees)
+        |> Map.put(:end_degrees, end_degrees)
+
+      {[candidate | candidates], accumulated_weight + candidate.weight}
+    end)
+    |> elem(0)
+    |> Enum.reverse()
+  end
+
+  defp total_weight(candidates), do: Enum.reduce(candidates, 0, &(&1.weight + &2))
+
+  defp wedge_path(%{start_degrees: start_degrees, end_degrees: end_degrees}) do
+    segment = end_degrees - start_degrees
+
+    if segment == 360 do
+      "M 50 2 A 48 48 0 1 1 50 98 A 48 48 0 1 1 50 2 Z"
+    else
+      start_angle = -90 + start_degrees
+      end_angle = -90 + end_degrees
+      {start_x, start_y} = polar_to_cartesian(50, 50, 48, start_angle)
+      {end_x, end_y} = polar_to_cartesian(50, 50, 48, end_angle)
+      large_arc = if segment > 180, do: 1, else: 0
+
+      "M 50 50 L #{point(start_x)} #{point(start_y)} A 48 48 0 #{large_arc} 1 #{point(end_x)} #{point(end_y)} Z"
+    end
   end
 
   defp polar_to_cartesian(center_x, center_y, radius, angle_degrees) do
@@ -290,11 +418,27 @@ defmodule BacklogWheelWeb.WheelLive do
 
   defp point(value), do: :erlang.float_to_binary(value, decimals: 3)
 
-  defp label_transform(_index, 0), do: ""
-
-  defp label_transform(index, count) do
-    angle = index * (360 / count) + 180 / count
+  defp label_transform(candidate) do
+    angle = winner_center_degrees(candidate)
     "rotate(#{point(angle)} 50 50) translate(0 -31) rotate(90 50 50)"
+  end
+
+  defp winner_center_degrees(nil), do: 0
+  defp winner_center_degrees(candidate), do: (candidate.start_degrees + candidate.end_degrees) / 2
+
+  defp candidate_weight_percent(_candidate, 0), do: "0.0"
+
+  defp candidate_weight_percent(candidate, total_weight) do
+    (candidate.weight / total_weight * 100)
+    |> point()
+  end
+
+  defp wheel_session_button_class(session, selected_session) do
+    [
+      "flex w-full items-center justify-between gap-2 rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md",
+      selected_session && session.id == selected_session.id && "border-primary bg-primary/10",
+      (!selected_session || session.id != selected_session.id) && "border-base-300 bg-base-100"
+    ]
   end
 
   defp label_size(count) when count <= 8, do: "3.2"

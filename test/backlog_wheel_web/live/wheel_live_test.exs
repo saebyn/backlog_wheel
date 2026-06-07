@@ -3,21 +3,45 @@ defmodule BacklogWheelWeb.WheelLiveTest do
 
   import Phoenix.LiveViewTest
   import BacklogWheel.BacklogFixtures
+  import BacklogWheel.VotingFixtures
 
   alias BacklogWheel.Backlog
 
-  test "renders wheel with no candidates", %{conn: conn} do
+  test "renders voting wheel with no sessions", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/wheel")
 
-    assert html =~ "Wheel"
+    assert html =~ "Voting Wheel"
+    assert html =~ "Create a voting session before spinning the wheel."
     assert html =~ "No spins yet"
     assert html =~ "0"
   end
 
-  test "spins, records, and reveals a selected game after animation", %{conn: conn} do
-    game = game_fixture(%{title: "Wheel Game", include_in_wheel: true, played_on_stream: true})
+  test "renders weighted voting session candidates", %{conn: conn} do
+    voting_session = voting_session_fixture()
+    first_game = game_fixture(%{title: "Small Slice"})
+    second_game = game_fixture(%{title: "Big Slice", external_id: "big-slice"})
+    first_pool_item = voting_session_game_fixture(voting_session, first_game, %{base_weight: 1})
+    second_pool_item = voting_session_game_fixture(voting_session, second_game, %{base_weight: 2})
 
-    {:ok, view, _html} = live(conn, ~p"/wheel")
+    voting_boost_fixture(second_pool_item, nil, %{strength: 3})
+
+    {:ok, view, _html} = live(conn, ~p"/wheel?voting_session_id=#{voting_session.id}")
+
+    assert has_element?(view, "#wheel-candidate-count", "2")
+    assert has_element?(view, "#wheel-total-weight", "Total weight: 6")
+    assert has_element?(view, "#wheel-candidate-#{first_pool_item.id}", "1")
+    assert has_element?(view, "#wheel-candidate-#{second_pool_item.id}", "5")
+    assert has_element?(view, "#wheel-weighted-candidates", "Base 2 + boosts 3")
+  end
+
+  test "spins a voting session, records, and reveals a selected game after animation", %{
+    conn: conn
+  } do
+    voting_session = voting_session_fixture()
+    game = game_fixture(%{title: "Voting Wheel Game", include_in_wheel: false})
+    voting_session_game_fixture(voting_session, game)
+
+    {:ok, view, _html} = live(conn, ~p"/wheel?voting_session_id=#{voting_session.id}")
 
     assert has_element?(view, "#wheel-candidate-count", "1")
     assert view |> element("#spin-wheel-button") |> render_click()
@@ -25,6 +49,7 @@ defmodule BacklogWheelWeb.WheelLiveTest do
     refute has_element?(view, "#spin-history", game.title)
 
     [spin] = Backlog.list_recent_spins()
+    assert spin.source == "voting_session"
 
     assert render_hook(view, "spin_finished", %{"spinId" => spin.id})
     assert has_element?(view, "#wheel-result", game.title)
@@ -33,5 +58,25 @@ defmodule BacklogWheelWeb.WheelLiveTest do
 
     assert view |> element("#dismiss-winner-modal") |> render_click()
     refute has_element?(view, "#wheel-winner-modal")
+  end
+
+  test "selects voting session from wheel page", %{conn: conn} do
+    first_session = voting_session_fixture()
+    first_game = game_fixture(%{title: "First Session Game"})
+    voting_session_game_fixture(first_session, first_game)
+
+    second_session = voting_session_fixture()
+    second_game = game_fixture(%{title: "Second Session Game", external_id: "second-session"})
+    voting_session_game_fixture(second_session, second_game)
+
+    {:ok, view, _html} = live(conn, ~p"/wheel?voting_session_id=#{first_session.id}")
+
+    assert has_element?(view, "#wheel-weighted-candidates", first_game.title)
+    refute has_element?(view, "#wheel-weighted-candidates", second_game.title)
+
+    assert view |> element("#select-wheel-session-#{second_session.id}") |> render_click()
+
+    assert has_element?(view, "#wheel-weighted-candidates", second_game.title)
+    refute has_element?(view, "#wheel-weighted-candidates", first_game.title)
   end
 end

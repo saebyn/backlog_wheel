@@ -315,5 +315,41 @@ defmodule BacklogWheel.VotingTest do
                final_weight: 9
              }
     end
+
+    test "list_voting_session_wheel_entries/1 returns final weights for the wheel" do
+      voting_session = voting_session_fixture()
+      base_game = game_fixture(%{title: "Base Weight Game"})
+      boosted_game = game_fixture(%{title: "Boosted Weight Game", external_id: "boosted"})
+      base_pool_item = voting_session_game_fixture(voting_session, base_game, %{base_weight: 2})
+
+      boosted_pool_item =
+        voting_session_game_fixture(voting_session, boosted_game, %{base_weight: 1})
+
+      voting_boost_fixture(boosted_pool_item, nil, %{strength: 4})
+
+      entries = Voting.list_voting_session_wheel_entries(voting_session)
+
+      assert Enum.map(entries, & &1.title) == ["Base Weight Game", "Boosted Weight Game"]
+
+      assert Enum.map(entries, &{&1.pool_item.id, &1.weight, &1.base_weight, &1.boost_total}) == [
+               {base_pool_item.id, 2, 2, 0},
+               {boosted_pool_item.id, 5, 1, 4}
+             ]
+    end
+
+    test "spin_voting_session_wheel/1 records a voting-session spin" do
+      voting_session = voting_session_fixture()
+      game = game_fixture(%{title: "Only Voting Candidate"})
+      voting_session_game_fixture(voting_session, game, %{base_weight: 3})
+
+      assert {:ok, %{game: selected_game, spin: spin, entry: entry}} =
+               Voting.spin_voting_session_wheel(voting_session)
+
+      assert selected_game.id == game.id
+      assert entry.weight == 3
+      assert spin.game.id == game.id
+      assert spin.source == "voting_session"
+      assert spin.notes =~ "Voting session #{voting_session.id}"
+    end
   end
 end
