@@ -86,6 +86,7 @@ defmodule BacklogWheelWeb do
       import Phoenix.HTML
       # Core UI components
       import BacklogWheelWeb.CoreComponents
+      import BacklogWheelWeb.DateTimeHelpers
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

@@ -44,7 +44,10 @@ defmodule BacklogWheelWeb.SpinHistoryLive do
               {spin.game.title}
             </.link>
             <p class="mt-1 text-sm text-base-content/60">
-              {format_spun_at(spin.spun_at)} · {spin.source}
+              <span title={format_utc_datetime(spin.spun_at)}>
+                {format_datetime_with_age(spin.spun_at)}
+              </span>
+              · {spin.source}
             </p>
           </div>
 
@@ -81,9 +84,5 @@ defmodule BacklogWheelWeb.SpinHistoryLive do
 
   defp refresh_spins(socket) do
     assign(socket, :spins, Backlog.list_recent_spins(100))
-  end
-
-  defp format_spun_at(%DateTime{} = datetime) do
-    Calendar.strftime(datetime, "%Y-%m-%d %H:%M UTC")
   end
 end

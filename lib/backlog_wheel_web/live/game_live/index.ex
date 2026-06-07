@@ -127,7 +127,7 @@ defmodule BacklogWheelWeb.GameLive.Index do
         </:col>
         <:col :let={{_id, game}} label="Last played">
           <span title={format_utc_datetime(game.last_played_at)}>
-            {format_last_played(game.last_played_at)}
+            {format_datetime_with_age(game.last_played_at)}
           </span>
         </:col>
         <:action :let={{_id, game}}>
@@ -271,51 +271,5 @@ defmodule BacklogWheelWeb.GameLive.Index do
       current_filter == filter && "btn-primary",
       current_filter != filter && "btn-ghost"
     ]
-  end
-
-  defp format_last_played(nil), do: "Never"
-
-  defp format_last_played(%DateTime{} = datetime) do
-    "#{format_local_datetime(datetime)} (#{format_time_ago(datetime)} ago)"
-  end
-
-  defp format_local_datetime(%DateTime{} = datetime) do
-    datetime
-    |> DateTime.to_unix(:second)
-    |> :calendar.system_time_to_local_time(:second)
-    |> NaiveDateTime.from_erl!()
-    |> Calendar.strftime("%Y-%m-%d %H:%M")
-  end
-
-  defp format_utc_datetime(nil), do: "Never played"
-
-  defp format_utc_datetime(%DateTime{} = datetime) do
-    Calendar.strftime(datetime, "%Y-%m-%d %H:%M UTC")
-  end
-
-  defp format_time_ago(%DateTime{} = datetime) do
-    seconds = max(DateTime.diff(DateTime.utc_now(), datetime, :second), 0)
-
-    cond do
-      seconds < 60 ->
-        "just now"
-
-      seconds < 3_600 ->
-        "#{div(seconds, 60)}m"
-
-      seconds < 86_400 ->
-        "#{div(seconds, 3_600)}h"
-
-      true ->
-        days = div(seconds, 86_400)
-        years = div(days, 365)
-        remaining_days = rem(days, 365)
-
-        if years > 0 do
-          "#{years}y #{remaining_days}d"
-        else
-          "#{days}d"
-        end
-    end
   end
 end

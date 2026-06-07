@@ -140,7 +140,11 @@ defmodule BacklogWheelWeb.WheelLive do
                   class="rounded-xl bg-base-200 p-4"
                 >
                   <p class="font-semibold leading-tight">{spin.game.title}</p>
-                  <p class="mt-1 text-sm text-base-content/60">{format_spun_at(spin.spun_at)}</p>
+                  <p class="mt-1 text-sm text-base-content/60">
+                    <span title={format_utc_datetime(spin.spun_at)}>
+                      {format_datetime_with_age(spin.spun_at)}
+                    </span>
+                  </p>
                 </div>
               </div>
             </section>
@@ -298,8 +302,4 @@ defmodule BacklogWheelWeb.WheelLive do
 
   defp truncate_title(title) when byte_size(title) <= 24, do: title
   defp truncate_title(title), do: String.slice(title, 0, 23) <> "..."
-
-  defp format_spun_at(%DateTime{} = datetime) do
-    Calendar.strftime(datetime, "%Y-%m-%d %H:%M UTC")
-  end
 end
