@@ -32,6 +32,18 @@ Install dependencies, create the SQLite database, run migrations, and build asse
 mix setup
 ```
 
+Install the pre-commit hooks:
+
+```sh
+pre-commit install
+```
+
+Run the secret scanner manually:
+
+```sh
+pre-commit run gitleaks --all-files
+```
+
 Run migrations after pulling new schema changes:
 
 ```sh

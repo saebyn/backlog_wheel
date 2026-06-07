@@ -7,6 +7,8 @@ pkgs.mkShellNoCC {
     sqlite
     inotify-tools
     git
+    gitleaks
+    pre-commit
     tailwindcss_4
     watchman
   ];
