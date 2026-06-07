@@ -301,5 +301,19 @@ defmodule BacklogWheel.VotingTest do
       assert first_boost.id != second_boost.id
       assert Repo.aggregate(VotingBoost, :count, :id) == 2
     end
+
+    test "voting_session_game_weight/1 calculates final weight from boosts" do
+      voting_session_game =
+        voting_session_game_fixture(voting_session_fixture(), game_fixture(), %{base_weight: 2})
+
+      voting_boost_fixture(voting_session_game, nil, %{strength: 3})
+      voting_boost_fixture(voting_session_game, nil, %{strength: 4})
+
+      assert Voting.voting_session_game_weight(voting_session_game) == %{
+               base_weight: 2,
+               boost_total: 7,
+               final_weight: 9
+             }
+    end
   end
 end

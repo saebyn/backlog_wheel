@@ -83,4 +83,24 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     assert view |> element("#set-session-cancelled") |> render_click()
     assert has_element?(view, "#selected-session-status", "cancelled")
   end
+
+  test "records local admin boosts and shows final weight", %{conn: conn} do
+    voting_session = voting_session_fixture()
+    game = game_fixture(%{title: "Boostable Game"})
+    pool_item = voting_session_game_fixture(voting_session, game, %{base_weight: 2})
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    assert has_element?(view, "#pool-game-base-weight-#{pool_item.id}", "2")
+    assert has_element?(view, "#pool-game-boost-total-#{pool_item.id}", "+0")
+    assert has_element?(view, "#pool-game-final-weight-#{pool_item.id}", "2")
+
+    assert view |> element("#boost-pool-game-#{pool_item.id}") |> render_click()
+    assert has_element?(view, "#pool-game-boost-total-#{pool_item.id}", "+1")
+    assert has_element?(view, "#pool-game-final-weight-#{pool_item.id}", "3")
+
+    assert view |> element("#boost-pool-game-#{pool_item.id}") |> render_click()
+    assert has_element?(view, "#pool-game-boost-total-#{pool_item.id}", "+2")
+    assert has_element?(view, "#pool-game-final-weight-#{pool_item.id}", "4")
+  end
 end

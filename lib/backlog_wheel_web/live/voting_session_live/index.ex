@@ -111,18 +111,56 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                     <div class="flex items-start justify-between gap-3">
                       <div>
                         <h3 class="font-bold leading-tight">{pool_item.game.title}</h3>
-                        <p class="mt-1 text-sm text-base-content/60">
-                          Base weight {pool_item.base_weight}
-                        </p>
+                        <div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                          <div class="rounded-xl bg-base-100 p-2">
+                            <p class="font-semibold uppercase tracking-wide text-base-content/50">
+                              Base
+                            </p>
+                            <p id={"pool-game-base-weight-#{pool_item.id}"} class="text-lg font-black">
+                              {pool_item.base_weight}
+                            </p>
+                          </div>
+                          <div class="rounded-xl bg-base-100 p-2">
+                            <p class="font-semibold uppercase tracking-wide text-base-content/50">
+                              Boosts
+                            </p>
+                            <p
+                              id={"pool-game-boost-total-#{pool_item.id}"}
+                              class="text-lg font-black text-primary"
+                            >
+                              +{pool_item.boost_total}
+                            </p>
+                          </div>
+                          <div class="rounded-xl bg-base-100 p-2">
+                            <p class="font-semibold uppercase tracking-wide text-base-content/50">
+                              Final
+                            </p>
+                            <p
+                              id={"pool-game-final-weight-#{pool_item.id}"}
+                              class="text-lg font-black"
+                            >
+                              {pool_item.final_weight}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <.button
-                        id={"remove-pool-game-#{pool_item.id}"}
-                        phx-click="remove_pool_game"
-                        phx-value-id={pool_item.id}
-                        data-confirm="Remove this game from the voting pool?"
-                      >
-                        Remove
-                      </.button>
+                      <div class="flex shrink-0 flex-col gap-2">
+                        <.button
+                          id={"boost-pool-game-#{pool_item.id}"}
+                          phx-click="boost_pool_game"
+                          phx-value-id={pool_item.id}
+                        >
+                          +1 Boost
+                        </.button>
+                        <.button
+                          id={"remove-pool-game-#{pool_item.id}"}
+                          phx-click="remove_pool_game"
+                          phx-value-id={pool_item.id}
+                          data-confirm="Remove this game from the voting pool?"
+                        >
+                          Remove
+                        </.button>
+                      </div>
                     </div>
                   </article>
                 </div>
@@ -223,6 +261,13 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   def handle_event("remove_pool_game", %{"id" => id}, socket) do
     pool_item = Enum.find(socket.assigns.pool_items, &(&1.id == String.to_integer(id)))
     {:ok, _pool_item} = Voting.remove_game_from_session(pool_item)
+
+    {:noreply, refresh(socket)}
+  end
+
+  def handle_event("boost_pool_game", %{"id" => id}, socket) do
+    pool_item = Enum.find(socket.assigns.pool_items, &(&1.id == String.to_integer(id)))
+    {:ok, _boost} = Voting.record_boost(pool_item, %{strength: 1, source: "local"})
 
     {:noreply, refresh(socket)}
   end

@@ -27,7 +27,7 @@ defmodule BacklogWheel.Voting do
     |> where([session], session.community_id == ^default_community_id)
     |> order_by([session], desc: session.inserted_at, desc: session.id)
     |> Repo.all()
-    |> Repo.preload(voting_session_games: :game)
+    |> preload_pool_games_with_boosts()
   end
 
   @doc """
@@ -36,7 +36,8 @@ defmodule BacklogWheel.Voting do
   def get_voting_session!(id) do
     VotingSession
     |> Repo.get!(id)
-    |> Repo.preload([:community, voting_session_games: :game])
+    |> Repo.preload(:community)
+    |> preload_pool_games_with_boosts()
   end
 
   @doc """
@@ -118,6 +119,19 @@ defmodule BacklogWheel.Voting do
     do_record_boost(voting_session_game, viewer.id, attrs)
   end
 
+  @doc """
+  Returns the boost total and final weight for a voting session game.
+  """
+  def voting_session_game_weight(%VotingSessionGame{} = voting_session_game) do
+    boost_total = boost_total_for_game(voting_session_game.id)
+
+    %{
+      base_weight: voting_session_game.base_weight,
+      boost_total: boost_total,
+      final_weight: voting_session_game.base_weight + boost_total
+    }
+  end
+
   defp do_record_boost(%VotingSessionGame{} = voting_session_game, viewer_id, attrs) do
     case get_existing_external_boost(attrs) do
       %VotingBoost{} = voting_boost ->
@@ -128,6 +142,36 @@ defmodule BacklogWheel.Voting do
         |> VotingBoost.changeset(attrs)
         |> Repo.insert()
     end
+  end
+
+  defp boost_total_for_game(voting_session_game_id) do
+    VotingBoost
+    |> where([boost], boost.voting_session_game_id == ^voting_session_game_id)
+    |> select([boost], coalesce(sum(boost.strength), 0))
+    |> Repo.one()
+  end
+
+  defp preload_pool_games_with_boosts(%VotingSession{} = voting_session) do
+    [voting_session]
+    |> preload_pool_games_with_boosts()
+    |> hd()
+  end
+
+  defp preload_pool_games_with_boosts(voting_sessions) when is_list(voting_sessions) do
+    voting_sessions
+    |> Repo.preload(voting_session_games: [:game, :voting_boosts])
+    |> Enum.map(fn voting_session ->
+      pool_items = Enum.map(voting_session.voting_session_games, &attach_weight/1)
+      %{voting_session | voting_session_games: pool_items}
+    end)
+  end
+
+  defp attach_weight(%VotingSessionGame{} = voting_session_game) do
+    boost_total = Enum.reduce(voting_session_game.voting_boosts, 0, &(&1.strength + &2))
+
+    voting_session_game
+    |> Map.put(:boost_total, boost_total)
+    |> Map.put(:final_weight, voting_session_game.base_weight + boost_total)
   end
 
   @doc """
