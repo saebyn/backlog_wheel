@@ -1,4 +1,4 @@
 [allowlist]
-description = "Ignore Phoenix secret key base in dev"
-paths = ["config/dev.exs", "config/runtime.exs"]
+description = "Ignore Phoenix secret key base in non-production config"
+paths = ["config/dev.exs", "config/test.exs"]
 regexes = ['''secret_key_base: ".*"''']
