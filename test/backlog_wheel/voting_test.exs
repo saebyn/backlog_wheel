@@ -355,7 +355,7 @@ defmodule BacklogWheel.VotingTest do
       game = game_fixture(%{title: "Only Voting Candidate"})
       voting_session_game_fixture(voting_session, game, %{base_weight: 3})
 
-      assert {:ok, %{game: selected_game, spin: spin, entry: entry}} =
+      assert {:ok, %{game: selected_game, spin: spin, entry: entry, spin_payload: payload}} =
                Voting.spin_voting_session_wheel(voting_session)
 
       assert selected_game.id == game.id
@@ -363,9 +363,12 @@ defmodule BacklogWheel.VotingTest do
       assert spin.game.id == game.id
       assert spin.source == "voting_session"
       assert spin.notes =~ "Voting session #{voting_session.id}"
+      assert payload["spinId"] == spin.id
+      assert payload["gameId"] == game.id
+      assert payload["votingSessionId"] == voting_session.id
     end
 
-    test "spin_voting_session_wheel/1 snapshots entries and final weights" do
+    test "spin_voting_session_wheel/1 snapshots payload, entries, and geometry" do
       voting_session = voting_session_fixture()
       first_game = game_fixture(%{title: "Snapshot Winner"})
       second_game = game_fixture(%{title: "Snapshot Other", external_id: "snapshot-other"})
@@ -377,13 +380,26 @@ defmodule BacklogWheel.VotingTest do
       voting_boost_fixture(first_pool_item, nil, %{strength: 3})
       voting_boost_fixture(second_pool_item, nil, %{strength: 1})
 
-      assert {:ok, %{spin: spin}} = Voting.spin_voting_session_wheel(voting_session)
+      assert {:ok, %{spin: spin, spin_payload: payload}} =
+               Voting.spin_voting_session_wheel(voting_session)
 
       assert spin.voting_session_id == voting_session.id
       assert spin.snapshot["source"] == "voting_session"
       assert spin.snapshot["voting_session_id"] == voting_session.id
       assert spin.snapshot["total_weight"] == 7
       assert spin.snapshot["winning_game_id"] == spin.game_id
+      assert is_float(spin.snapshot["landing_degrees"])
+      assert spin.snapshot["duration_ms"] == 30_000
+      assert spin.snapshot["full_turns"] == 12
+      assert is_integer(spin.snapshot["spin_seed"])
+      assert is_binary(spin.snapshot["started_at"])
+      assert spin.snapshot["easing_profile"]["type"] == "cubic-bezier"
+
+      assert payload["spinId"] == spin.id
+      assert payload["landingDegrees"] == spin.snapshot["landing_degrees"]
+      assert payload["durationMs"] == 30_000
+      assert payload["fullTurns"] == 12
+      assert payload["segments"] == spin.snapshot["entries"]
 
       assert [first_entry, second_entry] = spin.snapshot["entries"]
 
@@ -391,6 +407,8 @@ defmodule BacklogWheel.VotingTest do
                "game_id" => first_game.id,
                "voting_session_game_id" => first_pool_item.id,
                "title" => "Snapshot Winner",
+               "start_degrees" => 0.0,
+               "end_degrees" => 257.14285714285717,
                "base_weight" => 2,
                "boost_total" => 3,
                "final_weight" => 5
@@ -400,10 +418,29 @@ defmodule BacklogWheel.VotingTest do
                "game_id" => second_game.id,
                "voting_session_game_id" => second_pool_item.id,
                "title" => "Snapshot Other",
+               "start_degrees" => 257.14285714285717,
+               "end_degrees" => 360.0,
                "base_weight" => 1,
                "boost_total" => 1,
                "final_weight" => 2
              }
+    end
+
+    test "spin_voting_session_wheel/1 broadcasts the canonical spin payload" do
+      voting_session = voting_session_fixture()
+      game = game_fixture(%{title: "Broadcast Winner"})
+      voting_session_game_fixture(voting_session, game)
+
+      assert :ok = Voting.subscribe_to_voting_session(voting_session)
+      assert {:ok, %{spin_payload: payload}} = Voting.spin_voting_session_wheel(voting_session)
+
+      assert_receive {:voting_session_spin_started, ^payload}
+      assert payload["gameId"] == game.id
+      assert [%{"game_id" => game_id} = segment] = payload["segments"]
+
+      assert game_id == game.id
+      assert segment["start_degrees"] == 0.0
+      assert segment["end_degrees"] == 360.0
     end
   end
 end

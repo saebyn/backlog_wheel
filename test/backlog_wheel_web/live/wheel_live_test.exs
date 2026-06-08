@@ -45,6 +45,22 @@ defmodule BacklogWheelWeb.WheelLiveTest do
 
     assert has_element?(view, "#wheel-candidate-count", "1")
     assert view |> element("#spin-wheel-button") |> render_click()
+
+    voting_session_id = voting_session.id
+    expected_game_id = game.id
+
+    assert_push_event(view, "roulette:spin", %{
+      "votingSessionId" => ^voting_session_id,
+      "gameId" => ^expected_game_id,
+      "landingDegrees" => 180.0,
+      "durationMs" => 30_000,
+      "fullTurns" => 12,
+      "segments" => [%{"game_id" => game_id} = segment]
+    })
+
+    assert game_id == expected_game_id
+    assert segment["start_degrees"] == 0.0
+    assert segment["end_degrees"] == 360.0
     assert has_element?(view, "#wheel-spinning")
     refute has_element?(view, "#spin-history", game.title)
 
@@ -78,6 +94,21 @@ defmodule BacklogWheelWeb.WheelLiveTest do
 
     assert has_element?(view, "#wheel-weighted-candidates", second_game.title)
     refute has_element?(view, "#wheel-weighted-candidates", first_game.title)
+  end
+
+  test "broadcasts the same spin payload to multiple wheel windows", %{conn: conn} do
+    voting_session = voting_session_fixture()
+    game = game_fixture(%{title: "Shared Spin Game"})
+    voting_session_game_fixture(voting_session, game)
+
+    {:ok, first_view, _html} = live(conn, ~p"/wheel?voting_session_id=#{voting_session.id}")
+    {:ok, second_view, _html} = live(conn, ~p"/wheel?voting_session_id=#{voting_session.id}")
+
+    assert first_view |> element("#spin-wheel-button") |> render_click()
+
+    assert_push_event(first_view, "roulette:spin", first_payload)
+    assert_push_event(second_view, "roulette:spin", second_payload)
+    assert first_payload == second_payload
   end
 
   test "refreshes selected voting session weights from pubsub", %{conn: conn} do

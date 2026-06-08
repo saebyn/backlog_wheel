@@ -19,6 +19,15 @@ defmodule BacklogWheel.Voting do
   }
 
   @pubsub BacklogWheel.PubSub
+  @spin_duration_ms 30_000
+  @spin_full_turns 12
+  @spin_easing_profile %{
+    "type" => "cubic-bezier",
+    "x1" => 0.08,
+    "y1" => 0.72,
+    "x2" => 0.12,
+    "y2" => 1.0
+  }
 
   @doc """
   Subscribes the caller to updates for a voting session.
@@ -185,23 +194,44 @@ defmodule BacklogWheel.Voting do
   Selects one game from a voting session pool by final weight and records the spin.
   """
   def spin_voting_session_wheel(%VotingSession{} = voting_session) do
-    entries = list_voting_session_wheel_entries(voting_session)
+    entries =
+      voting_session
+      |> list_voting_session_wheel_entries()
+      |> with_wheel_geometry()
 
     case select_weighted_entry(entries) do
       nil ->
         {:error, :no_candidates}
 
       entry ->
+        spun_at = DateTime.utc_now() |> DateTime.truncate(:second)
+        spin_seed = System.unique_integer([:positive])
+        landing_degrees = winner_center_degrees(entry)
+
+        snapshot =
+          spin_snapshot(voting_session, entries, entry, %{
+            spin_seed: spin_seed,
+            landing_degrees: landing_degrees,
+            spun_at: spun_at
+          })
+
         case Backlog.create_spin(%{
                game_id: entry.game.id,
                voting_session_id: voting_session.id,
-               spun_at: DateTime.utc_now(),
+               spun_at: spun_at,
                source: "voting_session",
                notes: "Voting session #{voting_session.id}; final weight #{entry.weight}",
-               snapshot: spin_snapshot(voting_session, entries, entry)
+               snapshot: snapshot
              }) do
-          {:ok, spin} -> {:ok, %{game: entry.game, spin: Repo.preload(spin, :game), entry: entry}}
-          {:error, changeset} -> {:error, changeset}
+          {:ok, spin} ->
+            spin = Repo.preload(spin, :game)
+            payload = spin_start_payload(spin, snapshot)
+            broadcast_voting_session_spin_started(voting_session.id, payload)
+
+            {:ok, %{game: entry.game, spin: spin, entry: entry, spin_payload: payload}}
+
+          {:error, changeset} ->
+            {:error, changeset}
         end
     end
   end
@@ -273,7 +303,7 @@ defmodule BacklogWheel.Voting do
 
   defp reload_voting_session!(%VotingSession{id: id}), do: get_voting_session!(id)
 
-  defp spin_snapshot(%VotingSession{} = voting_session, entries, winning_entry) do
+  defp spin_snapshot(%VotingSession{} = voting_session, entries, winning_entry, spin_data) do
     total_weight = Enum.reduce(entries, 0, &(&1.weight + &2))
 
     %{
@@ -282,6 +312,12 @@ defmodule BacklogWheel.Voting do
       "winning_game_id" => winning_entry.game.id,
       "winning_voting_session_game_id" => winning_entry.pool_item.id,
       "total_weight" => total_weight,
+      "spin_seed" => spin_data.spin_seed,
+      "landing_degrees" => spin_data.landing_degrees,
+      "duration_ms" => @spin_duration_ms,
+      "full_turns" => @spin_full_turns,
+      "started_at" => DateTime.to_iso8601(spin_data.spun_at),
+      "easing_profile" => @spin_easing_profile,
       "entries" => Enum.map(entries, &snapshot_entry/1)
     }
   end
@@ -291,11 +327,50 @@ defmodule BacklogWheel.Voting do
       "game_id" => entry.game.id,
       "voting_session_game_id" => entry.pool_item.id,
       "title" => entry.title,
+      "start_degrees" => entry.start_degrees,
+      "end_degrees" => entry.end_degrees,
       "base_weight" => entry.base_weight,
       "boost_total" => entry.boost_total,
       "final_weight" => entry.weight
     }
   end
+
+  defp spin_start_payload(spin, snapshot) do
+    %{
+      "spinId" => spin.id,
+      "votingSessionId" => snapshot["voting_session_id"],
+      "gameId" => snapshot["winning_game_id"],
+      "votingSessionGameId" => snapshot["winning_voting_session_game_id"],
+      "landingDegrees" => snapshot["landing_degrees"],
+      "durationMs" => snapshot["duration_ms"],
+      "fullTurns" => snapshot["full_turns"],
+      "spinSeed" => snapshot["spin_seed"],
+      "startedAt" => snapshot["started_at"],
+      "easingProfile" => snapshot["easing_profile"],
+      "segments" => snapshot["entries"]
+    }
+  end
+
+  defp with_wheel_geometry(candidates) do
+    total_weight = Enum.reduce(candidates, 0, &(&1.weight + &2))
+
+    candidates
+    |> Enum.reduce({[], 0}, fn candidate, {candidates, accumulated_weight} ->
+      start_degrees = accumulated_weight / total_weight * 360
+      end_degrees = (accumulated_weight + candidate.weight) / total_weight * 360
+
+      candidate =
+        candidate
+        |> Map.put(:start_degrees, start_degrees)
+        |> Map.put(:end_degrees, end_degrees)
+
+      {[candidate | candidates], accumulated_weight + candidate.weight}
+    end)
+    |> elem(0)
+    |> Enum.reverse()
+  end
+
+  defp winner_center_degrees(candidate), do: (candidate.start_degrees + candidate.end_degrees) / 2
 
   @doc """
   Populates a voting session pool from the current wheel-eligible games.
@@ -372,5 +447,13 @@ defmodule BacklogWheel.Voting do
 
   defp broadcast_voting_session_changed(id) do
     Phoenix.PubSub.broadcast(@pubsub, voting_session_topic(id), {:voting_session_changed, id})
+  end
+
+  defp broadcast_voting_session_spin_started(id, payload) do
+    Phoenix.PubSub.broadcast(
+      @pubsub,
+      voting_session_topic(id),
+      {:voting_session_spin_started, payload}
+    )
   end
 end

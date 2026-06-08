@@ -4,7 +4,6 @@ defmodule BacklogWheelWeb.WheelLive do
   alias BacklogWheel.Backlog
   alias BacklogWheel.Voting
 
-  @spin_duration_ms 30_000
   @wheel_colors [
     "#f97316",
     "#7c3aed",
@@ -317,25 +316,25 @@ defmodule BacklogWheelWeb.WheelLive do
     end
   end
 
+  def handle_info({:voting_session_spin_started, %{"votingSessionId" => id} = payload}, socket) do
+    if socket.assigns.selected_session_id == id do
+      socket = push_event(socket, "roulette:spin", payload)
+
+      {:noreply,
+       socket
+       |> assign(:selected_game, nil)
+       |> assign(:pending_game, Backlog.get_game!(payload["gameId"]))
+       |> assign(:pending_spin_id, payload["spinId"])
+       |> assign(:spinning?, true)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   defp spin_selected_session(socket) do
     case Voting.spin_voting_session_wheel(socket.assigns.selected_session) do
-      {:ok, %{game: game, spin: spin, entry: entry}} ->
-        winner = Enum.find(socket.assigns.candidates, &(&1.pool_item.id == entry.pool_item.id))
-
-        socket =
-          push_event(socket, "roulette:spin", %{
-            winnerCenterDegrees: winner_center_degrees(winner),
-            segmentCount: socket.assigns.candidate_count,
-            spinId: spin.id,
-            durationMs: @spin_duration_ms
-          })
-
-        {:noreply,
-         socket
-         |> assign(:selected_game, nil)
-         |> assign(:pending_game, game)
-         |> assign(:pending_spin_id, spin.id)
-         |> assign(:spinning?, true)}
+      {:ok, _spin_result} ->
+        {:noreply, socket}
 
       {:error, :no_candidates} ->
         {:noreply,
