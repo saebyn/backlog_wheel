@@ -21,6 +21,8 @@ defmodule BacklogWheel.Voting do
   @pubsub BacklogWheel.PubSub
   @spin_duration_ms 30_000
   @spin_full_turns 12
+  @landing_edge_inset_ratio 0.12
+  @landing_edge_inset_degrees 8.0
   @spin_easing_profile %{
     "type" => "cubic-bezier",
     "x1" => 0.08,
@@ -206,7 +208,7 @@ defmodule BacklogWheel.Voting do
       entry ->
         spun_at = DateTime.utc_now() |> DateTime.truncate(:second)
         spin_seed = System.unique_integer([:positive])
-        landing_degrees = winner_center_degrees(entry)
+        landing_degrees = random_landing_degrees(entry)
 
         snapshot =
           spin_snapshot(voting_session, entries, entry, %{
@@ -370,7 +372,13 @@ defmodule BacklogWheel.Voting do
     |> Enum.reverse()
   end
 
-  defp winner_center_degrees(candidate), do: (candidate.start_degrees + candidate.end_degrees) / 2
+  defp random_landing_degrees(candidate) do
+    segment_degrees = candidate.end_degrees - candidate.start_degrees
+    inset_degrees = min(segment_degrees * @landing_edge_inset_ratio, @landing_edge_inset_degrees)
+    position = :rand.uniform() |> max(0.000_001) |> min(0.999_999)
+
+    candidate.start_degrees + inset_degrees + (segment_degrees - inset_degrees * 2) * position
+  end
 
   @doc """
   Populates a voting session pool from the current wheel-eligible games.

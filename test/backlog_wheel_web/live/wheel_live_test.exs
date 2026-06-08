@@ -52,13 +52,15 @@ defmodule BacklogWheelWeb.WheelLiveTest do
     assert_push_event(view, "roulette:spin", %{
       "votingSessionId" => ^voting_session_id,
       "gameId" => ^expected_game_id,
-      "landingDegrees" => 180.0,
+      "landingDegrees" => landing_degrees,
       "durationMs" => 30_000,
       "fullTurns" => 12,
       "segments" => [%{"game_id" => game_id} = segment]
     })
 
     assert game_id == expected_game_id
+    assert landing_degrees > 8.0
+    assert landing_degrees < 352.0
     assert segment["start_degrees"] == 0.0
     assert segment["end_degrees"] == 360.0
     assert has_element?(view, "#wheel-spinning")

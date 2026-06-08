@@ -366,6 +366,8 @@ defmodule BacklogWheel.VotingTest do
       assert payload["spinId"] == spin.id
       assert payload["gameId"] == game.id
       assert payload["votingSessionId"] == voting_session.id
+      assert payload["landingDegrees"] > 8.0
+      assert payload["landingDegrees"] < 352.0
     end
 
     test "spin_voting_session_wheel/1 snapshots payload, entries, and geometry" do
@@ -424,6 +426,14 @@ defmodule BacklogWheel.VotingTest do
                "boost_total" => 1,
                "final_weight" => 2
              }
+
+      winning_entry = Enum.find(spin.snapshot["entries"], &(&1["game_id"] == spin.game_id))
+
+      segment_degrees = winning_entry["end_degrees"] - winning_entry["start_degrees"]
+      inset_degrees = min(segment_degrees * 0.12, 8.0)
+
+      assert spin.snapshot["landing_degrees"] > winning_entry["start_degrees"] + inset_degrees
+      assert spin.snapshot["landing_degrees"] < winning_entry["end_degrees"] - inset_degrees
     end
 
     test "spin_voting_session_wheel/1 broadcasts the canonical spin payload" do
