@@ -8,6 +8,7 @@ defmodule BacklogWheel.BacklogTest do
     alias BacklogWheel.Backlog.Game
 
     import BacklogWheel.BacklogFixtures
+    import BacklogWheel.VotingFixtures
 
     @invalid_attrs %{title: nil}
 
@@ -130,6 +131,30 @@ defmodule BacklogWheel.BacklogTest do
       assert %DateTime{} = spin.spun_at
       assert [recent_spin] = Backlog.list_recent_spins()
       assert recent_spin.game.id == game.id
+    end
+
+    test "latest_voting_session_spin/1 returns the newest session spin" do
+      voting_session = voting_session_fixture()
+      game = game_fixture(%{external_id: "latest-session-spin"})
+
+      {:ok, older_spin} =
+        Backlog.create_spin(%{
+          game_id: game.id,
+          voting_session_id: voting_session.id,
+          spun_at: ~U[2026-06-06 12:00:00Z],
+          source: "voting_session"
+        })
+
+      {:ok, newer_spin} =
+        Backlog.create_spin(%{
+          game_id: game.id,
+          voting_session_id: voting_session.id,
+          spun_at: ~U[2026-06-06 12:01:00Z],
+          source: "voting_session"
+        })
+
+      assert Backlog.latest_voting_session_spin(voting_session.id).id == newer_spin.id
+      refute Backlog.latest_voting_session_spin(voting_session.id).id == older_spin.id
     end
 
     test "delete_spin/1 deletes a spin history entry" do

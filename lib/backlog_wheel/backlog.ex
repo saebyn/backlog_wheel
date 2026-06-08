@@ -72,6 +72,17 @@ defmodule BacklogWheel.Backlog do
   end
 
   @doc """
+  Returns the latest recorded spin for a voting session.
+  """
+  def latest_voting_session_spin(voting_session_id) when is_integer(voting_session_id) do
+    Spin
+    |> where([spin], spin.voting_session_id == ^voting_session_id)
+    |> order_by([spin], desc: spin.spun_at, desc: spin.id)
+    |> limit(1)
+    |> Repo.one()
+  end
+
+  @doc """
   Records a spin for a game.
   """
   def create_spin(attrs) do

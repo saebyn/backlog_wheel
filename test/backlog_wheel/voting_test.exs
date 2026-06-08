@@ -350,6 +350,18 @@ defmodule BacklogWheel.VotingTest do
              ]
     end
 
+    test "list_voting_session_wheel_entries/1 keeps stable pool item order" do
+      voting_session = voting_session_fixture()
+      first_pool_item = voting_session_game_fixture(voting_session, game_fixture())
+
+      second_pool_item =
+        voting_session_game_fixture(voting_session, game_fixture(%{external_id: "stable-order"}))
+
+      entries = Voting.list_voting_session_wheel_entries(voting_session)
+
+      assert Enum.map(entries, & &1.pool_item.id) == [first_pool_item.id, second_pool_item.id]
+    end
+
     test "spin_voting_session_wheel/1 records a voting-session spin" do
       voting_session = voting_session_fixture()
       game = game_fixture(%{title: "Only Voting Candidate"})
@@ -366,8 +378,8 @@ defmodule BacklogWheel.VotingTest do
       assert payload["spinId"] == spin.id
       assert payload["gameId"] == game.id
       assert payload["votingSessionId"] == voting_session.id
-      assert payload["landingDegrees"] > 8.0
-      assert payload["landingDegrees"] < 352.0
+      assert payload["landingDegrees"] > 18.0
+      assert payload["landingDegrees"] < 342.0
     end
 
     test "spin_voting_session_wheel/1 snapshots payload, entries, and geometry" do
@@ -430,7 +442,7 @@ defmodule BacklogWheel.VotingTest do
       winning_entry = Enum.find(spin.snapshot["entries"], &(&1["game_id"] == spin.game_id))
 
       segment_degrees = winning_entry["end_degrees"] - winning_entry["start_degrees"]
-      inset_degrees = min(segment_degrees * 0.12, 8.0)
+      inset_degrees = min(segment_degrees * 0.25, 18.0)
 
       assert spin.snapshot["landing_degrees"] > winning_entry["start_degrees"] + inset_degrees
       assert spin.snapshot["landing_degrees"] < winning_entry["end_degrees"] - inset_degrees

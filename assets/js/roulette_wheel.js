@@ -25,12 +25,15 @@ const RouletteWheel = {
   mounted() {
     this.rotation = 0
     this.timeout = null
-    this.soundTimeout = null
     this.pointerFrame = null
     this.lastPointerFlipAt = 0
     this.audioContext = null
+    this.spinning = false
     this.rotor = this.el.querySelector("[data-wheel-rotor]")
     this.pointer = this.el.querySelector("[data-wheel-pointer]")
+    this.votingSessionId = this.el.dataset.votingSessionId
+    this.rotation = this.initialRotation()
+    this.applyRotation()
 
     this.handleEvent("roulette:spin", ({landingDegrees, segments, spinId, durationMs, fullTurns}) => {
       if (!this.rotor || !segments || segments.length < 1) return
@@ -38,50 +41,83 @@ const RouletteWheel = {
       window.clearTimeout(this.timeout)
       this.stopPointerTicks()
 
-      const segmentDegrees = 360 / segments.length
       const currentPosition = normalizeDegrees(this.rotation + landingDegrees)
       const landingDelta = normalizeDegrees(360 - currentPosition)
       const fullTurnDegrees = fullTurns * 360
       const startingRotation = this.rotation
       const nextRotation = this.rotation + fullTurnDegrees + landingDelta
+      const edgeCrossings = this.edgeCrossingsForSpin(segments, startingRotation, nextRotation)
 
+      this.spinning = true
       this.rotor.style.transition = `transform ${durationMs}ms cubic-bezier(0.08, 0.72, 0.12, 1)`
       this.rotor.style.transform = `rotate(${nextRotation}deg)`
       this.rotation = nextRotation
-      this.flipPointer()
-      this.startPointerTicks(startingRotation, nextRotation, segmentDegrees, durationMs)
-      this.startSpinSound(durationMs)
+      this.startPointerTicks(startingRotation, nextRotation, edgeCrossings, durationMs)
 
       this.timeout = window.setTimeout(() => {
         this.stopPointerTicks()
-        this.stopSpinSound()
+        this.spinning = false
         this.playFlourish()
         this.pushEvent("spin_finished", {spinId})
       }, durationMs)
     })
   },
 
+  updated() {
+    this.rotor = this.el.querySelector("[data-wheel-rotor]")
+    this.pointer = this.el.querySelector("[data-wheel-pointer]")
+    const votingSessionId = this.el.dataset.votingSessionId
+
+    if (votingSessionId !== this.votingSessionId) {
+      this.votingSessionId = votingSessionId
+      this.rotation = this.initialRotation()
+    }
+
+    if (!this.spinning) this.applyRotation()
+  },
+
   destroyed() {
     window.clearTimeout(this.timeout)
     this.stopPointerTicks()
-    this.stopSpinSound()
   },
 
-  startPointerTicks(startingRotation, endingRotation, segmentDegrees, durationMs) {
+  edgeCrossingsForSpin(segments, startingRotation, endingRotation) {
+    const edges = [...new Set(
+      segments
+        .flatMap(({start_degrees, end_degrees}) => [start_degrees, end_degrees])
+        .map(edgeDegrees => normalizeDegrees(edgeDegrees))
+    )]
+    const crossings = []
+
+    edges.forEach(edgeDegrees => {
+      const firstTurn = Math.floor((startingRotation + edgeDegrees) / 360)
+      const lastTurn = Math.ceil((endingRotation + edgeDegrees) / 360)
+
+      for (let turn = firstTurn; turn <= lastTurn; turn++) {
+        const crossingRotation = turn * 360 - edgeDegrees
+        if (crossingRotation > startingRotation && crossingRotation <= endingRotation) {
+          crossings.push(crossingRotation)
+        }
+      }
+    })
+
+    return crossings.sort((a, b) => a - b)
+  },
+
+  startPointerTicks(startingRotation, endingRotation, edgeCrossings, durationMs) {
     if (!this.pointer || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
 
     const startedAt = window.performance.now()
     const rotationDelta = endingRotation - startingRotation
-    let lastEdge = Math.floor(startingRotation / segmentDegrees)
+    let nextEdgeIndex = 0
 
     const tick = (now) => {
       const progress = Math.min((now - startedAt) / durationMs, 1)
       const easedRotation = startingRotation + rotationDelta * spinEasing(progress)
-      const currentEdge = Math.floor(easedRotation / segmentDegrees)
 
-      if (currentEdge > lastEdge) {
-        this.flipPointer(now)
-        lastEdge = currentEdge
+      while (nextEdgeIndex < edgeCrossings.length && easedRotation >= edgeCrossings[nextEdgeIndex]) {
+        this.tickPointerEdge(now)
+        nextEdgeIndex += 1
       }
 
       if (progress < 1) {
@@ -97,13 +133,26 @@ const RouletteWheel = {
     this.pointerFrame = null
   },
 
-  flipPointer(now = window.performance.now()) {
+  applyRotation() {
+    if (!this.rotor) return
+
+    this.rotor.style.transition = "none"
+    this.rotor.style.transform = `rotate(${this.rotation}deg)`
+  },
+
+  initialRotation() {
+    const rotation = Number.parseFloat(this.el.dataset.initialRotation)
+    return Number.isFinite(rotation) ? rotation : 0
+  },
+
+  tickPointerEdge(now = window.performance.now()) {
     if (now - this.lastPointerFlipAt < minPointerFlipIntervalMs) return
 
     this.lastPointerFlipAt = now
     this.pointer.classList.remove("wheel-pointer-flip")
     void this.pointer.offsetWidth
     this.pointer.classList.add("wheel-pointer-flip")
+    this.playTone(520, 0.028, 0.045)
   },
 
   getAudioContext() {
@@ -133,31 +182,6 @@ const RouletteWheel = {
     gain.connect(context.destination)
     oscillator.start(start)
     oscillator.stop(start + durationSeconds)
-  },
-
-  startSpinSound(durationMs) {
-    this.stopSpinSound()
-    this.playTone(260, 0.035, 0.06)
-
-    const startedAt = window.performance.now()
-    const tick = () => {
-      const elapsedRatio = Math.min((window.performance.now() - startedAt) / durationMs, 1)
-      const frequency = 620 - elapsedRatio * 300
-      const delayMs = 45 + Math.pow(elapsedRatio, 2.4) * 420
-
-      this.playTone(frequency, 0.028, 0.045)
-
-      if (elapsedRatio < 1) {
-        this.soundTimeout = window.setTimeout(tick, delayMs)
-      }
-    }
-
-    this.soundTimeout = window.setTimeout(tick, 45)
-  },
-
-  stopSpinSound() {
-    window.clearTimeout(this.soundTimeout)
-    this.soundTimeout = null
   },
 
   playFlourish() {

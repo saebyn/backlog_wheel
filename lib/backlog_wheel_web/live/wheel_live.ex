@@ -24,6 +24,8 @@ defmodule BacklogWheelWeb.WheelLive do
           <div
             id="roulette-wheel-hook"
             phx-hook="RouletteWheel"
+            data-voting-session-id={@selected_session && @selected_session.id}
+            data-initial-rotation={@initial_rotation}
             class="relative flex min-h-[70vh] items-center justify-center overflow-hidden rounded-[2rem] border border-base-300 bg-radial-[at_50%_50%] from-base-100 via-base-200 to-base-300 shadow-2xl"
           >
             <div class="relative aspect-square w-[min(92vw,calc(100vh-9rem))] max-w-[78rem] rounded-full will-change-transform">
@@ -362,9 +364,24 @@ defmodule BacklogWheelWeb.WheelLive do
     |> assign(:candidates, candidates)
     |> assign(:candidate_count, length(candidates))
     |> assign(:total_weight, total_weight(candidates))
+    |> assign(:initial_rotation, initial_rotation(selected_session))
     |> assign(:recent_spins, Backlog.list_recent_spins())
     |> subscribe_to_selected_session()
   end
+
+  defp initial_rotation(nil), do: 0
+
+  defp initial_rotation(selected_session) do
+    case Backlog.latest_voting_session_spin(selected_session.id) do
+      %{snapshot: %{"landing_degrees" => landing_degrees}} when is_number(landing_degrees) ->
+        normalize_degrees(360 - landing_degrees)
+
+      _spin ->
+        0
+    end
+  end
+
+  defp normalize_degrees(degrees), do: degrees - Float.floor(degrees / 360) * 360
 
   defp subscribe_to_selected_session(socket) do
     if connected?(socket) &&

@@ -27,6 +27,13 @@ defmodule BacklogWheelWeb.WheelLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/wheel?voting_session_id=#{voting_session.id}")
 
+    assert has_element?(
+             view,
+             "#roulette-wheel-hook[data-voting-session-id='#{voting_session.id}']"
+           )
+
+    assert has_element?(view, "#roulette-wheel-hook[data-initial-rotation='0']")
+
     assert has_element?(view, "#wheel-candidate-count", "2")
     assert has_element?(view, "#wheel-total-weight", "Total weight: 6")
     assert has_element?(view, "#wheel-candidate-#{first_pool_item.id}", "1")
@@ -59,8 +66,8 @@ defmodule BacklogWheelWeb.WheelLiveTest do
     })
 
     assert game_id == expected_game_id
-    assert landing_degrees > 8.0
-    assert landing_degrees < 352.0
+    assert landing_degrees > 18.0
+    assert landing_degrees < 342.0
     assert segment["start_degrees"] == 0.0
     assert segment["end_degrees"] == 360.0
     assert has_element?(view, "#wheel-spinning")
@@ -70,6 +77,12 @@ defmodule BacklogWheelWeb.WheelLiveTest do
     assert spin.source == "voting_session"
 
     assert render_hook(view, "spin_finished", %{"spinId" => spin.id})
+
+    assert has_element?(
+             view,
+             "#roulette-wheel-hook[data-initial-rotation='#{360 - landing_degrees}']"
+           )
+
     assert has_element?(view, "#wheel-result", game.title)
     assert has_element?(view, "#wheel-winner-modal", game.title)
     assert has_element?(view, "#spin-history", game.title)

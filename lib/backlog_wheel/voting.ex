@@ -21,8 +21,8 @@ defmodule BacklogWheel.Voting do
   @pubsub BacklogWheel.PubSub
   @spin_duration_ms 30_000
   @spin_full_turns 12
-  @landing_edge_inset_ratio 0.12
-  @landing_edge_inset_degrees 8.0
+  @landing_edge_inset_ratio 0.25
+  @landing_edge_inset_degrees 18.0
   @spin_easing_profile %{
     "type" => "cubic-bezier",
     "x1" => 0.08,
@@ -266,11 +266,17 @@ defmodule BacklogWheel.Voting do
 
   defp preload_pool_games_with_boosts(voting_sessions) when is_list(voting_sessions) do
     voting_sessions
-    |> Repo.preload(voting_session_games: [:game, :voting_boosts])
+    |> Repo.preload(
+      voting_session_games: {ordered_voting_session_games_query(), [:game, :voting_boosts]}
+    )
     |> Enum.map(fn voting_session ->
       pool_items = Enum.map(voting_session.voting_session_games, &attach_weight/1)
       %{voting_session | voting_session_games: pool_items}
     end)
+  end
+
+  defp ordered_voting_session_games_query do
+    order_by(VotingSessionGame, [pool_item], asc: pool_item.id)
   end
 
   defp attach_weight(%VotingSessionGame{} = voting_session_game) do
