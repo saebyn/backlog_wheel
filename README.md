@@ -1,10 +1,14 @@
 # Backlog Wheel
 
+<img width="1231" height="1274" alt="image" src="https://github.com/user-attachments/assets/979b393d-30c7-4592-9215-701934dafdd1" />
+
+
+
+## Development
+
 Backlog Wheel is a small Phoenix LiveView app for choosing what game to play from a personal backlog. The first version is a local stream tool: maintain a backlog, mark games as wheel candidates, spin a wheel, and record the result.
 
-## Development Environment
-
-This project is developed on NixOS with `nix-direnv`.
+I'm developing this project on NixOS with `nix-direnv`.
 
 Copy example.envrc to .envrc and edit it as needed:
 
@@ -20,7 +24,7 @@ direnv allow
 
 If the shell is already allowed, entering the project directory should load the environment automatically.
 
-If you aren't on NixOS, you may wish to follow the instructions at https://phoenix.hexdocs.pm/installation.html
+If you aren't on NixOS, you may wish to follow the instructions at https://phoenix.hexdocs.pm/installation.html to get your environment set up.
 
 ## Setup
 
