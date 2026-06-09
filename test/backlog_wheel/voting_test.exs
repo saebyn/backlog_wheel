@@ -13,6 +13,8 @@ defmodule BacklogWheel.VotingTest do
     VotingSessionGame
   }
 
+  alias BacklogWheel.Twitch
+
   import BacklogWheel.BacklogFixtures
   import BacklogWheel.VotingFixtures
 
@@ -175,6 +177,147 @@ defmodule BacklogWheel.VotingTest do
 
       assert Backlog.get_game!(eligible_game.id).include_in_wheel == true
       assert Backlog.get_game!(excluded_game.id).include_in_wheel == false
+    end
+  end
+
+  describe "twitch voting rewards" do
+    setup do
+      start_supervised!(BacklogWheel.FakeTwitchClient)
+
+      original_config = Application.get_env(:backlog_wheel, :twitch)
+
+      Application.put_env(:backlog_wheel, :twitch,
+        client_id: "client-id",
+        client_secret: "client-secret",
+        broadcaster_id: "broadcaster-id",
+        reward_cost: 321
+      )
+
+      on_exit(fn ->
+        if is_nil(original_config) do
+          Application.delete_env(:backlog_wheel, :twitch)
+        else
+          Application.put_env(:backlog_wheel, :twitch, original_config)
+        end
+      end)
+
+      :ok
+    end
+
+    test "start_twitch_voting/2 creates one reward per voting session game" do
+      voting_session = voting_session_fixture()
+      first_game = game_fixture(%{title: "First Twitch Candidate"})
+
+      second_game =
+        game_fixture(%{title: "Second Twitch Candidate", external_id: "second-twitch"})
+
+      first_pool_item = voting_session_game_fixture(voting_session, first_game)
+      second_pool_item = voting_session_game_fixture(voting_session, second_game)
+
+      {:ok, _credential} =
+        Twitch.save_credential(%{
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+          scopes: "channel:manage:redemptions"
+        })
+
+      assert {:ok, updated_session} =
+               Voting.start_twitch_voting(voting_session, client: BacklogWheel.FakeTwitchClient)
+
+      assert updated_session.status == "open"
+      assert [first_updated, second_updated] = updated_session.voting_session_games
+
+      assert first_updated.id == first_pool_item.id
+      assert first_updated.twitch_reward_id == "reward-#{first_pool_item.id}"
+
+      assert first_updated.twitch_reward_title ==
+               "Boost ##{first_pool_item.id}: First Twitch Candidate"
+
+      assert first_updated.twitch_reward_cost == 321
+      assert first_updated.twitch_reward_status == "enabled"
+
+      assert second_updated.id == second_pool_item.id
+      assert second_updated.twitch_reward_id == "reward-#{second_pool_item.id}"
+
+      assert second_updated.twitch_reward_title ==
+               "Boost ##{second_pool_item.id}: Second Twitch Candidate"
+
+      assert second_updated.twitch_reward_cost == 321
+      assert second_updated.twitch_reward_status == "enabled"
+    end
+
+    test "start_twitch_voting/2 requires a stored Twitch credential" do
+      voting_session = voting_session_fixture()
+      voting_session_game_fixture(voting_session, game_fixture())
+
+      assert Voting.start_twitch_voting(voting_session, client: BacklogWheel.FakeTwitchClient) ==
+               {:error, :missing_twitch_credential}
+    end
+
+    test "start_twitch_voting/2 does not require viewers to type game names" do
+      voting_session = voting_session_fixture()
+      game = game_fixture(%{title: "No Typing Required"})
+      pool_item = voting_session_game_fixture(voting_session, game)
+
+      {:ok, _credential} =
+        Twitch.save_credential(%{
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+          scopes: "channel:manage:redemptions"
+        })
+
+      assert {:ok, _session} =
+               Voting.start_twitch_voting(voting_session, client: BacklogWheel.FakeTwitchClient)
+
+      assert BacklogWheel.FakeTwitchClient.reward_attrs(pool_item.id).title ==
+               "Boost ##{pool_item.id}: No Typing Required"
+    end
+
+    test "remove_twitch_rewards/2 deletes rewards and keeps voting status unchanged" do
+      voting_session = voting_session_fixture(%{status: "open"})
+      game = game_fixture(%{title: "Temporary Reward"})
+      pool_item = voting_session_game_fixture(voting_session, game)
+
+      {:ok, _credential} =
+        Twitch.save_credential(%{
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+          scopes: "channel:manage:redemptions"
+        })
+
+      {:ok, session_with_rewards} =
+        Voting.start_twitch_voting(voting_session, client: BacklogWheel.FakeTwitchClient)
+
+      [pool_item_with_reward] = session_with_rewards.voting_session_games
+      reward_id = pool_item_with_reward.twitch_reward_id
+
+      assert {:ok, updated_session} =
+               Voting.remove_twitch_rewards(voting_session, client: BacklogWheel.FakeTwitchClient)
+
+      assert updated_session.status == "open"
+      assert BacklogWheel.FakeTwitchClient.deleted_reward?(reward_id)
+
+      assert [updated_pool_item] = updated_session.voting_session_games
+      assert updated_pool_item.id == pool_item.id
+      assert updated_pool_item.twitch_reward_id == nil
+      assert updated_pool_item.twitch_reward_title == nil
+      assert updated_pool_item.twitch_reward_cost == nil
+      assert updated_pool_item.twitch_reward_status == nil
+    end
+
+    test "remove_twitch_rewards/2 reports when no rewards exist" do
+      voting_session = voting_session_fixture()
+      voting_session_game_fixture(voting_session, game_fixture())
+
+      {:ok, _credential} =
+        Twitch.save_credential(%{
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+          scopes: "channel:manage:redemptions"
+        })
+
+      assert Voting.remove_twitch_rewards(voting_session, client: BacklogWheel.FakeTwitchClient) ==
+               {:error, :no_twitch_rewards}
     end
   end
 

@@ -18,6 +18,9 @@ defmodule BacklogWheelWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/twitch/oauth/start", TwitchOAuthController, :start
+    get "/twitch/oauth/callback", TwitchOAuthController, :callback
+    live "/twitch", TwitchLive, :index
     live "/wheel", WheelLive, :show
     live "/history", SpinHistoryLive, :index
     live "/voting", VotingSessionLive.Index, :index

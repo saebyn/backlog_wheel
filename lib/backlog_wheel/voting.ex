@@ -9,6 +9,7 @@ defmodule BacklogWheel.Voting do
   alias BacklogWheel.Backlog
   alias BacklogWheel.Communities
   alias BacklogWheel.Repo
+  alias BacklogWheel.Twitch
 
   alias BacklogWheel.Voting.{
     Viewer,
@@ -93,6 +94,33 @@ defmodule BacklogWheel.Voting do
     |> VotingSession.changeset(%{status: status})
     |> Repo.update()
     |> broadcast_voting_session_change()
+  end
+
+  @doc """
+  Starts Twitch voting by creating one positive boost reward per pool game.
+  """
+  def start_twitch_voting(%VotingSession{} = voting_session, opts \\ []) do
+    client = Keyword.get(opts, :client, Twitch.client())
+
+    with {:ok, config} <- Twitch.config(),
+         {:ok, credential} <- fetch_twitch_credential(),
+         {:ok, _pool_items} <- create_twitch_rewards(voting_session, config, credential, client),
+         {:ok, session} <- update_voting_session_status(voting_session, "open") do
+      {:ok, get_voting_session!(session.id)}
+    end
+  end
+
+  @doc """
+  Deletes Twitch rewards for a voting session without changing session status.
+  """
+  def remove_twitch_rewards(%VotingSession{} = voting_session, opts \\ []) do
+    client = Keyword.get(opts, :client, Twitch.client())
+
+    with {:ok, config} <- Twitch.config(),
+         {:ok, credential} <- fetch_twitch_credential(),
+         {:ok, _pool_items} <- delete_twitch_rewards(voting_session, config, credential, client) do
+      {:ok, get_voting_session!(voting_session.id)}
+    end
   end
 
   @doc """
@@ -256,6 +284,113 @@ defmodule BacklogWheel.Voting do
     |> where([boost], boost.voting_session_game_id == ^voting_session_game_id)
     |> select([boost], coalesce(sum(boost.strength), 0))
     |> Repo.one()
+  end
+
+  defp fetch_twitch_credential do
+    case Twitch.get_credential() do
+      nil -> {:error, :missing_twitch_credential}
+      credential -> {:ok, credential}
+    end
+  end
+
+  defp create_twitch_rewards(%VotingSession{} = voting_session, config, credential, client) do
+    voting_session = get_voting_session!(voting_session.id)
+
+    case voting_session.voting_session_games do
+      [] ->
+        {:error, :empty_pool}
+
+      pool_items ->
+        pool_items
+        |> Enum.reduce_while({:ok, []}, fn pool_item, {:ok, created_pool_items} ->
+          case maybe_create_twitch_reward(pool_item, config, credential, client) do
+            {:ok, updated_pool_item} -> {:cont, {:ok, [updated_pool_item | created_pool_items]}}
+            {:error, reason} -> {:halt, {:error, reason}}
+          end
+        end)
+        |> then(fn
+          {:ok, created_pool_items} -> {:ok, Enum.reverse(created_pool_items)}
+          {:error, reason} -> {:error, reason}
+        end)
+    end
+  end
+
+  defp delete_twitch_rewards(%VotingSession{} = voting_session, config, credential, client) do
+    voting_session = get_voting_session!(voting_session.id)
+
+    pool_items =
+      Enum.filter(voting_session.voting_session_games, &(&1.twitch_reward_id not in [nil, ""]))
+
+    case pool_items do
+      [] ->
+        {:error, :no_twitch_rewards}
+
+      pool_items ->
+        pool_items
+        |> Enum.reduce_while({:ok, []}, fn pool_item, {:ok, deleted_pool_items} ->
+          case delete_twitch_reward(pool_item, config, credential, client) do
+            {:ok, updated_pool_item} -> {:cont, {:ok, [updated_pool_item | deleted_pool_items]}}
+            {:error, reason} -> {:halt, {:error, reason}}
+          end
+        end)
+        |> then(fn
+          {:ok, deleted_pool_items} -> {:ok, Enum.reverse(deleted_pool_items)}
+          {:error, reason} -> {:error, reason}
+        end)
+    end
+  end
+
+  defp delete_twitch_reward(%VotingSessionGame{} = pool_item, config, credential, client) do
+    with :ok <- client.delete_custom_reward(config, credential, pool_item.twitch_reward_id) do
+      pool_item
+      |> VotingSessionGame.clear_twitch_reward_changeset()
+      |> Repo.update()
+      |> broadcast_voting_session_change(pool_item.voting_session_id)
+    end
+  end
+
+  defp maybe_create_twitch_reward(
+         %VotingSessionGame{twitch_reward_id: reward_id} = pool_item,
+         _config,
+         _credential,
+         _client
+       )
+       when reward_id not in [nil, ""] do
+    {:ok, pool_item}
+  end
+
+  defp maybe_create_twitch_reward(%VotingSessionGame{} = pool_item, config, credential, client) do
+    attrs = twitch_reward_attrs(pool_item, config)
+
+    with {:ok, reward} <- client.create_custom_reward(config, credential, attrs) do
+      persist_twitch_reward(pool_item, reward)
+    end
+  end
+
+  defp persist_twitch_reward(%VotingSessionGame{} = pool_item, reward) do
+    pool_item
+    |> VotingSessionGame.twitch_reward_changeset(%{
+      twitch_reward_id: Map.fetch!(reward, :id),
+      twitch_reward_title: Map.fetch!(reward, :title),
+      twitch_reward_cost: Map.fetch!(reward, :cost),
+      twitch_reward_status: Map.fetch!(reward, :status)
+    })
+    |> Repo.update()
+    |> broadcast_voting_session_change(pool_item.voting_session_id)
+  end
+
+  defp twitch_reward_attrs(%VotingSessionGame{} = pool_item, config) do
+    %{
+      voting_session_game_id: pool_item.id,
+      title: twitch_reward_title(pool_item),
+      cost: config.reward_cost
+    }
+  end
+
+  defp twitch_reward_title(%VotingSessionGame{} = pool_item) do
+    prefix = "Boost ##{pool_item.id}: "
+
+    prefix <> String.slice(pool_item.game.title, 0, 45 - String.length(prefix))
   end
 
   defp preload_pool_games_with_boosts(%VotingSession{} = voting_session) do

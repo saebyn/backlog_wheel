@@ -8,12 +8,14 @@ defmodule BacklogWheel.Twitch.ConfigTest do
             %Config{
               client_id: "client-id",
               client_secret: "client-secret",
-              broadcaster_id: "broadcaster-id"
+              broadcaster_id: "broadcaster-id",
+              reward_cost: 250
             }} =
              Config.new(%{
                "client_id" => "client-id",
                "client_secret" => "client-secret",
-               "broadcaster_id" => "broadcaster-id"
+               "broadcaster_id" => "broadcaster-id",
+               "reward_cost" => "250"
              })
   end
 
@@ -30,5 +32,15 @@ defmodule BacklogWheel.Twitch.ConfigTest do
              client_secret: "client-secret",
              broadcaster_id: "broadcaster-id"
            )
+  end
+
+  test "new/1 defaults invalid reward costs" do
+    assert {:ok, %Config{reward_cost: 100}} =
+             Config.new(
+               client_id: "client-id",
+               client_secret: "client-secret",
+               broadcaster_id: "broadcaster-id",
+               reward_cost: "not-a-number"
+             )
   end
 end

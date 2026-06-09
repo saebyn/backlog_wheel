@@ -85,14 +85,15 @@ Import behavior:
 
 ## Twitch Configuration
 
-Twitch integration is currently a configuration shell only. OAuth, EventSub, reward creation, and live Twitch API calls are not implemented yet.
+Twitch integration supports local OAuth authorization and temporary channel point reward creation for voting sessions. EventSub and redemption ingestion are not implemented yet.
 
-Add these values to `.envrc` for future Twitch work, then run `direnv allow`:
+Add these values to `.envrc`, then run `direnv allow`:
 
 ```sh
 export TWITCH_CLIENT_ID="your-twitch-client-id"
 export TWITCH_CLIENT_SECRET="your-twitch-client-secret"
 export TWITCH_BROADCASTER_ID="your-twitch-broadcaster-id"
+export TWITCH_REWARD_COST="100"
 ```
 
 When registering a local development app at <https://dev.twitch.tv/console/apps/create>, use this OAuth redirect URL:
@@ -101,15 +102,17 @@ When registering a local development app at <https://dev.twitch.tv/console/apps/
 http://localhost:4000/twitch/oauth/callback
 ```
 
-Twitch allows HTTP redirect URLs for `localhost`. The callback route is reserved for future OAuth work and is not implemented yet.
+Twitch allows HTTP redirect URLs for `localhost`. After setting the env vars, visit the voting page and click `Connect Twitch` to authorize the local app.
 
 Behavior today:
 
 - `TWITCH_CLIENT_ID` identifies the Twitch application/client.
-- `TWITCH_CLIENT_SECRET` is the local client secret for future OAuth token work.
+- `TWITCH_CLIENT_SECRET` is used by the local OAuth callback to exchange authorization codes.
 - `TWITCH_BROADCASTER_ID` identifies the channel that future reward actions will target.
-- If any value is missing, `BacklogWheel.Twitch.config/0` returns `{:error, {:missing_config, keys}}` and `BacklogWheel.Twitch.configured?/0` returns `false`.
-- No Twitch network requests are made.
+- `TWITCH_REWARD_COST` sets the positive boost reward cost in channel points and defaults to `100`.
+- If required config is missing, `BacklogWheel.Twitch.config/0` returns `{:error, {:missing_config, keys}}` and `BacklogWheel.Twitch.configured?/0` returns `false`.
+- Starting Twitch voting creates one positive boost channel point reward per game in the voting session pool.
+- Redemption ingestion is not implemented yet.
 
 ## Tests
 

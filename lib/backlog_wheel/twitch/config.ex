@@ -6,23 +6,25 @@ defmodule BacklogWheel.Twitch.Config do
   It does not perform OAuth, EventSub setup, or Twitch API calls.
   """
 
-  @enforce_keys [:client_id, :client_secret, :broadcaster_id]
-  defstruct [:client_id, :client_secret, :broadcaster_id]
+  @enforce_keys [:client_id, :client_secret, :broadcaster_id, :reward_cost]
+  defstruct [:client_id, :client_secret, :broadcaster_id, :reward_cost]
 
   @type t :: %__MODULE__{
           client_id: String.t(),
           client_secret: String.t(),
-          broadcaster_id: String.t()
+          broadcaster_id: String.t(),
+          reward_cost: pos_integer()
         }
 
-  @keys [:client_id, :client_secret, :broadcaster_id]
+  @required_keys [:client_id, :client_secret, :broadcaster_id]
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, {:missing_config, [atom()]}}
   def new(config \\ Application.get_env(:backlog_wheel, :twitch, [])) do
     twitch_config = %__MODULE__{
       client_id: value(config, :client_id),
       client_secret: value(config, :client_secret),
-      broadcaster_id: value(config, :broadcaster_id)
+      broadcaster_id: value(config, :broadcaster_id),
+      reward_cost: reward_cost(config)
     }
 
     case missing_keys(twitch_config) do
@@ -37,7 +39,7 @@ defmodule BacklogWheel.Twitch.Config do
   end
 
   defp missing_keys(config) do
-    Enum.filter(@keys, fn key -> blank?(Map.fetch!(config, key)) end)
+    Enum.filter(@required_keys, fn key -> blank?(Map.fetch!(config, key)) end)
   end
 
   defp value(config, key) when is_list(config), do: Keyword.get(config, key)
@@ -46,6 +48,21 @@ defmodule BacklogWheel.Twitch.Config do
     do: Map.get(config, key) || Map.get(config, Atom.to_string(key))
 
   defp value(_config, _key), do: nil
+
+  defp reward_cost(config) do
+    case value(config, :reward_cost) do
+      value when is_integer(value) and value > 0 -> value
+      value when is_binary(value) -> parse_reward_cost(value)
+      _value -> 100
+    end
+  end
+
+  defp parse_reward_cost(value) do
+    case Integer.parse(value) do
+      {cost, ""} when cost > 0 -> cost
+      _invalid -> 100
+    end
+  end
 
   defp blank?(value), do: value in [nil, ""]
 end

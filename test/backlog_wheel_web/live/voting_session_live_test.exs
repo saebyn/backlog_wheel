@@ -6,6 +6,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
   import BacklogWheel.VotingFixtures
 
   alias BacklogWheel.Backlog
+  alias BacklogWheel.Twitch
   alias BacklogWheel.Voting
 
   test "creates a voting session", %{conn: conn} do
@@ -102,6 +103,113 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     assert view |> element("#boost-pool-game-#{pool_item.id}") |> render_click()
     assert has_element?(view, "#pool-game-boost-total-#{pool_item.id}", "+2")
     assert has_element?(view, "#pool-game-final-weight-#{pool_item.id}", "4")
+  end
+
+  test "shows Twitch connection and start prerequisites", %{conn: conn} do
+    voting_session_fixture()
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    assert has_element?(view, "#twitch-connection-status", "Twitch not connected")
+    assert has_element?(view, "#manage-twitch", "Manage Twitch")
+    assert has_element?(view, "#start-twitch-voting[disabled]")
+    assert has_element?(view, "#remove-twitch-rewards[disabled]")
+
+    assert has_element?(
+             view,
+             "#twitch-voting-hint",
+             "Connect Twitch before starting Twitch voting."
+           )
+  end
+
+  test "shows empty pool prerequisite after Twitch is connected", %{conn: conn} do
+    voting_session_fixture()
+
+    {:ok, _credential} =
+      Twitch.save_credential(%{
+        access_token: "access-token",
+        refresh_token: "refresh-token",
+        scopes: "channel:manage:redemptions"
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    assert has_element?(view, "#twitch-connection-status", "Twitch connected")
+    assert has_element?(view, "#manage-twitch", "Manage Twitch")
+    assert has_element?(view, "#start-twitch-voting[disabled]")
+    assert has_element?(view, "#remove-twitch-rewards[disabled]")
+
+    assert has_element?(
+             view,
+             "#twitch-voting-hint",
+             "Add games to the voting pool before starting Twitch voting."
+           )
+  end
+
+  test "enables starting Twitch voting when connected with a non-empty pool", %{conn: conn} do
+    voting_session = voting_session_fixture()
+    voting_session_game_fixture(voting_session, game_fixture(%{title: "Twitch Ready"}))
+
+    {:ok, _credential} =
+      Twitch.save_credential(%{
+        access_token: "access-token",
+        refresh_token: "refresh-token",
+        scopes: "channel:manage:redemptions"
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    assert has_element?(view, "#twitch-connection-status", "Twitch connected")
+    refute has_element?(view, "#start-twitch-voting[disabled]")
+    assert has_element?(view, "#remove-twitch-rewards[disabled]")
+    refute has_element?(view, "#twitch-voting-hint")
+  end
+
+  test "keeps start Twitch voting enabled for open sessions without rewards", %{conn: conn} do
+    voting_session = voting_session_fixture()
+    voting_session_game_fixture(voting_session, game_fixture(%{title: "Open But No Reward"}))
+    {:ok, _session} = Voting.update_voting_session_status(voting_session, "open")
+
+    {:ok, _credential} =
+      Twitch.save_credential(%{
+        access_token: "access-token",
+        refresh_token: "refresh-token",
+        scopes: "channel:manage:redemptions"
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    assert has_element?(view, "#selected-session-status", "open")
+    refute has_element?(view, "#start-twitch-voting[disabled]")
+    refute has_element?(view, "#twitch-voting-hint")
+  end
+
+  test "enables removing Twitch rewards after rewards exist", %{conn: conn} do
+    voting_session = voting_session_fixture(%{status: "open"})
+    game = game_fixture(%{title: "Rewarded Game"})
+    pool_item = voting_session_game_fixture(voting_session, game)
+
+    {:ok, _credential} =
+      Twitch.save_credential(%{
+        access_token: "access-token",
+        refresh_token: "refresh-token",
+        scopes: "channel:manage:redemptions"
+      })
+
+    pool_item
+    |> BacklogWheel.Voting.VotingSessionGame.twitch_reward_changeset(%{
+      twitch_reward_id: "reward-#{pool_item.id}",
+      twitch_reward_title: "Boost ##{pool_item.id}: Rewarded Game",
+      twitch_reward_cost: 100,
+      twitch_reward_status: "enabled"
+    })
+    |> BacklogWheel.Repo.update!()
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    assert has_element?(view, "#start-twitch-voting[disabled]")
+    refute has_element?(view, "#remove-twitch-rewards[disabled]")
+    assert has_element?(view, "#twitch-voting-hint", "Twitch voting rewards are already created")
   end
 
   test "links selected voting session to wheel", %{conn: conn} do

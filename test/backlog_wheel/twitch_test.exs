@@ -1,5 +1,5 @@
 defmodule BacklogWheel.TwitchTest do
-  use ExUnit.Case, async: false
+  use BacklogWheel.DataCase, async: false
 
   alias BacklogWheel.Twitch
   alias BacklogWheel.Twitch.Config
@@ -37,7 +37,46 @@ defmodule BacklogWheel.TwitchTest do
               %Config{
                 client_id: "client-id",
                 client_secret: "client-secret",
-                broadcaster_id: "broadcaster-id"
+                broadcaster_id: "broadcaster-id",
+                reward_cost: 100
               }}
+  end
+
+  test "save_credential/1 persists the latest Twitch OAuth token" do
+    assert {:ok, credential} =
+             Twitch.save_credential(%{
+               access_token: "access-token",
+               refresh_token: "refresh-token",
+               scopes: "channel:manage:redemptions"
+             })
+
+    assert Twitch.credential_configured?()
+    assert Twitch.get_credential().id == credential.id
+
+    assert {:ok, updated_credential} =
+             Twitch.save_credential(%{
+               access_token: "new-access-token",
+               refresh_token: "new-refresh-token",
+               scopes: "channel:manage:redemptions"
+             })
+
+    assert updated_credential.id == credential.id
+    assert Twitch.get_credential().access_token == "new-access-token"
+  end
+
+  test "delete_credential/0 removes stored Twitch OAuth tokens" do
+    assert {:ok, _credential} =
+             Twitch.save_credential(%{
+               access_token: "access-token",
+               refresh_token: "refresh-token",
+               scopes: "channel:manage:redemptions"
+             })
+
+    assert Twitch.credential_configured?()
+
+    assert :ok = Twitch.delete_credential()
+
+    refute Twitch.credential_configured?()
+    assert Twitch.get_credential() == nil
   end
 end

@@ -2,6 +2,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   use BacklogWheelWeb, :live_view
 
   alias BacklogWheel.Backlog
+  alias BacklogWheel.Twitch
   alias BacklogWheel.Voting
   alias BacklogWheel.Voting.VotingSession
 
@@ -13,7 +14,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
         <aside class="space-y-4 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl">
           <.header>
             Voting Sessions
-            <:subtitle>Create and manage local voting pools before Twitch integration.</:subtitle>
+            <:subtitle>Create voting pools, manage boosts, and publish Twitch rewards.</:subtitle>
             <:actions>
               <.button id="create-voting-session" variant="primary" phx-click="create_session">
                 <.icon name="hero-plus" /> New Session
@@ -74,6 +75,16 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                   <span id="selected-session-pool-size" class="badge badge-ghost">
                     {@pool_size} pool games
                   </span>
+                  <span
+                    id="twitch-connection-status"
+                    class={[
+                      "badge",
+                      @twitch_connected? && "badge-success",
+                      !@twitch_connected? && "badge-warning"
+                    ]}
+                  >
+                    {if @twitch_connected?, do: "Twitch connected", else: "Twitch not connected"}
+                  </span>
                 </div>
               </div>
 
@@ -88,6 +99,24 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                 >
                   Spin this pool
                 </.button>
+                <.button id="manage-twitch" href={~p"/twitch"}>
+                  Manage Twitch
+                </.button>
+                <.button
+                  id="start-twitch-voting"
+                  phx-click="start_twitch_voting"
+                  disabled={!@can_start_twitch_voting?}
+                >
+                  Start Twitch Voting
+                </.button>
+                <.button
+                  id="remove-twitch-rewards"
+                  phx-click="remove_twitch_rewards"
+                  disabled={!@twitch_connected? || !@has_twitch_rewards?}
+                  data-confirm="Remove Twitch channel point rewards for this session? Voting stays open."
+                >
+                  Remove Twitch Rewards
+                </.button>
                 <.button
                   :for={status <- ["draft", "open", "locked", "closed", "cancelled"]}
                   id={"set-session-#{status}"}
@@ -99,6 +128,14 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                 </.button>
               </div>
             </div>
+
+            <p
+              :if={@twitch_voting_hint}
+              id="twitch-voting-hint"
+              class="rounded-2xl border border-base-300 bg-base-200 px-4 py-3 text-sm text-base-content/70"
+            >
+              {@twitch_voting_hint}
+            </p>
 
             <div class="grid gap-6 xl:grid-cols-[1fr_22rem]">
               <section class="space-y-3">
@@ -149,6 +186,20 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                               {pool_item.final_weight}
                             </p>
                           </div>
+                        </div>
+                        <div
+                          :if={pool_item.twitch_reward_id}
+                          class="mt-3 rounded-xl bg-base-100 p-3 text-xs"
+                        >
+                          <p class="font-semibold uppercase tracking-wide text-base-content/50">
+                            Twitch Reward
+                          </p>
+                          <p id={"pool-game-twitch-reward-#{pool_item.id}"} class="mt-1 font-bold">
+                            {pool_item.twitch_reward_title}
+                          </p>
+                          <p class="text-base-content/60">
+                            {pool_item.twitch_reward_cost} points · {pool_item.twitch_reward_status}
+                          </p>
                         </div>
                       </div>
                       <div class="flex shrink-0 flex-col gap-2">
@@ -249,6 +300,40 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
      |> refresh()}
   end
 
+  def handle_event("start_twitch_voting", _params, socket) do
+    case Voting.start_twitch_voting(socket.assigns.selected_session) do
+      {:ok, session} ->
+        {:noreply,
+         socket
+         |> assign(:selected_session_id, session.id)
+         |> put_flash(:info, "Twitch voting started")
+         |> refresh()}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, twitch_error(reason))
+         |> refresh()}
+    end
+  end
+
+  def handle_event("remove_twitch_rewards", _params, socket) do
+    case Voting.remove_twitch_rewards(socket.assigns.selected_session) do
+      {:ok, session} ->
+        {:noreply,
+         socket
+         |> assign(:selected_session_id, session.id)
+         |> put_flash(:info, "Twitch rewards removed; voting status unchanged")
+         |> refresh()}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, twitch_error(reason))
+         |> refresh()}
+    end
+  end
+
   def handle_event("populate_pool", _params, socket) do
     {:ok, pool_items} =
       Voting.populate_session_from_wheel_candidates(socket.assigns.selected_session)
@@ -302,6 +387,9 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     |> assign(:selected_session_id, selected_session && selected_session.id)
     |> assign(:pool_items, pool_items)
     |> assign(:pool_size, length(pool_items))
+    |> assign(:has_twitch_rewards?, has_twitch_rewards?(pool_items))
+    |> assign(:twitch_connected?, Twitch.credential_configured?())
+    |> assign_twitch_voting_state(pool_items)
     |> stream(:voting_sessions, sessions, reset: true)
     |> stream(:voting_session_pool, pool_items, reset: true)
     |> stream(:available_games, available_games, reset: true)
@@ -339,9 +427,43 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     ]
   end
 
+  defp has_twitch_rewards?(pool_items) do
+    Enum.any?(pool_items, &(&1.twitch_reward_id not in [nil, ""]))
+  end
+
+  defp assign_twitch_voting_state(socket, pool_items) do
+    hint = twitch_voting_hint(socket.assigns.twitch_connected?, pool_items)
+
+    socket
+    |> assign(:twitch_voting_hint, hint)
+    |> assign(:can_start_twitch_voting?, is_nil(hint))
+  end
+
+  defp twitch_voting_hint(false, _pool_items),
+    do: "Connect Twitch before starting Twitch voting."
+
+  defp twitch_voting_hint(_connected?, []),
+    do: "Add games to the voting pool before starting Twitch voting."
+
+  defp twitch_voting_hint(_connected?, pool_items) do
+    if Enum.all?(pool_items, &(&1.twitch_reward_id not in [nil, ""])) do
+      "Twitch voting rewards are already created for this session."
+    end
+  end
+
   defp status_label("draft"), do: "Draft"
   defp status_label("open"), do: "Open"
   defp status_label("locked"), do: "Lock"
   defp status_label("closed"), do: "Close"
   defp status_label("cancelled"), do: "Cancel"
+
+  defp twitch_error({:missing_config, missing}),
+    do: "Missing Twitch config: #{Enum.join(missing, ", ")}"
+
+  defp twitch_error(:missing_twitch_credential),
+    do: "Connect Twitch before starting Twitch voting"
+
+  defp twitch_error(:empty_pool), do: "Add games before starting Twitch voting"
+  defp twitch_error(:no_twitch_rewards), do: "No Twitch rewards to remove"
+  defp twitch_error(_reason), do: "Could not start Twitch voting"
 end
