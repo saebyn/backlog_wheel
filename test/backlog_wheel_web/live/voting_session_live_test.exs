@@ -67,6 +67,41 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     assert Backlog.get_game!(excluded_game.id).include_in_wheel == false
   end
 
+  test "filters available games by title", %{conn: conn} do
+    voting_session_fixture()
+    alpha_game = game_fixture(%{title: "Alpha Adventure"})
+    beta_game = game_fixture(%{title: "Beta Quest", external_id: "beta-quest"})
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    assert has_element?(view, "#available-voting-games", alpha_game.title)
+    assert has_element?(view, "#available-voting-games", beta_game.title)
+
+    view
+    |> form("#available-games-filter-form", available_games_filter: %{query: "alpha"})
+    |> render_change()
+
+    assert has_element?(view, "#available-voting-games", alpha_game.title)
+    refute has_element?(view, "#available-voting-games", beta_game.title)
+  end
+
+  test "shows an empty message when available game filter has no matches", %{conn: conn} do
+    voting_session_fixture()
+    game_fixture(%{title: "Visible Game"})
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    view
+    |> form("#available-games-filter-form", available_games_filter: %{query: "missing"})
+    |> render_change()
+
+    assert has_element?(
+             view,
+             "#empty-available-voting-games",
+             "No available games match this search."
+           )
+  end
+
   test "updates voting session status", %{conn: conn} do
     voting_session_fixture()
 

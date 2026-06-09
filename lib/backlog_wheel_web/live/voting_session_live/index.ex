@@ -229,12 +229,25 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                 <p class="text-sm text-base-content/70">
                   Add or remove games here without changing whether they appear on the main wheel.
                 </p>
+                <.form
+                  for={@available_games_filter_form}
+                  id="available-games-filter-form"
+                  phx-change="filter_available_games"
+                >
+                  <.input
+                    field={@available_games_filter_form[:query]}
+                    type="search"
+                    label="Search available games"
+                    placeholder="Filter by title"
+                    phx-debounce="200"
+                  />
+                </.form>
                 <div id="available-voting-games" phx-update="stream" class="space-y-2">
                   <p
                     id="empty-available-voting-games"
                     class="hidden rounded-xl bg-base-100 p-4 text-sm text-base-content/70 only:block"
                   >
-                    Every game is already in this vote.
+                    {@available_games_empty_message}
                   </p>
                   <div
                     :for={{id, game} <- @streams.available_games}
@@ -272,6 +285,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
      |> assign(:page_title, "Voting Sessions")
      |> assign(:selected_session_id, nil)
      |> assign(:subscribed_voting_session_id, nil)
+     |> assign(:available_games_filter, "")
      |> refresh()}
   end
 
@@ -334,6 +348,14 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     end
   end
 
+  def handle_event(
+        "filter_available_games",
+        %{"available_games_filter" => %{"query" => query}},
+        socket
+      ) do
+    {:noreply, socket |> assign(:available_games_filter, query) |> refresh()}
+  end
+
   def handle_event("populate_pool", _params, socket) do
     {:ok, pool_items} =
       Voting.populate_session_from_wheel_candidates(socket.assigns.selected_session)
@@ -379,14 +401,29 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     selected_session = selected_session(sessions, socket.assigns.selected_session_id)
     pool_items = if selected_session, do: selected_session.voting_session_games, else: []
 
-    available_games =
+    unfiltered_available_games =
       if selected_session, do: Voting.list_available_games_for_session(selected_session), else: []
+
+    available_games =
+      filter_available_games(unfiltered_available_games, socket.assigns.available_games_filter)
 
     socket
     |> assign(:selected_session, selected_session)
     |> assign(:selected_session_id, selected_session && selected_session.id)
     |> assign(:pool_items, pool_items)
     |> assign(:pool_size, length(pool_items))
+    |> assign(
+      :available_games_filter_form,
+      available_games_filter_form(socket.assigns.available_games_filter)
+    )
+    |> assign(
+      :available_games_empty_message,
+      available_games_empty_message(
+        unfiltered_available_games,
+        available_games,
+        socket.assigns.available_games_filter
+      )
+    )
     |> assign(:has_twitch_rewards?, has_twitch_rewards?(pool_items))
     |> assign(:twitch_connected?, Twitch.credential_configured?())
     |> assign_twitch_voting_state(pool_items)
@@ -426,6 +463,38 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
       (!selected_session || session.id != selected_session.id) && "border-base-300 bg-base-200"
     ]
   end
+
+  defp filter_available_games(available_games, filter) do
+    normalized_filter = filter |> String.trim() |> String.downcase()
+
+    if normalized_filter == "" do
+      available_games
+    else
+      Enum.filter(available_games, fn game ->
+        game.title
+        |> String.downcase()
+        |> String.contains?(normalized_filter)
+      end)
+    end
+  end
+
+  defp available_games_filter_form(filter) do
+    to_form(%{"query" => filter}, as: :available_games_filter)
+  end
+
+  defp available_games_empty_message([], _available_games, _filter),
+    do: "Every game is already in this vote."
+
+  defp available_games_empty_message(_unfiltered_available_games, [], filter) do
+    if String.trim(filter) == "" do
+      "Every game is already in this vote."
+    else
+      "No available games match this search."
+    end
+  end
+
+  defp available_games_empty_message(_unfiltered_available_games, _available_games, _filter),
+    do: "Every game is already in this vote."
 
   defp has_twitch_rewards?(pool_items) do
     Enum.any?(pool_items, &(&1.twitch_reward_id not in [nil, ""]))
