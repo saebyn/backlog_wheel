@@ -38,7 +38,12 @@ defmodule BacklogWheelWeb.WheelLiveTest do
     assert has_element?(view, "#wheel-total-weight", "Total weight: 6")
     assert has_element?(view, "#wheel-candidate-#{first_pool_item.id}", "1")
     assert has_element?(view, "#wheel-candidate-#{second_pool_item.id}", "5")
-    assert has_element?(view, "#wheel-weighted-candidates", "Base 2 + boosts 3")
+
+    assert has_element?(
+             view,
+             "#wheel-weighted-candidates",
+             "Starting votes 2 + channel point votes 3"
+           )
   end
 
   test "spins a voting session, records, and reveals a selected game after animation", %{

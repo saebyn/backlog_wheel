@@ -19,7 +19,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
 
     assert has_element?(view, "#voting-session-detail")
     assert has_element?(view, "#selected-session-status", "draft")
-    assert has_element?(view, "#selected-session-pool-size", "0 pool games")
+    assert has_element?(view, "#selected-session-pool-size", "0 games in this vote")
   end
 
   test "populates pool from wheel-eligible games", %{conn: conn} do
@@ -40,7 +40,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
 
     assert has_element?(view, "#voting-session-pool", wheel_game.title)
     refute has_element?(view, "#voting-session-pool", excluded_game.title)
-    assert has_element?(view, "#selected-session-pool-size", "1 pool games")
+    assert has_element?(view, "#selected-session-pool-size", "1 games in this vote")
   end
 
   test "adds and removes games without changing wheel eligibility", %{conn: conn} do
@@ -142,7 +142,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     assert has_element?(
              view,
              "#twitch-voting-hint",
-             "Add games to the voting pool before starting Twitch voting."
+             "Add games to this vote before starting Twitch voting."
            )
   end
 

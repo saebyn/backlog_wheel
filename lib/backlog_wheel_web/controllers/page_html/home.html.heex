@@ -95,4 +95,68 @@
       </p>
     </div>
   </section>
+
+  <section class="mt-16 space-y-6 rounded-[2rem] border border-base-content/10 bg-base-100/80 p-6 shadow-xl backdrop-blur sm:p-8">
+    <div class="max-w-3xl space-y-3">
+      <p class="text-sm font-black uppercase tracking-[0.25em] text-primary">
+        Built for indecisive stream nights
+      </p>
+      <h2 class="text-3xl font-black tracking-tight text-base-content sm:text-5xl">
+        Less spreadsheet energy. More “fine, chat, we’ll play that.”
+      </h2>
+      <p class="text-base leading-7 text-base-content/70 sm:text-lg">
+        Backlog Wheel keeps the boring parts local and fast: organize the backlog, pick the games in this vote, let Twitch channel points tilt the odds, then spin something loud enough to feel final.
+      </p>
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-4">
+      <div class="rounded-3xl bg-base-200 p-5">
+        <p class="text-xs font-black uppercase tracking-[0.22em] text-base-content/50">
+          1. Curate
+        </p>
+        <h3 class="mt-3 text-xl font-black">Make the list smaller.</h3>
+        <p class="mt-2 text-sm leading-6 text-base-content/70">
+          Keep the full backlog around, but only put the realistic contenders on tonight’s wheel.
+        </p>
+      </div>
+      <div class="rounded-3xl bg-base-200 p-5">
+        <p class="text-xs font-black uppercase tracking-[0.22em] text-base-content/50">2. Vote</p>
+        <h3 class="mt-3 text-xl font-black">Let chat nudge fate.</h3>
+        <p class="mt-2 text-sm leading-6 text-base-content/70">
+          Create one temporary channel point reward per game so viewers vote by clicking, not typing.
+        </p>
+      </div>
+      <div class="rounded-3xl bg-base-200 p-5">
+        <p class="text-xs font-black uppercase tracking-[0.22em] text-base-content/50">3. Spin</p>
+        <h3 class="mt-3 text-xl font-black">Weighted, not scripted.</h3>
+        <p class="mt-2 text-sm leading-6 text-base-content/70">
+          Starting votes plus channel point votes become the odds. The wheel handles the blame.
+        </p>
+      </div>
+      <div class="rounded-3xl bg-base-200 p-5">
+        <p class="text-xs font-black uppercase tracking-[0.22em] text-base-content/50">
+          4. Remember
+        </p>
+        <h3 class="mt-3 text-xl font-black">Receipts included.</h3>
+        <p class="mt-2 text-sm leading-6 text-base-content/70">
+          Every spin gets recorded with the vote totals, because future you will absolutely ask why.
+        </p>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-3 rounded-3xl border border-primary/20 bg-primary/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h3 class="text-xl font-black">Ready to put democracy on rails?</h3>
+        <p class="mt-1 text-sm text-base-content/70">
+          Connect Twitch, build a voting session, and let the wheel make the hard call.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <.link navigate={~p"/twitch"} class="btn btn-primary hover-lift">Connect Twitch</.link>
+        <.link navigate={~p"/voting"} class="btn btn-primary btn-soft hover-lift">
+          Build a Vote
+        </.link>
+      </div>
+    </div>
+  </section>
 </Layouts.app>

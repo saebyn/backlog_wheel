@@ -69,9 +69,15 @@ defmodule BacklogWheelWeb.SpinHistoryLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/history")
 
-    assert has_element?(view, "#spin-snapshot-summary-#{spin.id}", "Winner weight: 4 of 8")
+    assert has_element?(view, "#spin-snapshot-summary-#{spin.id}", "Winner votes: 4 of 8")
     assert has_element?(view, "#spin-snapshot-summary-#{spin.id}", "50.0%")
-    assert has_element?(view, "#spin-snapshot-summary-#{spin.id}", "Base 2 + boosts 2")
+
+    assert has_element?(
+             view,
+             "#spin-snapshot-summary-#{spin.id}",
+             "Starting votes 2 + channel point votes 2"
+           )
+
     assert has_element?(view, "#spin-snapshot-summary-#{spin.id}", "2 entries snapshotted")
   end
 

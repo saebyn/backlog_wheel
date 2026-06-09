@@ -98,7 +98,7 @@ defmodule BacklogWheelWeb.WheelLive do
           <aside class="flex flex-col gap-4 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl">
             <.header>
               Voting Wheel
-              <:subtitle>Thirty-second weighted spin from a voting session pool.</:subtitle>
+              <:subtitle>Thirty-second spin from the selected voting session.</:subtitle>
               <:actions>
                 <.button navigate={~p"/voting"}>Manage voting</.button>
               </:actions>
@@ -135,7 +135,7 @@ defmodule BacklogWheelWeb.WheelLive do
               id="wheel-weight-summary"
               class="space-y-2 rounded-2xl border border-base-300 bg-base-200 p-4"
             >
-              <h2 class="text-lg font-bold">Weighted odds</h2>
+              <h2 class="text-lg font-bold">Vote Totals</h2>
               <div id="wheel-weighted-candidates" class="space-y-2">
                 <div
                   :for={candidate <- @candidates}
@@ -154,7 +154,7 @@ defmodule BacklogWheelWeb.WheelLive do
                     </div>
                   </div>
                   <p class="mt-1 text-xs text-base-content/60">
-                    Base {candidate.base_weight} + boosts {candidate.boost_total}
+                    Starting votes {candidate.base_weight} + channel point votes {candidate.boost_total}
                   </p>
                 </div>
               </div>

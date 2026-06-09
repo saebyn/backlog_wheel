@@ -7,5 +7,6 @@ defmodule BacklogWheelWeb.PageControllerTest do
 
     assert response =~ "Backlog Wheel"
     assert response =~ "Manage Games"
+    assert response =~ "Built for indecisive stream nights"
   end
 end

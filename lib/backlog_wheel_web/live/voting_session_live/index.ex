@@ -14,7 +14,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
         <aside class="space-y-4 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl">
           <.header>
             Voting Sessions
-            <:subtitle>Create voting pools, manage boosts, and publish Twitch rewards.</:subtitle>
+            <:subtitle>Create game lists, collect channel point votes, and spin a winner.</:subtitle>
             <:actions>
               <.button id="create-voting-session" variant="primary" phx-click="create_session">
                 <.icon name="hero-plus" /> New Session
@@ -56,7 +56,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
               <p class="text-sm font-semibold uppercase tracking-[0.24em] text-primary">No Session</p>
               <h1 class="mt-3 text-4xl font-black tracking-tight">Create a voting session</h1>
               <p class="mt-3 text-base-content/70">
-                Start with the current wheel candidates, then adjust the pool locally.
+                Start with the current wheel games, then adjust the game list locally.
               </p>
             </div>
           </div>
@@ -67,13 +67,13 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                 <p class="text-sm font-semibold uppercase tracking-[0.24em] text-primary">
                   Session #{@selected_session.id}
                 </p>
-                <h1 class="mt-2 text-4xl font-black tracking-tight">Voting Pool</h1>
+                <h1 class="mt-2 text-4xl font-black tracking-tight">Games In This Vote</h1>
                 <div class="mt-3 flex flex-wrap gap-2">
                   <span id="selected-session-status" class="badge badge-primary capitalize">
                     {@selected_session.status}
                   </span>
                   <span id="selected-session-pool-size" class="badge badge-ghost">
-                    {@pool_size} pool games
+                    {@pool_size} games in this vote
                   </span>
                   <span
                     id="twitch-connection-status"
@@ -90,14 +90,14 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
               <div class="flex flex-wrap gap-2">
                 <.button id="populate-session-pool" phx-click="populate_pool">
-                  Populate from wheel
+                  Add wheel games
                 </.button>
                 <.button
                   id="spin-selected-voting-session"
                   navigate={~p"/wheel?#{[voting_session_id: @selected_session.id]}"}
                   disabled={@pool_size == 0}
                 >
-                  Spin this pool
+                  Spin these games
                 </.button>
                 <.button id="manage-twitch" href={~p"/twitch"}>
                   Manage Twitch
@@ -139,13 +139,13 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
             <div class="grid gap-6 xl:grid-cols-[1fr_22rem]">
               <section class="space-y-3">
-                <h2 class="text-xl font-bold">Session Pool</h2>
+                <h2 class="text-xl font-bold">Games In This Vote</h2>
                 <div id="voting-session-pool" phx-update="stream" class="grid gap-3 md:grid-cols-2">
                   <p
                     id="empty-session-pool"
                     class="hidden rounded-2xl bg-base-200 p-5 text-base-content/70 only:block md:col-span-2"
                   >
-                    No games in this voting pool yet.
+                    No games in this vote yet.
                   </p>
                   <article
                     :for={{id, pool_item} <- @streams.voting_session_pool}
@@ -158,7 +158,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                         <div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
                           <div class="rounded-xl bg-base-100 p-2">
                             <p class="font-semibold uppercase tracking-wide text-base-content/50">
-                              Base
+                              Starting Votes
                             </p>
                             <p id={"pool-game-base-weight-#{pool_item.id}"} class="text-lg font-black">
                               {pool_item.base_weight}
@@ -166,7 +166,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                           </div>
                           <div class="rounded-xl bg-base-100 p-2">
                             <p class="font-semibold uppercase tracking-wide text-base-content/50">
-                              Boosts
+                              Channel Point Votes
                             </p>
                             <p
                               id={"pool-game-boost-total-#{pool_item.id}"}
@@ -177,7 +177,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                           </div>
                           <div class="rounded-xl bg-base-100 p-2">
                             <p class="font-semibold uppercase tracking-wide text-base-content/50">
-                              Final
+                              Total Votes
                             </p>
                             <p
                               id={"pool-game-final-weight-#{pool_item.id}"}
@@ -208,13 +208,13 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                           phx-click="boost_pool_game"
                           phx-value-id={pool_item.id}
                         >
-                          +1 Boost
+                          +1 Vote
                         </.button>
                         <.button
                           id={"remove-pool-game-#{pool_item.id}"}
                           phx-click="remove_pool_game"
                           phx-value-id={pool_item.id}
-                          data-confirm="Remove this game from the voting pool?"
+                          data-confirm="Remove this game from this vote?"
                         >
                           Remove
                         </.button>
@@ -227,14 +227,14 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
               <section class="space-y-3 rounded-2xl border border-base-300 bg-base-200 p-4">
                 <h2 class="text-xl font-bold">Available Games</h2>
                 <p class="text-sm text-base-content/70">
-                  Add or remove games here without changing wheel eligibility.
+                  Add or remove games here without changing whether they appear on the main wheel.
                 </p>
                 <div id="available-voting-games" phx-update="stream" class="space-y-2">
                   <p
                     id="empty-available-voting-games"
                     class="hidden rounded-xl bg-base-100 p-4 text-sm text-base-content/70 only:block"
                   >
-                    Every game is already in this pool.
+                    Every game is already in this vote.
                   </p>
                   <div
                     :for={{id, game} <- @streams.available_games}
@@ -340,7 +340,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
     {:noreply,
      socket
-     |> put_flash(:info, "Added #{length(pool_items)} wheel-eligible games")
+     |> put_flash(:info, "Added #{length(pool_items)} wheel games")
      |> refresh()}
   end
 
@@ -443,7 +443,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     do: "Connect Twitch before starting Twitch voting."
 
   defp twitch_voting_hint(_connected?, []),
-    do: "Add games to the voting pool before starting Twitch voting."
+    do: "Add games to this vote before starting Twitch voting."
 
   defp twitch_voting_hint(_connected?, pool_items) do
     if Enum.all?(pool_items, &(&1.twitch_reward_id not in [nil, ""])) do
@@ -463,7 +463,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   defp twitch_error(:missing_twitch_credential),
     do: "Connect Twitch before starting Twitch voting"
 
-  defp twitch_error(:empty_pool), do: "Add games before starting Twitch voting"
+  defp twitch_error(:empty_pool), do: "Add games to this vote before starting Twitch voting"
   defp twitch_error(:no_twitch_rewards), do: "No Twitch rewards to remove"
   defp twitch_error(_reason), do: "Could not start Twitch voting"
 end

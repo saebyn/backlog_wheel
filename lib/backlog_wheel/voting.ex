@@ -97,7 +97,7 @@ defmodule BacklogWheel.Voting do
   end
 
   @doc """
-  Starts Twitch voting by creating one positive boost reward per pool game.
+  Starts Twitch voting by creating one positive channel point vote reward per game.
   """
   def start_twitch_voting(%VotingSession{} = voting_session, opts \\ []) do
     client = Keyword.get(opts, :client, Twitch.client())

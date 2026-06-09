@@ -57,15 +57,15 @@ defmodule BacklogWheelWeb.SpinHistoryLive do
               <% winner_entry = winner_snapshot_entry(spin) %>
               <% total_weight = snapshot_total_weight(spin) %>
               <p class="font-semibold text-base-content/80">
-                Winner weight: {winner_entry["final_weight"]} of {total_weight} ({winner_odds_percent(
+                Winner votes: {winner_entry["final_weight"]} of {total_weight} ({winner_odds_percent(
                   winner_entry,
                   total_weight
                 )}%)
               </p>
               <p class="mt-1 text-xs text-base-content/60">
-                Base {winner_entry["base_weight"]} + boosts {winner_entry["boost_total"]} · {snapshot_entry_count(
-                  spin
-                )} entries snapshotted
+                Starting votes {winner_entry["base_weight"]} + channel point votes {winner_entry[
+                  "boost_total"
+                ]} · {snapshot_entry_count(spin)} entries snapshotted
               </p>
             </div>
           </div>

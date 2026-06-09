@@ -6,7 +6,7 @@
 
 ## Development
 
-Backlog Wheel is a small Phoenix LiveView app for choosing what game to play from a personal backlog. The first version is a local stream tool: maintain a backlog, mark games as wheel candidates, spin a wheel, and record the result.
+Backlog Wheel is a small Phoenix LiveView app for choosing what game to play from a personal backlog. The first version is a local stream tool: maintain a backlog, mark games as eligible for the wheel, spin a wheel, and record the result.
 
 I'm developing this project on NixOS with `nix-direnv`.
 
@@ -106,16 +106,16 @@ When registering a local development app at <https://dev.twitch.tv/console/apps/
 http://localhost:4000/twitch/oauth/callback
 ```
 
-Twitch allows HTTP redirect URLs for `localhost`. After setting the env vars, visit the voting page and click `Connect Twitch` to authorize the local app.
+Twitch allows HTTP redirect URLs for `localhost`. After setting the env vars, visit the Twitch page and click `Connect Twitch` to authorize the local app.
 
 Behavior today:
 
 - `TWITCH_CLIENT_ID` identifies the Twitch application/client.
 - `TWITCH_CLIENT_SECRET` is used by the local OAuth callback to exchange authorization codes.
 - `TWITCH_BROADCASTER_ID` identifies the channel that future reward actions will target.
-- `TWITCH_REWARD_COST` sets the positive boost reward cost in channel points and defaults to `100`.
+- `TWITCH_REWARD_COST` sets the channel point vote cost and defaults to `100`.
 - If required config is missing, `BacklogWheel.Twitch.config/0` returns `{:error, {:missing_config, keys}}` and `BacklogWheel.Twitch.configured?/0` returns `false`.
-- Starting Twitch voting creates one positive boost channel point reward per game in the voting session pool.
+- Starting Twitch voting creates one positive channel point vote reward per game in the voting session.
 - Redemption ingestion is not implemented yet.
 
 ## Tests
