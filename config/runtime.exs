@@ -25,7 +25,12 @@ config :backlog_wheel, BacklogWheelWeb.Endpoint,
 
 config :backlog_wheel,
   steam_api_key: System.get_env("STEAM_API_KEY"),
-  steam_id64: System.get_env("STEAM_ID64")
+  steam_id64: System.get_env("STEAM_ID64"),
+  twitch: [
+    client_id: System.get_env("TWITCH_CLIENT_ID"),
+    client_secret: System.get_env("TWITCH_CLIENT_SECRET"),
+    broadcaster_id: System.get_env("TWITCH_BROADCASTER_ID")
+  ]
 
 if config_env() == :prod do
   database_path =

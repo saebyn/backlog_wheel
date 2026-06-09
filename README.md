@@ -83,6 +83,34 @@ Import behavior:
 - Re-imports refresh `last_played_at` when Steam returns `rtime_last_played`.
 - Existing Steam games are skipped so local edits are preserved.
 
+## Twitch Configuration
+
+Twitch integration is currently a configuration shell only. OAuth, EventSub, reward creation, and live Twitch API calls are not implemented yet.
+
+Add these values to `.envrc` for future Twitch work, then run `direnv allow`:
+
+```sh
+export TWITCH_CLIENT_ID="your-twitch-client-id"
+export TWITCH_CLIENT_SECRET="your-twitch-client-secret"
+export TWITCH_BROADCASTER_ID="your-twitch-broadcaster-id"
+```
+
+When registering a local development app at <https://dev.twitch.tv/console/apps/create>, use this OAuth redirect URL:
+
+```text
+http://localhost:4000/twitch/oauth/callback
+```
+
+Twitch allows HTTP redirect URLs for `localhost`. The callback route is reserved for future OAuth work and is not implemented yet.
+
+Behavior today:
+
+- `TWITCH_CLIENT_ID` identifies the Twitch application/client.
+- `TWITCH_CLIENT_SECRET` is the local client secret for future OAuth token work.
+- `TWITCH_BROADCASTER_ID` identifies the channel that future reward actions will target.
+- If any value is missing, `BacklogWheel.Twitch.config/0` returns `{:error, {:missing_config, keys}}` and `BacklogWheel.Twitch.configured?/0` returns `false`.
+- No Twitch network requests are made.
+
 ## Tests
 
 Run the test suite:
