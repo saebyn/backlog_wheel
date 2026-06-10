@@ -11,6 +11,9 @@ defmodule BacklogWheel.Voting.VotingSessionGame do
     field :twitch_reward_title, :string
     field :twitch_reward_cost, :integer
     field :twitch_reward_status, :string
+    field :twitch_reward_deletion_status, :string
+    field :twitch_reward_deletion_error, :string
+    field :twitch_reward_deleted_at, :utc_datetime
 
     belongs_to :voting_session, VotingSession
     belongs_to :game, Game
@@ -34,7 +37,10 @@ defmodule BacklogWheel.Voting.VotingSessionGame do
       :twitch_reward_id,
       :twitch_reward_title,
       :twitch_reward_cost,
-      :twitch_reward_status
+      :twitch_reward_status,
+      :twitch_reward_deletion_status,
+      :twitch_reward_deletion_error,
+      :twitch_reward_deleted_at
     ])
     |> validate_required([
       :twitch_reward_id,
@@ -48,10 +54,25 @@ defmodule BacklogWheel.Voting.VotingSessionGame do
 
   def clear_twitch_reward_changeset(voting_session_game) do
     change(voting_session_game, %{
-      twitch_reward_id: nil,
-      twitch_reward_title: nil,
-      twitch_reward_cost: nil,
-      twitch_reward_status: nil
+      twitch_reward_status: "deleted",
+      twitch_reward_deletion_status: "deleted",
+      twitch_reward_deletion_error: nil,
+      twitch_reward_deleted_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    })
+  end
+
+  def twitch_reward_deleting_changeset(voting_session_game) do
+    change(voting_session_game, %{
+      twitch_reward_deletion_status: "deleting",
+      twitch_reward_deletion_error: nil
+    })
+  end
+
+  def twitch_reward_deletion_failed_changeset(voting_session_game, reason) do
+    change(voting_session_game, %{
+      twitch_reward_deletion_status: "failed",
+      twitch_reward_deletion_error: inspect(reason),
+      twitch_reward_deleted_at: nil
     })
   end
 end

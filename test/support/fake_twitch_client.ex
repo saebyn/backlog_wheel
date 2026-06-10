@@ -11,7 +11,7 @@ defmodule BacklogWheel.FakeTwitchClient do
   end
 
   def start_link(_opts) do
-    Agent.start_link(fn -> %{rewards: %{}} end, name: @agent)
+    Agent.start_link(fn -> %{rewards: %{}, failing_deletions: MapSet.new()} end, name: @agent)
   end
 
   def authorize_url(_config, redirect_uri, state) do
@@ -46,12 +46,28 @@ defmodule BacklogWheel.FakeTwitchClient do
   end
 
   def delete_custom_reward(_config, _credential, reward_id) do
-    Agent.update(@agent, fn state ->
-      deleted_rewards = MapSet.put(Map.get(state, :deleted_rewards, MapSet.new()), reward_id)
-      Map.put(state, :deleted_rewards, deleted_rewards)
-    end)
+    if fail_deletion?(reward_id) do
+      {:error, :delete_failed}
+    else
+      Agent.update(@agent, fn state ->
+        deleted_rewards = MapSet.put(Map.get(state, :deleted_rewards, MapSet.new()), reward_id)
+        Map.put(state, :deleted_rewards, deleted_rewards)
+      end)
 
-    :ok
+      :ok
+    end
+  end
+
+  def fail_deletion(reward_id) do
+    Agent.update(@agent, fn state ->
+      Map.update!(state, :failing_deletions, &MapSet.put(&1, reward_id))
+    end)
+  end
+
+  def allow_deletion(reward_id) do
+    Agent.update(@agent, fn state ->
+      Map.update!(state, :failing_deletions, &MapSet.delete(&1, reward_id))
+    end)
   end
 
   def reward_attrs(voting_session_game_id) do
@@ -62,6 +78,14 @@ defmodule BacklogWheel.FakeTwitchClient do
     Agent.get(@agent, fn state ->
       state
       |> Map.get(:deleted_rewards, MapSet.new())
+      |> MapSet.member?(reward_id)
+    end)
+  end
+
+  defp fail_deletion?(reward_id) do
+    Agent.get(@agent, fn state ->
+      state
+      |> Map.fetch!(:failing_deletions)
       |> MapSet.member?(reward_id)
     end)
   end

@@ -247,6 +247,42 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     assert has_element?(view, "#twitch-voting-hint", "Twitch voting rewards are already created")
   end
 
+  test "shows failed Twitch reward cleanup as retryable", %{conn: conn} do
+    voting_session = voting_session_fixture(%{status: "closed"})
+    game = game_fixture(%{title: "Failed Cleanup Game"})
+    pool_item = voting_session_game_fixture(voting_session, game)
+
+    {:ok, _credential} =
+      Twitch.save_credential(%{
+        access_token: "access-token",
+        refresh_token: "refresh-token",
+        scopes: "channel:manage:redemptions"
+      })
+
+    pool_item
+    |> BacklogWheel.Voting.VotingSessionGame.twitch_reward_changeset(%{
+      twitch_reward_id: "reward-#{pool_item.id}",
+      twitch_reward_title: "Boost ##{pool_item.id}: Failed Cleanup Game",
+      twitch_reward_cost: 100,
+      twitch_reward_status: "enabled",
+      twitch_reward_deletion_status: "failed",
+      twitch_reward_deletion_error: ":delete_failed"
+    })
+    |> BacklogWheel.Repo.update!()
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    assert has_element?(view, "#failed-twitch-reward-deletions", "1 reward cleanup failed")
+    assert has_element?(view, "#remove-twitch-rewards", "Retry Reward Cleanup")
+    refute has_element?(view, "#remove-twitch-rewards[disabled]")
+
+    assert has_element?(
+             view,
+             "#pool-game-twitch-reward-cleanup-error-#{pool_item.id}",
+             "Cleanup failed: :delete_failed"
+           )
+  end
+
   test "links selected voting session to wheel", %{conn: conn} do
     voting_session = voting_session_fixture()
     game = game_fixture(%{title: "Linked Wheel Game"})

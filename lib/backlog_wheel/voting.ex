@@ -97,6 +97,25 @@ defmodule BacklogWheel.Voting do
   end
 
   @doc """
+  Closes or cancels a voting session and attempts to delete its Twitch rewards.
+  """
+  def close_voting_session(%VotingSession{} = voting_session, status, opts \\ [])
+      when status in ["closed", "cancelled"] do
+    with {:ok, session} <- update_voting_session_status(voting_session, status) do
+      case remove_twitch_rewards(session, opts) do
+        {:ok, session} ->
+          {:ok, session}
+
+        {:error, :no_twitch_rewards} ->
+          {:ok, get_voting_session!(session.id)}
+
+        {:error, reason} ->
+          {:error, {:twitch_reward_cleanup_failed, get_voting_session!(session.id), reason}}
+      end
+    end
+  end
+
+  @doc """
   Starts Twitch voting by creating one positive channel point vote reward per game.
   """
   def start_twitch_voting(%VotingSession{} = voting_session, opts \\ []) do
@@ -115,11 +134,26 @@ defmodule BacklogWheel.Voting do
   """
   def remove_twitch_rewards(%VotingSession{} = voting_session, opts \\ []) do
     client = Keyword.get(opts, :client, Twitch.client())
+    voting_session = get_voting_session!(voting_session.id)
+    pool_items = twitch_reward_pool_items(voting_session)
 
-    with {:ok, config} <- Twitch.config(),
-         {:ok, credential} <- fetch_twitch_credential(),
-         {:ok, _pool_items} <- delete_twitch_rewards(voting_session, config, credential, client) do
-      {:ok, get_voting_session!(voting_session.id)}
+    case pool_items do
+      [] ->
+        {:error, :no_twitch_rewards}
+
+      pool_items ->
+        with {:ok, config} <- Twitch.config(),
+             {:ok, credential} <- fetch_twitch_credential(),
+             {:ok, _pool_items} <- delete_twitch_rewards(pool_items, config, credential, client) do
+          {:ok, get_voting_session!(voting_session.id)}
+        else
+          {:error, {:twitch_reward_deletion_failed, _count} = reason} ->
+            {:error, reason}
+
+          {:error, reason} ->
+            mark_twitch_reward_deletions_failed(pool_items, reason)
+            {:error, reason}
+        end
     end
   end
 
@@ -315,47 +349,69 @@ defmodule BacklogWheel.Voting do
     end
   end
 
-  defp delete_twitch_rewards(%VotingSession{} = voting_session, config, credential, client) do
-    voting_session = get_voting_session!(voting_session.id)
+  defp delete_twitch_rewards(pool_items, config, credential, client) do
+    results =
+      Enum.map(pool_items, fn pool_item ->
+        case delete_twitch_reward(pool_item, config, credential, client) do
+          {:ok, updated_pool_item} -> {:ok, updated_pool_item}
+          {:error, reason} -> {:error, pool_item, reason}
+        end
+      end)
 
-    pool_items =
-      Enum.filter(voting_session.voting_session_games, &(&1.twitch_reward_id not in [nil, ""]))
+    failures = Enum.filter(results, &match?({:error, _pool_item, _reason}, &1))
 
-    case pool_items do
-      [] ->
-        {:error, :no_twitch_rewards}
-
-      pool_items ->
-        pool_items
-        |> Enum.reduce_while({:ok, []}, fn pool_item, {:ok, deleted_pool_items} ->
-          case delete_twitch_reward(pool_item, config, credential, client) do
-            {:ok, updated_pool_item} -> {:cont, {:ok, [updated_pool_item | deleted_pool_items]}}
-            {:error, reason} -> {:halt, {:error, reason}}
-          end
-        end)
-        |> then(fn
-          {:ok, deleted_pool_items} -> {:ok, Enum.reverse(deleted_pool_items)}
-          {:error, reason} -> {:error, reason}
-        end)
+    if failures == [] do
+      {:ok, Enum.map(results, fn {:ok, pool_item} -> pool_item end)}
+    else
+      {:error, {:twitch_reward_deletion_failed, length(failures)}}
     end
   end
 
   defp delete_twitch_reward(%VotingSessionGame{} = pool_item, config, credential, client) do
+    pool_item = mark_twitch_reward_deleting!(pool_item)
+
     with :ok <- client.delete_custom_reward(config, credential, pool_item.twitch_reward_id) do
       pool_item
       |> VotingSessionGame.clear_twitch_reward_changeset()
       |> Repo.update()
       |> broadcast_voting_session_change(pool_item.voting_session_id)
+    else
+      {:error, reason} ->
+        pool_item
+        |> VotingSessionGame.twitch_reward_deletion_failed_changeset(reason)
+        |> Repo.update()
+        |> broadcast_voting_session_change(pool_item.voting_session_id)
+
+        {:error, reason}
     end
   end
 
+  defp mark_twitch_reward_deleting!(%VotingSessionGame{} = pool_item) do
+    pool_item
+    |> VotingSessionGame.twitch_reward_deleting_changeset()
+    |> Repo.update!()
+  end
+
+  defp mark_twitch_reward_deletions_failed(pool_items, reason) do
+    Enum.each(pool_items, fn pool_item ->
+      pool_item
+      |> VotingSessionGame.twitch_reward_deletion_failed_changeset(reason)
+      |> Repo.update()
+      |> broadcast_voting_session_change(pool_item.voting_session_id)
+    end)
+  end
+
   defp maybe_create_twitch_reward(
-         %VotingSessionGame{twitch_reward_id: reward_id} = pool_item,
+         %VotingSessionGame{
+           twitch_reward_id: reward_id,
+           twitch_reward_deletion_status: deletion_status
+         } =
+           pool_item,
          _config,
          _credential,
          _client
        )
-       when reward_id not in [nil, ""] do
+       when reward_id not in [nil, ""] and deletion_status != "deleted" do
     {:ok, pool_item}
   end
 
@@ -373,7 +429,10 @@ defmodule BacklogWheel.Voting do
       twitch_reward_id: Map.fetch!(reward, :id),
       twitch_reward_title: Map.fetch!(reward, :title),
       twitch_reward_cost: Map.fetch!(reward, :cost),
-      twitch_reward_status: Map.fetch!(reward, :status)
+      twitch_reward_status: Map.fetch!(reward, :status),
+      twitch_reward_deletion_status: nil,
+      twitch_reward_deletion_error: nil,
+      twitch_reward_deleted_at: nil
     })
     |> Repo.update()
     |> broadcast_voting_session_change(pool_item.voting_session_id)
@@ -391,6 +450,13 @@ defmodule BacklogWheel.Voting do
     prefix = "Boost ##{pool_item.id}: "
 
     prefix <> String.slice(pool_item.game.title, 0, 45 - String.length(prefix))
+  end
+
+  defp twitch_reward_pool_items(%VotingSession{} = voting_session) do
+    Enum.filter(voting_session.voting_session_games, fn pool_item ->
+      pool_item.twitch_reward_id not in [nil, ""] and
+        pool_item.twitch_reward_deletion_status != "deleted"
+    end)
   end
 
   defp preload_pool_games_with_boosts(%VotingSession{} = voting_session) do

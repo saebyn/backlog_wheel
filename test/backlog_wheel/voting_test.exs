@@ -299,10 +299,84 @@ defmodule BacklogWheel.VotingTest do
 
       assert [updated_pool_item] = updated_session.voting_session_games
       assert updated_pool_item.id == pool_item.id
-      assert updated_pool_item.twitch_reward_id == nil
-      assert updated_pool_item.twitch_reward_title == nil
-      assert updated_pool_item.twitch_reward_cost == nil
-      assert updated_pool_item.twitch_reward_status == nil
+      assert updated_pool_item.twitch_reward_id == reward_id
+      assert updated_pool_item.twitch_reward_title == "Boost ##{pool_item.id}: Temporary Reward"
+      assert updated_pool_item.twitch_reward_cost == 321
+      assert updated_pool_item.twitch_reward_status == "deleted"
+      assert updated_pool_item.twitch_reward_deletion_status == "deleted"
+      assert updated_pool_item.twitch_reward_deletion_error == nil
+      assert updated_pool_item.twitch_reward_deleted_at
+    end
+
+    test "close_voting_session/3 closes voting and deletes rewards" do
+      voting_session = voting_session_fixture(%{status: "open"})
+      game = game_fixture(%{title: "Closing Reward"})
+      voting_session_game_fixture(voting_session, game)
+
+      {:ok, _credential} =
+        Twitch.save_credential(%{
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+          scopes: "channel:manage:redemptions"
+        })
+
+      {:ok, session_with_rewards} =
+        Voting.start_twitch_voting(voting_session, client: BacklogWheel.FakeTwitchClient)
+
+      [pool_item_with_reward] = session_with_rewards.voting_session_games
+      reward_id = pool_item_with_reward.twitch_reward_id
+
+      assert {:ok, closed_session} =
+               Voting.close_voting_session(voting_session, "closed",
+                 client: BacklogWheel.FakeTwitchClient
+               )
+
+      assert closed_session.status == "closed"
+      assert BacklogWheel.FakeTwitchClient.deleted_reward?(reward_id)
+      assert [updated_pool_item] = closed_session.voting_session_games
+      assert updated_pool_item.twitch_reward_deletion_status == "deleted"
+    end
+
+    test "close_voting_session/3 records failed deletions and keeps rewards retryable" do
+      voting_session = voting_session_fixture(%{status: "open"})
+      game = game_fixture(%{title: "Retry Reward"})
+      voting_session_game_fixture(voting_session, game)
+
+      {:ok, _credential} =
+        Twitch.save_credential(%{
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+          scopes: "channel:manage:redemptions"
+        })
+
+      {:ok, session_with_rewards} =
+        Voting.start_twitch_voting(voting_session, client: BacklogWheel.FakeTwitchClient)
+
+      [pool_item_with_reward] = session_with_rewards.voting_session_games
+      reward_id = pool_item_with_reward.twitch_reward_id
+      BacklogWheel.FakeTwitchClient.fail_deletion(reward_id)
+
+      assert {:error,
+              {:twitch_reward_cleanup_failed, closed_session, {:twitch_reward_deletion_failed, 1}}} =
+               Voting.close_voting_session(voting_session, "closed",
+                 client: BacklogWheel.FakeTwitchClient
+               )
+
+      assert closed_session.status == "closed"
+      assert [failed_pool_item] = closed_session.voting_session_games
+      assert failed_pool_item.twitch_reward_id == reward_id
+      assert failed_pool_item.twitch_reward_deletion_status == "failed"
+      assert failed_pool_item.twitch_reward_deletion_error == ":delete_failed"
+
+      BacklogWheel.FakeTwitchClient.allow_deletion(reward_id)
+
+      assert {:ok, retried_session} =
+               Voting.remove_twitch_rewards(closed_session, client: BacklogWheel.FakeTwitchClient)
+
+      assert BacklogWheel.FakeTwitchClient.deleted_reward?(reward_id)
+      assert [retried_pool_item] = retried_session.voting_session_games
+      assert retried_pool_item.twitch_reward_deletion_status == "deleted"
+      assert retried_pool_item.twitch_reward_deletion_error == nil
     end
 
     test "remove_twitch_rewards/2 reports when no rewards exist" do
