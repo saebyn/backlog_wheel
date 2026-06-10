@@ -35,6 +35,23 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
     assert has_element?(view, "nav a, header a", "Twitch")
     assert has_element?(view, "#connect-twitch", "Connect Twitch")
     assert has_element?(view, "#disconnect-twitch[disabled]")
+    assert has_element?(view, "#twitch-settings-eventsub-status", "Missing secret")
+    assert has_element?(view, "#twitch-settings-eventsub-warning")
+  end
+
+  test "shows EventSub configured when signing secret exists", %{conn: conn} do
+    Application.put_env(:backlog_wheel, :twitch,
+      client_id: "client-id",
+      client_secret: "client-secret",
+      broadcaster_id: "broadcaster-id",
+      reward_cost: 123,
+      eventsub_secret: "eventsub-secret"
+    )
+
+    {:ok, view, _html} = live(conn, ~p"/twitch")
+
+    assert has_element?(view, "#twitch-settings-eventsub-status", "Configured")
+    refute has_element?(view, "#twitch-settings-eventsub-warning")
   end
 
   test "shows reconnect and disconnect when Twitch is connected", %{conn: conn} do

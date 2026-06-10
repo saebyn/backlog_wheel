@@ -32,7 +32,7 @@ defmodule BacklogWheelWeb.TwitchLive do
             </span>
           </div>
 
-          <div class="mt-6 grid gap-3 sm:grid-cols-3">
+          <div class="mt-6 grid gap-3 sm:grid-cols-4">
             <div class="rounded-2xl bg-base-200 p-4">
               <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
                 App config
@@ -57,6 +57,14 @@ defmodule BacklogWheelWeb.TwitchLive do
                 channel:manage:redemptions
               </p>
             </div>
+            <div class="rounded-2xl bg-base-200 p-4">
+              <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+                Webhook events
+              </p>
+              <p id="twitch-settings-eventsub-status" class="mt-1 font-bold">
+                {if @eventsub_configured?, do: "Configured", else: "Missing secret"}
+              </p>
+            </div>
           </div>
 
           <p
@@ -65,6 +73,16 @@ defmodule BacklogWheelWeb.TwitchLive do
             class="mt-4 rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm"
           >
             Missing Twitch config: {Enum.join(@missing_config, ", ")}
+          </p>
+
+          <p
+            :if={!@eventsub_configured?}
+            id="twitch-settings-eventsub-warning"
+            class="mt-4 rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm"
+          >
+            Twitch EventSub is not configured. Channel point rewards can be created, but
+            redemptions will not be delivered as votes until TWITCH_EVENTSUB_SECRET is set and
+            Twitch is reconnected.
           </p>
 
           <div class="mt-6 flex flex-wrap gap-2">
@@ -114,6 +132,7 @@ defmodule BacklogWheelWeb.TwitchLive do
     |> assign(:twitch_configured?, match?({:ok, _config}, config))
     |> assign(:missing_config, missing_config(config))
     |> assign(:reward_cost, reward_cost(config))
+    |> assign(:eventsub_configured?, eventsub_configured?(config))
   end
 
   defp missing_config({:error, {:missing_config, missing}}), do: missing
@@ -121,4 +140,9 @@ defmodule BacklogWheelWeb.TwitchLive do
 
   defp reward_cost({:ok, config}), do: config.reward_cost
   defp reward_cost(_config), do: nil
+
+  defp eventsub_configured?({:ok, config}),
+    do: match?({:ok, _secret}, Twitch.eventsub_secret(config))
+
+  defp eventsub_configured?(_config), do: false
 end

@@ -31,6 +31,12 @@ defmodule BacklogWheelWeb.Router do
     live "/games/:id/edit", GameLive.Form, :edit
   end
 
+  scope "/", BacklogWheelWeb do
+    pipe_through :api
+
+    post "/twitch/eventsub", TwitchEventSubController, :webhook
+  end
+
   # Other scopes may use custom stacks.
   # scope "/api", BacklogWheelWeb do
   #   pipe_through :api

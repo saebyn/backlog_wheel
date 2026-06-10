@@ -6,12 +6,19 @@ defmodule BacklogWheel.TwitchTest do
 
   setup do
     original_config = Application.get_env(:backlog_wheel, :twitch)
+    original_client = Application.get_env(:backlog_wheel, :twitch_client)
 
     on_exit(fn ->
       if is_nil(original_config) do
         Application.delete_env(:backlog_wheel, :twitch)
       else
         Application.put_env(:backlog_wheel, :twitch, original_config)
+      end
+
+      if is_nil(original_client) do
+        Application.delete_env(:backlog_wheel, :twitch_client)
+      else
+        Application.put_env(:backlog_wheel, :twitch_client, original_client)
       end
     end)
   end
@@ -62,6 +69,32 @@ defmodule BacklogWheel.TwitchTest do
 
     assert updated_credential.id == credential.id
     assert Twitch.get_credential().access_token == "new-access-token"
+  end
+
+  test "refresh_credential/2 refreshes and stores the OAuth token" do
+    start_supervised!(BacklogWheel.FakeTwitchClient)
+
+    config = %Config{
+      client_id: "client-id",
+      client_secret: "client-secret",
+      broadcaster_id: "broadcaster-id",
+      reward_cost: 100
+    }
+
+    {:ok, credential} =
+      Twitch.save_credential(%{
+        access_token: "stale-access-token",
+        refresh_token: "refresh-token",
+        scopes: "channel:manage:redemptions"
+      })
+
+    assert {:ok, refreshed_credential} =
+             Twitch.refresh_credential(config, BacklogWheel.FakeTwitchClient)
+
+    assert refreshed_credential.id == credential.id
+    assert refreshed_credential.access_token == "refreshed-stale-access-token"
+    assert refreshed_credential.refresh_token == "refresh-token"
+    assert Twitch.get_credential().access_token == "refreshed-stale-access-token"
   end
 
   test "delete_credential/0 removes stored Twitch OAuth tokens" do

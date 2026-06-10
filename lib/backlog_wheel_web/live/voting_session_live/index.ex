@@ -1,6 +1,8 @@
 defmodule BacklogWheelWeb.VotingSessionLive.Index do
   use BacklogWheelWeb, :live_view
 
+  require Logger
+
   alias BacklogWheel.Backlog
   alias BacklogWheel.Twitch
   alias BacklogWheel.Voting
@@ -362,6 +364,8 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
          |> refresh()}
 
       {:error, reason} ->
+        Logger.warning("Failed to start Twitch voting: #{inspect(reason)}")
+
         {:noreply,
          socket
          |> put_flash(:error, twitch_error(reason))
@@ -379,6 +383,8 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
          |> refresh()}
 
       {:error, reason} ->
+        Logger.warning("Failed to remove Twitch rewards: #{inspect(reason)}")
+
         {:noreply,
          socket
          |> put_flash(:error, twitch_error(reason))
@@ -581,11 +587,31 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   defp twitch_error(:missing_twitch_credential),
     do: "Connect Twitch before starting Twitch voting"
 
+  defp twitch_error(:missing_twitch_refresh_token),
+    do: "Reconnect Twitch before starting Twitch voting"
+
   defp twitch_error(:empty_pool), do: "Add games to this vote before starting Twitch voting"
   defp twitch_error(:no_twitch_rewards), do: "No Twitch rewards to remove"
 
   defp twitch_error({:twitch_reward_deletion_failed, count}),
     do: "#{count} Twitch reward cleanup failed"
 
+  defp twitch_error({:twitch_http_error, status, body}) do
+    message = twitch_http_error_message(body)
+
+    if message do
+      "Twitch API error #{status}: #{message}"
+    else
+      "Twitch API error #{status}"
+    end
+  end
+
+  defp twitch_error({:error, reason}), do: twitch_error(reason)
+
   defp twitch_error(_reason), do: "Could not complete Twitch action"
+
+  defp twitch_http_error_message(%{"message" => message}) when is_binary(message), do: message
+  defp twitch_http_error_message(%{message: message}) when is_binary(message), do: message
+  defp twitch_http_error_message(body) when is_binary(body) and body != "", do: body
+  defp twitch_http_error_message(_body), do: nil
 end

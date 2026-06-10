@@ -26,6 +26,42 @@ defmodule BacklogWheel.Twitch do
     "#{conn.scheme}://#{conn.host}#{port}/twitch/oauth/callback"
   end
 
+  @spec eventsub_callback_url(Plug.Conn.t(), Config.t()) :: String.t()
+  def eventsub_callback_url(_conn, %Config{eventsub_callback_url: callback_url})
+      when is_binary(callback_url) and callback_url != "" do
+    callback_url
+  end
+
+  def eventsub_callback_url(conn, %Config{}) do
+    port = if conn.port in [80, 443], do: "", else: ":#{conn.port}"
+
+    "#{conn.scheme}://#{conn.host}#{port}/twitch/eventsub"
+  end
+
+  @spec eventsub_secret(Config.t()) :: {:ok, String.t()} | {:error, {:missing_config, [atom()]}}
+  def eventsub_secret(%Config{eventsub_secret: secret}) when is_binary(secret) and secret != "" do
+    {:ok, secret}
+  end
+
+  def eventsub_secret(%Config{}), do: {:error, {:missing_config, [:eventsub_secret]}}
+
+  @spec ensure_redemption_eventsub_subscription(Plug.Conn.t()) :: {:ok, map()} | {:error, term()}
+  def ensure_redemption_eventsub_subscription(conn) do
+    with {:ok, config} <- config(),
+         {:ok, secret} <- eventsub_secret(config),
+         credential when not is_nil(credential) <- get_credential() do
+      client().create_redemption_eventsub_subscription(
+        config,
+        credential,
+        eventsub_callback_url(conn, config),
+        secret
+      )
+    else
+      nil -> {:error, :missing_twitch_credential}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   @spec get_credential() :: Credential.t() | nil
   def get_credential do
     Credential
@@ -46,9 +82,32 @@ defmodule BacklogWheel.Twitch do
     |> Repo.insert_or_update()
   end
 
+  @spec refresh_credential(Config.t(), module()) :: {:ok, Credential.t()} | {:error, term()}
+  def refresh_credential(%Config{} = config, client \\ client()) do
+    with %Credential{} = credential <- get_credential(),
+         {:ok, token_attrs} <- client.refresh_access_token(config, credential) do
+      token_attrs
+      |> preserve_refresh_token(credential)
+      |> save_credential()
+    else
+      nil -> {:error, :missing_twitch_credential}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   @spec delete_credential() :: :ok
   def delete_credential do
     Repo.delete_all(Credential)
     :ok
+  end
+
+  defp preserve_refresh_token(attrs, %Credential{} = credential) do
+    refresh_token = Map.get(attrs, :refresh_token) || Map.get(attrs, "refresh_token")
+
+    if refresh_token in [nil, ""] do
+      Map.put(attrs, :refresh_token, credential.refresh_token)
+    else
+      attrs
+    end
   end
 end

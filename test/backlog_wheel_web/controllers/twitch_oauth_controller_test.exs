@@ -42,6 +42,29 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
     assert Twitch.get_credential().access_token == "access-token"
   end
 
+  test "callback creates EventSub subscription when configured", %{conn: conn} do
+    start_supervised!(BacklogWheel.FakeTwitchClient)
+
+    Application.put_env(:backlog_wheel, :twitch,
+      client_id: "client-id",
+      client_secret: "client-secret",
+      broadcaster_id: "broadcaster-id",
+      eventsub_secret: "eventsub-secret",
+      eventsub_callback_url: "https://example.com/twitch/eventsub"
+    )
+
+    conn =
+      conn
+      |> Plug.Test.init_test_session(twitch_oauth_state: "state-1")
+      |> get(~p"/twitch/oauth/callback?#{[code: "valid-code", state: "state-1"]}")
+
+    assert redirected_to(conn) == ~p"/voting"
+    assert Twitch.get_credential().access_token == "access-token"
+
+    assert BacklogWheel.FakeTwitchClient.eventsub_callback_url() ==
+             "https://example.com/twitch/eventsub"
+  end
+
   test "callback rejects mismatched state", %{conn: conn} do
     conn =
       conn

@@ -244,6 +244,7 @@ defmodule BacklogWheel.VotingTest do
 
       assert second_updated.twitch_reward_cost == 321
       assert second_updated.twitch_reward_status == "enabled"
+      assert BacklogWheel.FakeTwitchClient.refresh_count() == 1
     end
 
     test "start_twitch_voting/2 requires a stored Twitch credential" do
@@ -443,6 +444,126 @@ defmodule BacklogWheel.VotingTest do
   end
 
   describe "voting_boosts" do
+    test "ingest_twitch_reward_redemption/1 records a channel point vote" do
+      voting_session = voting_session_fixture(%{status: "open"})
+      game = game_fixture(%{title: "Redeemable Game"})
+      pool_item = voting_session_game_fixture(voting_session, game)
+
+      pool_item
+      |> VotingSessionGame.twitch_reward_changeset(%{
+        twitch_reward_id: "reward-1",
+        twitch_reward_title: "Boost ##{pool_item.id}: Redeemable Game",
+        twitch_reward_cost: 100,
+        twitch_reward_status: "enabled"
+      })
+      |> Repo.update!()
+
+      assert {:ok, %VotingBoost{} = boost} =
+               Voting.ingest_twitch_reward_redemption(%{
+                 "id" => "redemption-1",
+                 "user_id" => "twitch-user-1",
+                 "user_name" => "Redeemer",
+                 "reward" => %{"id" => "reward-1"}
+               })
+
+      assert boost.voting_session_game_id == pool_item.id
+      assert boost.strength == 1
+      assert boost.source == "twitch_channel_points"
+      assert boost.external_event_id == "redemption-1"
+
+      identity =
+        Repo.get_by!(ViewerIdentity, platform: "twitch", platform_user_id: "twitch-user-1")
+
+      viewer = Repo.get!(Viewer, identity.viewer_id)
+      assert viewer.display_name == "Redeemer"
+      assert boost.viewer_id == viewer.id
+    end
+
+    test "ingest_twitch_reward_redemption/1 reuses Twitch viewer identities" do
+      voting_session = voting_session_fixture(%{status: "open"})
+      game = game_fixture(%{title: "Known Viewer Game"})
+      pool_item = voting_session_game_fixture(voting_session, game)
+      viewer = viewer_fixture(%{display_name: "Known Viewer"})
+      viewer_identity_fixture(viewer, %{platform: "twitch", platform_user_id: "twitch-user-2"})
+
+      pool_item
+      |> VotingSessionGame.twitch_reward_changeset(%{
+        twitch_reward_id: "reward-2",
+        twitch_reward_title: "Boost ##{pool_item.id}: Known Viewer Game",
+        twitch_reward_cost: 100,
+        twitch_reward_status: "enabled"
+      })
+      |> Repo.update!()
+
+      assert {:ok, boost} =
+               Voting.ingest_twitch_reward_redemption(%{
+                 id: "redemption-2",
+                 user_id: "twitch-user-2",
+                 user_name: "Changed Name",
+                 reward: %{id: "reward-2"}
+               })
+
+      assert boost.viewer_id == viewer.id
+      assert Repo.aggregate(Viewer, :count, :id) == 1
+    end
+
+    test "ingest_twitch_reward_redemption/1 is idempotent by redemption id" do
+      voting_session = voting_session_fixture(%{status: "open"})
+      game = game_fixture(%{title: "Duplicate Redemption Game"})
+      pool_item = voting_session_game_fixture(voting_session, game)
+
+      pool_item
+      |> VotingSessionGame.twitch_reward_changeset(%{
+        twitch_reward_id: "reward-3",
+        twitch_reward_title: "Boost ##{pool_item.id}: Duplicate Redemption Game",
+        twitch_reward_cost: 100,
+        twitch_reward_status: "enabled"
+      })
+      |> Repo.update!()
+
+      attrs = %{
+        "id" => "redemption-3",
+        "user_id" => "twitch-user-3",
+        "user_name" => "Duplicate Viewer",
+        "reward" => %{"id" => "reward-3"}
+      }
+
+      assert {:ok, first_boost} = Voting.ingest_twitch_reward_redemption(attrs)
+      assert {:ok, second_boost} = Voting.ingest_twitch_reward_redemption(attrs)
+
+      assert first_boost.id == second_boost.id
+      assert Repo.aggregate(VotingBoost, :count, :id) == 1
+    end
+
+    test "ingest_twitch_reward_redemption/1 ignores unknown and inactive rewards" do
+      voting_session = voting_session_fixture(%{status: "closed"})
+      game = game_fixture(%{title: "Closed Reward Game"})
+      pool_item = voting_session_game_fixture(voting_session, game)
+
+      pool_item
+      |> VotingSessionGame.twitch_reward_changeset(%{
+        twitch_reward_id: "closed-reward",
+        twitch_reward_title: "Boost ##{pool_item.id}: Closed Reward Game",
+        twitch_reward_cost: 100,
+        twitch_reward_status: "enabled"
+      })
+      |> Repo.update!()
+
+      assert Voting.ingest_twitch_reward_redemption(%{
+               "id" => "unknown-redemption",
+               "user_id" => "twitch-user-4",
+               "reward" => %{"id" => "unknown-reward"}
+             }) == {:ignored, :unknown_twitch_reward}
+
+      assert Voting.ingest_twitch_reward_redemption(%{
+               "id" => "closed-redemption",
+               "user_id" => "twitch-user-5",
+               "reward" => %{"id" => "closed-reward"}
+             }) == {:ignored, :unknown_twitch_reward}
+
+      assert Repo.aggregate(VotingBoost, :count, :id) == 0
+    end
+
     test "record_boost/3 records a positive boost against a session game" do
       voting_session_game = voting_session_game_fixture(voting_session_fixture(), game_fixture())
       viewer = viewer_fixture(%{display_name: "Boost Viewer"})

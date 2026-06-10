@@ -29,6 +29,18 @@ defmodule BacklogWheel.FakeTwitchClient do
 
   def exchange_code(_config, _code, _redirect_uri), do: {:error, :invalid_code}
 
+  def refresh_access_token(_config, credential) do
+    Agent.update(@agent, &Map.update(&1, :refresh_count, 1, fn count -> count + 1 end))
+
+    {:ok,
+     %{
+       access_token: "refreshed-#{credential.access_token}",
+       refresh_token: credential.refresh_token,
+       scopes: credential.scopes,
+       expires_at: DateTime.utc_now() |> DateTime.add(3600, :second) |> DateTime.truncate(:second)
+     }}
+  end
+
   def create_custom_reward(_config, _credential, attrs) do
     voting_session_game_id = Map.fetch!(attrs, :voting_session_game_id)
 
@@ -56,6 +68,27 @@ defmodule BacklogWheel.FakeTwitchClient do
 
       :ok
     end
+  end
+
+  def create_redemption_eventsub_subscription(_config, _credential, callback_url, _secret) do
+    Agent.update(@agent, fn state ->
+      Map.put(state, :eventsub_callback_url, callback_url)
+    end)
+
+    {:ok,
+     %{
+       id: "eventsub-subscription-1",
+       status: "webhook_callback_verification_pending",
+       type: "channel.channel_points_custom_reward_redemption.add"
+     }}
+  end
+
+  def eventsub_callback_url do
+    Agent.get(@agent, &Map.get(&1, :eventsub_callback_url))
+  end
+
+  def refresh_count do
+    Agent.get(@agent, &Map.get(&1, :refresh_count, 0))
   end
 
   def fail_deletion(reward_id) do

@@ -25,6 +25,8 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
          {:ok, token_attrs} <-
            Twitch.client().exchange_code(config, code, Twitch.redirect_uri(conn)),
          {:ok, _credential} <- Twitch.save_credential(token_attrs) do
+      maybe_create_eventsub_subscription(conn, config)
+
       conn
       |> delete_session(:twitch_oauth_state)
       |> put_flash(:info, "Twitch connected")
@@ -58,6 +60,16 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
       :ok
     else
       {:error, :invalid_state}
+    end
+  end
+
+  defp maybe_create_eventsub_subscription(conn, config) do
+    with {:ok, _secret} <- Twitch.eventsub_secret(config),
+         {:ok, _subscription} <- Twitch.ensure_redemption_eventsub_subscription(conn) do
+      :ok
+    else
+      {:error, {:missing_config, [:eventsub_secret]}} -> :ok
+      {:error, _reason} -> :ok
     end
   end
 end

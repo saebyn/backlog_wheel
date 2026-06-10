@@ -30,7 +30,9 @@ config :backlog_wheel,
     client_id: System.get_env("TWITCH_CLIENT_ID"),
     client_secret: System.get_env("TWITCH_CLIENT_SECRET"),
     broadcaster_id: System.get_env("TWITCH_BROADCASTER_ID"),
-    reward_cost: String.to_integer(System.get_env("TWITCH_REWARD_COST", "100"))
+    reward_cost: String.to_integer(System.get_env("TWITCH_REWARD_COST", "100")),
+    eventsub_secret: System.get_env("TWITCH_EVENTSUB_SECRET"),
+    eventsub_callback_url: System.get_env("TWITCH_EVENTSUB_CALLBACK_URL")
   ]
 
 if config_env() == :prod do

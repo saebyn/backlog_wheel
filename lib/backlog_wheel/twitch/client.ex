@@ -9,12 +9,20 @@ defmodule BacklogWheel.Twitch.Client do
   alias BacklogWheel.Twitch.Credential
 
   @callback exchange_code(Config.t(), String.t(), String.t()) :: {:ok, map()} | {:error, term()}
+  @callback refresh_access_token(Config.t(), Credential.t()) :: {:ok, map()} | {:error, term()}
   @callback create_custom_reward(Config.t(), Credential.t(), map()) ::
               {:ok, map()} | {:error, term()}
   @callback delete_custom_reward(Config.t(), Credential.t(), String.t()) :: :ok | {:error, term()}
+  @callback create_redemption_eventsub_subscription(
+              Config.t(),
+              Credential.t(),
+              String.t(),
+              String.t()
+            ) :: {:ok, map()} | {:error, term()}
 
   @token_url "https://id.twitch.tv/oauth2/token"
   @custom_rewards_url "https://api.twitch.tv/helix/channel_points/custom_rewards"
+  @eventsub_subscriptions_url "https://api.twitch.tv/helix/eventsub/subscriptions"
   @scopes ["channel:manage:redemptions"]
 
   def scopes, do: @scopes
@@ -53,6 +61,24 @@ defmodule BacklogWheel.Twitch.Client do
     end
   end
 
+  def refresh_access_token(%Config{} = config, %Credential{} = credential) do
+    with {:ok, refresh_token} <- fetch_refresh_token(credential),
+         {:ok, %{status: status, body: body}} when status in 200..299 <-
+           Req.post(@token_url,
+             form: [
+               client_id: config.client_id,
+               client_secret: config.client_secret,
+               grant_type: "refresh_token",
+               refresh_token: refresh_token
+             ]
+           ) do
+      {:ok, normalize_token_response(body)}
+    else
+      {:error, reason} -> {:error, reason}
+      {:ok, %{status: status, body: body}} -> {:error, {:twitch_http_error, status, body}}
+    end
+  end
+
   def create_custom_reward(%Config{} = config, %Credential{} = credential, attrs) do
     with {:ok, %{status: status, body: body}} when status in 200..299 <-
            Req.post(@custom_rewards_url,
@@ -85,6 +111,36 @@ defmodule BacklogWheel.Twitch.Client do
     end
   end
 
+  def create_redemption_eventsub_subscription(
+        %Config{} = config,
+        %Credential{} = credential,
+        callback_url,
+        secret
+      ) do
+    with {:ok, %{status: status, body: body}} when status in 200..299 <-
+           Req.post(@eventsub_subscriptions_url,
+             headers: [
+               {"client-id", config.client_id},
+               {"authorization", "Bearer #{credential.access_token}"}
+             ],
+             json: %{
+               type: "channel.channel_points_custom_reward_redemption.add",
+               version: "1",
+               condition: %{broadcaster_user_id: config.broadcaster_id},
+               transport: %{
+                 method: "webhook",
+                 callback: callback_url,
+                 secret: secret
+               }
+             }
+           ) do
+      normalize_eventsub_subscription_response(body)
+    else
+      {:ok, %{status: status, body: body}} -> {:error, {:twitch_http_error, status, body}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   defp normalize_token_response(body) do
     expires_at =
       body
@@ -107,6 +163,13 @@ defmodule BacklogWheel.Twitch.Client do
 
   defp expires_at(_seconds), do: nil
 
+  defp fetch_refresh_token(%Credential{refresh_token: refresh_token})
+       when is_binary(refresh_token) and refresh_token != "" do
+    {:ok, refresh_token}
+  end
+
+  defp fetch_refresh_token(%Credential{}), do: {:error, :missing_twitch_refresh_token}
+
   defp reward_payload(attrs) do
     %{
       title: fetch_attr!(attrs, :title),
@@ -128,6 +191,17 @@ defmodule BacklogWheel.Twitch.Client do
   end
 
   defp normalize_reward_response(_body), do: {:error, :invalid_twitch_reward_response}
+
+  defp normalize_eventsub_subscription_response(%{"data" => [subscription | _]}) do
+    {:ok,
+     %{
+       id: subscription["id"],
+       status: subscription["status"],
+       type: subscription["type"]
+     }}
+  end
+
+  defp normalize_eventsub_subscription_response(_body), do: {:error, :invalid_eventsub_response}
 
   defp reward_status(%{"is_enabled" => false}), do: "disabled"
   defp reward_status(%{"is_paused" => true}), do: "paused"

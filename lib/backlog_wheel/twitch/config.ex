@@ -7,13 +7,22 @@ defmodule BacklogWheel.Twitch.Config do
   """
 
   @enforce_keys [:client_id, :client_secret, :broadcaster_id, :reward_cost]
-  defstruct [:client_id, :client_secret, :broadcaster_id, :reward_cost]
+  defstruct [
+    :client_id,
+    :client_secret,
+    :broadcaster_id,
+    :reward_cost,
+    :eventsub_secret,
+    :eventsub_callback_url
+  ]
 
   @type t :: %__MODULE__{
           client_id: String.t(),
           client_secret: String.t(),
           broadcaster_id: String.t(),
-          reward_cost: pos_integer()
+          reward_cost: pos_integer(),
+          eventsub_secret: String.t() | nil,
+          eventsub_callback_url: String.t() | nil
         }
 
   @required_keys [:client_id, :client_secret, :broadcaster_id]
@@ -24,7 +33,9 @@ defmodule BacklogWheel.Twitch.Config do
       client_id: value(config, :client_id),
       client_secret: value(config, :client_secret),
       broadcaster_id: value(config, :broadcaster_id),
-      reward_cost: reward_cost(config)
+      reward_cost: reward_cost(config),
+      eventsub_secret: value(config, :eventsub_secret),
+      eventsub_callback_url: value(config, :eventsub_callback_url)
     }
 
     case missing_keys(twitch_config) do

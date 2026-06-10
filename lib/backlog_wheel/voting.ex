@@ -122,7 +122,7 @@ defmodule BacklogWheel.Voting do
     client = Keyword.get(opts, :client, Twitch.client())
 
     with {:ok, config} <- Twitch.config(),
-         {:ok, credential} <- fetch_twitch_credential(),
+         {:ok, credential} <- fetch_twitch_credential(config, client),
          {:ok, _pool_items} <- create_twitch_rewards(voting_session, config, credential, client),
          {:ok, session} <- update_voting_session_status(voting_session, "open") do
       {:ok, get_voting_session!(session.id)}
@@ -143,7 +143,7 @@ defmodule BacklogWheel.Voting do
 
       pool_items ->
         with {:ok, config} <- Twitch.config(),
-             {:ok, credential} <- fetch_twitch_credential(),
+             {:ok, credential} <- fetch_twitch_credential(config, client),
              {:ok, _pool_items} <- delete_twitch_rewards(pool_items, config, credential, client) do
           {:ok, get_voting_session!(voting_session.id)}
         else
@@ -217,6 +217,32 @@ defmodule BacklogWheel.Voting do
 
   def record_boost(%VotingSessionGame{} = voting_session_game, %Viewer{} = viewer, attrs) do
     do_record_boost(voting_session_game, viewer.id, attrs)
+  end
+
+  @doc """
+  Ingests a Twitch channel point reward redemption as one positive vote.
+
+  Duplicate redemption IDs are idempotent. Redemptions for unknown or inactive
+  rewards are ignored because Twitch can retry delivery after local cleanup.
+  """
+  def ingest_twitch_reward_redemption(attrs) when is_map(attrs) do
+    with {:ok, redemption_id} <- fetch_redemption_id(attrs),
+         {:ok, reward_id} <- fetch_redemption_reward_id(attrs),
+         {:ok, twitch_user_id} <- fetch_twitch_user_id(attrs) do
+      case get_active_pool_item_by_twitch_reward_id(reward_id) do
+        nil ->
+          {:ignored, :unknown_twitch_reward}
+
+        pool_item ->
+          with {:ok, viewer} <- get_or_create_twitch_viewer(pool_item, attrs, twitch_user_id) do
+            record_boost(pool_item, viewer, %{
+              strength: 1,
+              source: "twitch_channel_points",
+              external_event_id: redemption_id
+            })
+          end
+      end
+    end
   end
 
   @doc """
@@ -320,10 +346,107 @@ defmodule BacklogWheel.Voting do
     |> Repo.one()
   end
 
-  defp fetch_twitch_credential do
+  defp fetch_redemption_id(attrs), do: fetch_required_string(attrs, [:id, :redemption_id])
+
+  defp fetch_twitch_user_id(attrs), do: fetch_required_string(attrs, [:user_id, :user_login_id])
+
+  defp fetch_redemption_reward_id(attrs) do
+    reward = Map.get(attrs, :reward) || Map.get(attrs, "reward") || %{}
+    fetch_required_string(reward, [:id, :reward_id])
+  end
+
+  defp fetch_required_string(attrs, keys) do
+    keys
+    |> Enum.find_value(fn key ->
+      value = Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key))
+
+      if is_binary(value) and value != "" do
+        value
+      end
+    end)
+    |> case do
+      nil -> {:error, {:missing_twitch_redemption_field, hd(keys)}}
+      value -> {:ok, value}
+    end
+  end
+
+  defp get_active_pool_item_by_twitch_reward_id(reward_id) do
+    VotingSessionGame
+    |> join(:inner, [pool_item], session in assoc(pool_item, :voting_session))
+    |> where([pool_item, session], session.status == "open")
+    |> where([pool_item, _session], pool_item.twitch_reward_id == ^reward_id)
+    |> where(
+      [pool_item, _session],
+      is_nil(pool_item.twitch_reward_deletion_status) or
+        pool_item.twitch_reward_deletion_status != "deleted"
+    )
+    |> preload([_pool_item, session], voting_session: session)
+    |> Repo.one()
+  end
+
+  defp get_or_create_twitch_viewer(%VotingSessionGame{} = pool_item, attrs, twitch_user_id) do
+    display_name = twitch_redemption_display_name(attrs, twitch_user_id)
+    community_id = pool_item.voting_session.community_id
+
+    case get_twitch_viewer_identity(community_id, twitch_user_id) do
+      %ViewerIdentity{} = identity ->
+        {:ok, Repo.get!(Viewer, identity.viewer_id)}
+
+      nil ->
+        create_twitch_viewer_identity(community_id, twitch_user_id, display_name)
+    end
+  end
+
+  defp get_twitch_viewer_identity(community_id, twitch_user_id) do
+    Repo.get_by(ViewerIdentity,
+      community_id: community_id,
+      platform: "twitch",
+      platform_user_id: twitch_user_id
+    )
+  end
+
+  defp create_twitch_viewer_identity(community_id, twitch_user_id, display_name) do
+    Repo.transaction(fn ->
+      with {:ok, viewer} <-
+             %Viewer{community_id: community_id}
+             |> Viewer.changeset(%{display_name: display_name})
+             |> Repo.insert(),
+           {:ok, _identity} <-
+             %ViewerIdentity{community_id: community_id, viewer_id: viewer.id}
+             |> ViewerIdentity.changeset(%{
+               platform: "twitch",
+               platform_user_id: twitch_user_id,
+               display_name: display_name
+             })
+             |> Repo.insert() do
+        viewer
+      else
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  defp twitch_redemption_display_name(attrs, fallback) do
+    Enum.find_value([:user_name, :user_login, :display_name], fallback, fn key ->
+      value = Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key))
+
+      if is_binary(value) and value != "" do
+        value
+      end
+    end)
+  end
+
+  defp fetch_twitch_credential(config, client) do
     case Twitch.get_credential() do
-      nil -> {:error, :missing_twitch_credential}
-      credential -> {:ok, credential}
+      nil ->
+        {:error, :missing_twitch_credential}
+
+      credential ->
+        if credential.refresh_token in [nil, ""] do
+          {:ok, credential}
+        else
+          Twitch.refresh_credential(config, client)
+        end
     end
   end
 
