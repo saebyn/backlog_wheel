@@ -4,6 +4,7 @@ defmodule BacklogWheel.Communities do
   """
 
   alias BacklogWheel.Communities.Community
+  alias BacklogWheel.Communities.Theme
   alias BacklogWheel.Repo
 
   @default_slug "default"
@@ -32,6 +33,47 @@ defmodule BacklogWheel.Communities do
 
         get_default_community!()
     end
+  end
+
+  @doc """
+  Returns a changeset for editing community theme settings.
+  """
+  def change_community_theme(%Community{} = community, attrs \\ %{}) do
+    Community.theme_changeset(community, attrs)
+  end
+
+  @doc """
+  Updates community theme settings.
+  """
+  def update_community_theme(%Community{} = community, attrs) do
+    community
+    |> Community.theme_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Clears custom community theme settings so defaults are used.
+  """
+  def reset_community_theme(%Community{} = community) do
+    theme_attrs = Map.new(Theme.color_fields(), &{&1, nil})
+
+    update_community_theme(community, theme_attrs)
+  end
+
+  @doc """
+  Returns the resolved light and dark theme values for a community.
+  """
+  def resolved_theme(%Community{} = community) do
+    Theme.resolve(community)
+  end
+
+  @doc """
+  Returns CSS custom properties for the resolved community theme.
+  """
+  def theme_style(%Community{} = community) do
+    community
+    |> resolved_theme()
+    |> Theme.style()
   end
 
   defp default_community_attrs do

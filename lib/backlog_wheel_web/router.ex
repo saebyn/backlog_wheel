@@ -29,6 +29,7 @@ defmodule BacklogWheelWeb.Router do
     live "/games/new", GameLive.Form, :new
     live "/games/:id", GameLive.Show, :show
     live "/games/:id/edit", GameLive.Form, :edit
+    live "/settings/theme", SettingsLive.Theme, :edit
   end
 
   scope "/", BacklogWheelWeb do

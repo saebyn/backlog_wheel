@@ -5,6 +5,8 @@ defmodule BacklogWheelWeb.Layouts do
   """
   use BacklogWheelWeb, :html
 
+  alias BacklogWheel.Communities
+
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
   # skeleton of your application, namely HTML headers
@@ -36,55 +38,67 @@ defmodule BacklogWheelWeb.Layouts do
   slot :inner_block, required: true
 
   def app(assigns) do
+    assigns = assign_new(assigns, :theme_style, fn -> default_theme_style() end)
+
     ~H"""
-    <div class="atmospheric-shell" aria-hidden="true" />
+    <div id="app-theme" class="theme-scope" style={@theme_style}>
+      <div class="atmospheric-shell" aria-hidden="true" />
 
-    <header class="navbar sticky top-0 z-30 border-b border-base-content/10 bg-base-100/70 px-4 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <span class="wheel-ring flex size-10 items-center justify-center rounded-full p-[2px] shadow-sm">
-            <span class="flex size-full items-center justify-center rounded-full bg-base-100 text-sm font-black text-primary">
-              BW
+      <header class="navbar sticky top-0 z-30 border-b border-base-content/10 bg-base-100/70 px-4 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
+        <div class="flex-1">
+          <a href="/" class="flex-1 flex w-fit items-center gap-2">
+            <span class="wheel-ring flex size-10 items-center justify-center rounded-full p-[2px] shadow-sm">
+              <span class="flex size-full items-center justify-center rounded-full bg-base-100 text-sm font-black text-primary">
+                BW
+              </span>
             </span>
-          </span>
-          <span class="text-sm font-black tracking-tight">Backlog Wheel</span>
-        </a>
-      </div>
-      <div class="flex-none">
-        <ul class="flex flex-column items-center gap-2 px-1">
-          <li>
-            <.link navigate={~p"/wheel"} class="btn btn-ghost hover-lift">Wheel</.link>
-          </li>
-          <li>
-            <.link navigate={~p"/games"} class="btn btn-ghost hover-lift">Games</.link>
-          </li>
-          <li>
-            <.link navigate={~p"/voting"} class="btn btn-ghost hover-lift">Voting</.link>
-          </li>
-          <li>
-            <.link navigate={~p"/twitch"} class="btn btn-ghost hover-lift">Twitch</.link>
-          </li>
-          <li>
-            <.link navigate={~p"/history"} class="btn btn-ghost hover-lift">History</.link>
-          </li>
-          <li>
-            <.theme_toggle />
-          </li>
-          <li>
-            <.link navigate={~p"/games/new"} class="btn btn-primary hover-lift">Add Game</.link>
-          </li>
-        </ul>
-      </div>
-    </header>
+            <span class="text-sm font-black tracking-tight">Backlog Wheel</span>
+          </a>
+        </div>
+        <div class="flex-none">
+          <ul class="flex flex-column items-center gap-2 px-1">
+            <li>
+              <.link navigate={~p"/wheel"} class="btn btn-ghost hover-lift">Wheel</.link>
+            </li>
+            <li>
+              <.link navigate={~p"/games"} class="btn btn-ghost hover-lift">Games</.link>
+            </li>
+            <li>
+              <.link navigate={~p"/voting"} class="btn btn-ghost hover-lift">Voting</.link>
+            </li>
+            <li>
+              <.link navigate={~p"/twitch"} class="btn btn-ghost hover-lift">Twitch</.link>
+            </li>
+            <li>
+              <.link navigate={~p"/history"} class="btn btn-ghost hover-lift">History</.link>
+            </li>
+            <li>
+              <.link navigate={~p"/settings/theme"} class="btn btn-ghost hover-lift">Settings</.link>
+            </li>
+            <li>
+              <.theme_toggle />
+            </li>
+            <li>
+              <.link navigate={~p"/games/new"} class="btn btn-primary hover-lift">Add Game</.link>
+            </li>
+          </ul>
+        </div>
+      </header>
 
-    <main class={if(@wide, do: "px-4 py-6 sm:px-6 lg:px-8", else: "px-4 py-20 sm:px-6 lg:px-8")}>
-      <div class={if(@wide, do: "mx-auto w-full space-y-4", else: "mx-auto max-w-5xl space-y-4")}>
-        {render_slot(@inner_block)}
-      </div>
-    </main>
+      <main class={if(@wide, do: "px-4 py-6 sm:px-6 lg:px-8", else: "px-4 py-20 sm:px-6 lg:px-8")}>
+        <div class={if(@wide, do: "mx-auto w-full space-y-4", else: "mx-auto max-w-5xl space-y-4")}>
+          {render_slot(@inner_block)}
+        </div>
+      </main>
 
-    <.flash_group flash={@flash} />
+      <.flash_group flash={@flash} />
+    </div>
     """
+  end
+
+  defp default_theme_style do
+    Communities.get_or_create_default_community()
+    |> Communities.theme_style()
   end
 
   @doc """
