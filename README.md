@@ -140,6 +140,7 @@ The stack creates:
 
 - An ECS Fargate service running one Phoenix release container.
 - An EFS file system mounted at `/data` for the production SQLite database.
+- It uses the account's default VPC rather than creating a project-specific VPC.
 - An internet-facing Application Load Balancer with HTTP to HTTPS redirect.
 - An ACM certificate and Route 53 `A` record for `wheel.streamosaic.app`.
 - A Secrets Manager secret named `backlog-wheel/prototype/runtime` for Phoenix and integration secrets.
@@ -147,6 +148,7 @@ The stack creates:
 Prerequisites:
 
 - AWS credentials for the target account.
+- A default VPC in the target account and region.
 - The `streamosaic.app` Route 53 hosted zone in the target account.
 - Docker running locally for the CDK Docker image asset build.
 - AWS CDK v2 available, for example with `npm install -g aws-cdk`.

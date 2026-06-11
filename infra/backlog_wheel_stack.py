@@ -29,18 +29,10 @@ class BacklogWheelStack(Stack):
         hosted_zone_id = self.node.try_get_context("hostedZoneId") or "Z026769531Q5JHNBET0M8"
         record_name = domain_name.removesuffix(f".{hosted_zone_domain}")
 
-        vpc = ec2.Vpc(
+        vpc = ec2.Vpc.from_lookup(
             self,
             "Vpc",
-            max_azs=2,
-            nat_gateways=0,
-            subnet_configuration=[
-                ec2.SubnetConfiguration(
-                    name="public",
-                    subnet_type=ec2.SubnetType.PUBLIC,
-                    cidr_mask=24,
-                )
-            ],
+            is_default=True,
         )
 
         cluster = ecs.Cluster(self, "Cluster", vpc=vpc)
