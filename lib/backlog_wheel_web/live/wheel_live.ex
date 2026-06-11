@@ -18,7 +18,7 @@ defmodule BacklogWheelWeb.WheelLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} wide>
+    <Layouts.app flash={@flash} current_user={@current_user} wide>
       <section id="wheel-page" class="min-h-[calc(100vh-7rem)] overflow-hidden">
         <div class="grid min-h-[calc(100vh-7rem)] gap-6 lg:grid-cols-[1fr_22rem] lg:items-stretch">
           <div

@@ -33,6 +33,8 @@ defmodule BacklogWheelWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
 
+  attr :current_user, :map, default: nil, doc: "the signed-in streamer/admin user"
+
   attr :wide, :boolean, default: false, doc: "use the full viewport width for the content"
 
   slot :inner_block, required: true
@@ -75,11 +77,24 @@ defmodule BacklogWheelWeb.Layouts do
             <li>
               <.link navigate={~p"/settings/theme"} class="btn btn-ghost hover-lift">Settings</.link>
             </li>
+            <li :if={@current_user}>
+              <span id="current-user-role" class="badge badge-ghost capitalize">
+                {@current_user.role}
+              </span>
+            </li>
             <li>
               <.theme_toggle />
             </li>
             <li>
               <.link navigate={~p"/games/new"} class="btn btn-primary hover-lift">Add Game</.link>
+            </li>
+            <li :if={@current_user}>
+              <.link href={~p"/logout"} method="delete" class="btn btn-ghost hover-lift">
+                Sign out
+              </.link>
+            </li>
+            <li :if={!@current_user}>
+              <.link navigate={~p"/login"} class="btn btn-primary hover-lift">Sign in</.link>
             </li>
           </ul>
         </div>

@@ -6,7 +6,7 @@ defmodule BacklogWheelWeb.SpinHistoryLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_user={@current_user}>
       <.header>
         Spin History
         <:subtitle>Recent wheel results, newest first.</:subtitle>

@@ -8,6 +8,11 @@ defmodule BacklogWheelWeb.Router do
     plug :put_root_layout, html: {BacklogWheelWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug BacklogWheelWeb.UserAuth, :fetch_current_user
+  end
+
+  pipeline :authenticated_browser do
+    plug BacklogWheelWeb.UserAuth, :require_authenticated_user
   end
 
   pipeline :api do
@@ -18,18 +23,31 @@ defmodule BacklogWheelWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/login", DiscordOAuthController, :login
+    get "/auth/discord/start", DiscordOAuthController, :start
+    get "/auth/discord/callback", DiscordOAuthController, :callback
+    delete "/logout", DiscordOAuthController, :logout
+  end
+
+  scope "/", BacklogWheelWeb do
+    pipe_through [:browser, :authenticated_browser]
+
     get "/twitch/oauth/start", TwitchOAuthController, :start
     get "/twitch/oauth/callback", TwitchOAuthController, :callback
-    live "/twitch", TwitchLive, :index
-    live "/wheel", WheelLive, :show
-    live "/history", SpinHistoryLive, :index
-    live "/voting", VotingSessionLive.Index, :index
-    live "/games", GameLive.Index, :index
-    live "/games/import/steam", GameLive.SteamImport, :index
-    live "/games/new", GameLive.Form, :new
-    live "/games/:id", GameLive.Show, :show
-    live "/games/:id/edit", GameLive.Form, :edit
-    live "/settings/theme", SettingsLive.Theme, :edit
+
+    live_session :authenticated,
+      on_mount: [{BacklogWheelWeb.UserAuth, :require_authenticated_user}] do
+      live "/twitch", TwitchLive, :index
+      live "/wheel", WheelLive, :show
+      live "/history", SpinHistoryLive, :index
+      live "/voting", VotingSessionLive.Index, :index
+      live "/games", GameLive.Index, :index
+      live "/games/import/steam", GameLive.SteamImport, :index
+      live "/games/new", GameLive.Form, :new
+      live "/games/:id", GameLive.Show, :show
+      live "/games/:id/edit", GameLive.Form, :edit
+      live "/settings/theme", SettingsLive.Theme, :edit
+    end
   end
 
   scope "/", BacklogWheelWeb do

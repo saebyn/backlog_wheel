@@ -58,6 +58,8 @@ class BacklogWheelStack(Stack):
             generate_secret_string=secretsmanager.SecretStringGenerator(
                 secret_string_template=json.dumps(
                     {
+                        "DISCORD_CLIENT_ID": "",
+                        "DISCORD_CLIENT_SECRET": "",
                         "STEAM_API_KEY": "",
                         "STEAM_ID64": "",
                         "TWITCH_CLIENT_ID": "",
@@ -117,6 +119,8 @@ class BacklogWheelStack(Stack):
                 key: ecs.Secret.from_secrets_manager(runtime_secret, key)
                 for key in [
                     "SECRET_KEY_BASE",
+                    "DISCORD_CLIENT_ID",
+                    "DISCORD_CLIENT_SECRET",
                     "STEAM_API_KEY",
                     "STEAM_ID64",
                     "TWITCH_CLIENT_ID",

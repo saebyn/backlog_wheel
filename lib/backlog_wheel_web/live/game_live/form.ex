@@ -7,7 +7,7 @@ defmodule BacklogWheelWeb.GameLive.Form do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_user={@current_user}>
       <.header>
         {@page_title}
         <:subtitle>Keep track of games that may appear on the future backlog wheel.</:subtitle>

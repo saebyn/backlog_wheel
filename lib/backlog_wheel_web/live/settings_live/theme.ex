@@ -6,7 +6,7 @@ defmodule BacklogWheelWeb.SettingsLive.Theme do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_user={@current_user}>
       <div class="grid gap-6 lg:grid-cols-[14rem_1fr]">
         <aside class="h-fit rounded-2xl border border-base-300 bg-base-100/85 p-3 shadow-sm backdrop-blur">
           <p class="px-3 py-2 text-xs font-black uppercase tracking-[0.22em] text-base-content/50">

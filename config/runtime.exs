@@ -26,6 +26,10 @@ config :backlog_wheel, BacklogWheelWeb.Endpoint,
 config :backlog_wheel,
   steam_api_key: System.get_env("STEAM_API_KEY"),
   steam_id64: System.get_env("STEAM_ID64"),
+  discord: [
+    client_id: System.get_env("DISCORD_CLIENT_ID"),
+    client_secret: System.get_env("DISCORD_CLIENT_SECRET")
+  ],
   twitch: [
     client_id: System.get_env("TWITCH_CLIENT_ID"),
     client_secret: System.get_env("TWITCH_CLIENT_SECRET"),

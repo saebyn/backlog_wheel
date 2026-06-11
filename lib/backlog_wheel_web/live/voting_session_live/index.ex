@@ -11,7 +11,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} wide>
+    <Layouts.app flash={@flash} current_user={@current_user} wide>
       <div class="grid gap-6 lg:grid-cols-[20rem_1fr]">
         <aside class="space-y-4 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl">
           <.header>

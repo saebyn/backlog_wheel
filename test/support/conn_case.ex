@@ -33,6 +33,34 @@ defmodule BacklogWheelWeb.ConnCase do
 
   setup tags do
     BacklogWheel.DataCase.setup_sandbox(tags)
-    {:ok, conn: Phoenix.ConnTest.build_conn()}
+
+    conn = Phoenix.ConnTest.build_conn()
+
+    conn =
+      if tags[:unauthenticated] do
+        conn
+      else
+        log_in_test_user(conn)
+      end
+
+    {:ok, conn: conn}
+  end
+
+  def log_in_test_user(conn, attrs \\ %{}) do
+    user =
+      %BacklogWheel.Accounts.User{}
+      |> BacklogWheel.Accounts.User.changeset(
+        Map.merge(
+          %{
+            discord_id: "test-discord-#{System.unique_integer([:positive])}",
+            username: "Test Streamer",
+            role: "admin"
+          },
+          attrs
+        )
+      )
+      |> BacklogWheel.Repo.insert!()
+
+    Plug.Test.init_test_session(conn, user_id: user.id)
   end
 end

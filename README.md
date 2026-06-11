@@ -87,6 +87,31 @@ Import behavior:
 - Re-imports refresh `last_played_at` when Steam returns `rtime_last_played`.
 - Existing Steam games are skipped so local edits are preserved.
 
+## Discord Login
+
+Discord login protects streamer/admin management pages. Users must already exist in the database with a matching `users.discord_id`; Discord OAuth does not create new users.
+
+Add these values to `.envrc`, then run `direnv allow`:
+
+```sh
+export DISCORD_CLIENT_ID="your-discord-client-id"
+export DISCORD_CLIENT_SECRET="your-discord-client-secret"
+```
+
+When registering a local development app in the Discord Developer Portal, use this OAuth redirect URL:
+
+```text
+http://localhost:4000/auth/discord/callback
+```
+
+Required OAuth scope:
+
+```text
+identify
+```
+
+No bot permissions, `email`, or `guilds` scope are required.
+
 ## Twitch Configuration
 
 Twitch integration supports local OAuth authorization and temporary channel point reward creation for voting sessions. EventSub and redemption ingestion are not implemented yet.

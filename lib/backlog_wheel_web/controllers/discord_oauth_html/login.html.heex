@@ -1,0 +1,29 @@
+<Layouts.app flash={@flash} current_user={@current_user}>
+  <section
+    id="discord-login-page"
+    class="mx-auto max-w-xl rounded-[2rem] border border-base-300 bg-base-100 p-8 text-center shadow-xl"
+  >
+    <p class="text-sm font-semibold uppercase tracking-[0.24em] text-primary">Backlog Wheel</p>
+    <h1 class="mt-3 text-4xl font-black tracking-tight">Streamer Sign In</h1>
+    <p class="mt-3 text-base-content/70">
+      Sign in with a Discord account that has already been added to manage games, voting, Twitch rewards, and settings.
+    </p>
+
+    <p
+      :if={!@discord_configured?}
+      id="discord-login-missing-config"
+      class="mt-6 rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm"
+    >
+      Discord login is not configured yet.
+    </p>
+
+    <.button
+      id="discord-login"
+      href={~p"/auth/discord/start"}
+      disabled={!@discord_configured?}
+      class="mt-6"
+    >
+      Sign in with Discord
+    </.button>
+  </section>
+</Layouts.app>
