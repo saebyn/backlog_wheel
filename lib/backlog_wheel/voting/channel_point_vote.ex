@@ -1,10 +1,10 @@
-defmodule BacklogWheel.Voting.VotingBoost do
+defmodule BacklogWheel.Voting.ChannelPointVote do
   use Ecto.Schema
   import Ecto.Changeset
 
   alias BacklogWheel.Voting.{Viewer, VotingSessionGame}
 
-  schema "voting_boosts" do
+  schema "channel_point_votes" do
     field :strength, :integer
     field :source, :string
     field :external_event_id, :string
@@ -16,8 +16,8 @@ defmodule BacklogWheel.Voting.VotingBoost do
   end
 
   @doc false
-  def changeset(voting_boost, attrs) do
-    voting_boost
+  def changeset(channel_point_vote, attrs) do
+    channel_point_vote
     |> cast(attrs, [:strength, :source, :external_event_id])
     |> validate_required([:voting_session_game_id, :strength, :source])
     |> validate_number(:strength, greater_than: 0)

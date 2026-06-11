@@ -126,7 +126,7 @@ defmodule BacklogWheel.BacklogTest do
       assert entry["game_id"] == game.id
       assert entry["title"] == game.title
       assert entry["base_weight"] == 1
-      assert entry["boost_total"] == 0
+      assert entry["channel_point_vote_total"] == 0
       assert entry["final_weight"] == 1
       assert %DateTime{} = spin.spun_at
       assert [recent_spin] = Backlog.list_recent_spins()

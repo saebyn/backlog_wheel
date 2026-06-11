@@ -52,18 +52,18 @@ defmodule BacklogWheel.VotingFixtures do
   end
 
   @doc """
-  Generate a voting boost.
+  Generate a channel point vote.
   """
-  def voting_boost_fixture(voting_session_game, viewer \\ nil, attrs \\ %{}) do
+  def channel_point_vote_fixture(voting_session_game, viewer \\ nil, attrs \\ %{}) do
     attrs = Enum.into(attrs, %{source: "local", strength: 1})
 
-    {:ok, voting_boost} =
+    {:ok, channel_point_vote} =
       if viewer do
-        BacklogWheel.Voting.record_boost(voting_session_game, viewer, attrs)
+        BacklogWheel.Voting.record_vote(voting_session_game, viewer, attrs)
       else
-        BacklogWheel.Voting.record_boost(voting_session_game, attrs)
+        BacklogWheel.Voting.record_vote(voting_session_game, attrs)
       end
 
-    voting_boost
+    channel_point_vote
   end
 end

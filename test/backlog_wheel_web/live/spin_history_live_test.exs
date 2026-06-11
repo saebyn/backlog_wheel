@@ -53,14 +53,14 @@ defmodule BacklogWheelWeb.SpinHistoryLiveTest do
               "game_id" => winner.id,
               "title" => winner.title,
               "base_weight" => 2,
-              "boost_total" => 2,
+              "channel_point_vote_total" => 2,
               "final_weight" => 4
             },
             %{
               "game_id" => other.id,
               "title" => other.title,
               "base_weight" => 1,
-              "boost_total" => 3,
+              "channel_point_vote_total" => 3,
               "final_weight" => 4
             }
           ]

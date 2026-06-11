@@ -3,7 +3,7 @@ defmodule BacklogWheel.Voting.VotingSessionGame do
   import Ecto.Changeset
 
   alias BacklogWheel.Backlog.Game
-  alias BacklogWheel.Voting.{VotingBoost, VotingSession}
+  alias BacklogWheel.Voting.{ChannelPointVote, VotingSession}
 
   schema "voting_session_games" do
     field :base_weight, :integer, default: 1
@@ -17,7 +17,7 @@ defmodule BacklogWheel.Voting.VotingSessionGame do
 
     belongs_to :voting_session, VotingSession
     belongs_to :game, Game
-    has_many :voting_boosts, VotingBoost
+    has_many :channel_point_votes, ChannelPointVote
 
     timestamps(type: :utc_datetime)
   end

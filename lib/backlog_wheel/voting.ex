@@ -12,9 +12,9 @@ defmodule BacklogWheel.Voting do
   alias BacklogWheel.Twitch
 
   alias BacklogWheel.Voting.{
+    ChannelPointVote,
     Viewer,
     ViewerIdentity,
-    VotingBoost,
     VotingSession,
     VotingSessionGame
   }
@@ -63,7 +63,7 @@ defmodule BacklogWheel.Voting do
     |> where([session], session.community_id == ^default_community_id)
     |> order_by([session], desc: session.inserted_at, desc: session.id)
     |> Repo.all()
-    |> preload_pool_games_with_boosts()
+    |> preload_pool_games_with_votes()
   end
 
   @doc """
@@ -73,7 +73,7 @@ defmodule BacklogWheel.Voting do
     VotingSession
     |> Repo.get!(id)
     |> Repo.preload(:community)
-    |> preload_pool_games_with_boosts()
+    |> preload_pool_games_with_votes()
   end
 
   @doc """
@@ -207,16 +207,16 @@ defmodule BacklogWheel.Voting do
   end
 
   @doc """
-  Records a positive boost against a voting session game.
+  Records a positive vote against a voting session game.
 
   When `external_event_id` is present, repeated events from the same source are idempotent.
   """
-  def record_boost(%VotingSessionGame{} = voting_session_game, attrs) do
-    do_record_boost(voting_session_game, nil, attrs)
+  def record_vote(%VotingSessionGame{} = voting_session_game, attrs) do
+    do_record_vote(voting_session_game, nil, attrs)
   end
 
-  def record_boost(%VotingSessionGame{} = voting_session_game, %Viewer{} = viewer, attrs) do
-    do_record_boost(voting_session_game, viewer.id, attrs)
+  def record_vote(%VotingSessionGame{} = voting_session_game, %Viewer{} = viewer, attrs) do
+    do_record_vote(voting_session_game, viewer.id, attrs)
   end
 
   @doc """
@@ -235,7 +235,7 @@ defmodule BacklogWheel.Voting do
 
         pool_item ->
           with {:ok, viewer} <- get_or_create_twitch_viewer(pool_item, attrs, twitch_user_id) do
-            record_boost(pool_item, viewer, %{
+            record_vote(pool_item, viewer, %{
               strength: 1,
               source: "twitch_channel_points",
               external_event_id: redemption_id
@@ -246,22 +246,22 @@ defmodule BacklogWheel.Voting do
   end
 
   @doc """
-  Returns the boost total and final weight for a voting session game.
+  Returns the channel point vote total and final weight for a voting session game.
   """
   def voting_session_game_weight(%VotingSessionGame{} = voting_session_game) do
-    boost_total = boost_total_for_game(voting_session_game.id)
+    channel_point_vote_total = channel_point_vote_total_for_game(voting_session_game.id)
 
     %{
       base_weight: voting_session_game.base_weight,
-      boost_total: boost_total,
-      final_weight: voting_session_game.base_weight + boost_total
+      channel_point_vote_total: channel_point_vote_total,
+      final_weight: voting_session_game.base_weight + channel_point_vote_total
     }
   end
 
   @doc """
   Returns weighted wheel entries for a voting session.
 
-  Each entry uses `final_weight = base_weight + boost_strength`.
+  Each entry uses `final_weight = base_weight + channel_point_votes`.
   """
   def list_voting_session_wheel_entries(%VotingSession{} = voting_session) do
     voting_session
@@ -274,7 +274,7 @@ defmodule BacklogWheel.Voting do
         title: pool_item.game.title,
         weight: pool_item.final_weight,
         base_weight: pool_item.base_weight,
-        boost_total: pool_item.boost_total
+        channel_point_vote_total: pool_item.channel_point_vote_total
       }
     end)
     |> Enum.reject(&(&1.weight <= 0))
@@ -326,23 +326,23 @@ defmodule BacklogWheel.Voting do
     end
   end
 
-  defp do_record_boost(%VotingSessionGame{} = voting_session_game, viewer_id, attrs) do
-    case get_existing_external_boost(attrs) do
-      %VotingBoost{} = voting_boost ->
-        {:ok, voting_boost}
+  defp do_record_vote(%VotingSessionGame{} = voting_session_game, viewer_id, attrs) do
+    case get_existing_external_vote(attrs) do
+      %ChannelPointVote{} = channel_point_vote ->
+        {:ok, channel_point_vote}
 
       nil ->
-        %VotingBoost{voting_session_game_id: voting_session_game.id, viewer_id: viewer_id}
-        |> VotingBoost.changeset(attrs)
+        %ChannelPointVote{voting_session_game_id: voting_session_game.id, viewer_id: viewer_id}
+        |> ChannelPointVote.changeset(attrs)
         |> Repo.insert()
         |> broadcast_voting_session_change(voting_session_game.voting_session_id)
     end
   end
 
-  defp boost_total_for_game(voting_session_game_id) do
-    VotingBoost
-    |> where([boost], boost.voting_session_game_id == ^voting_session_game_id)
-    |> select([boost], coalesce(sum(boost.strength), 0))
+  defp channel_point_vote_total_for_game(voting_session_game_id) do
+    ChannelPointVote
+    |> where([vote], vote.voting_session_game_id == ^voting_session_game_id)
+    |> select([vote], coalesce(sum(vote.strength), 0))
     |> Repo.one()
   end
 
@@ -570,7 +570,7 @@ defmodule BacklogWheel.Voting do
   end
 
   defp twitch_reward_title(%VotingSessionGame{} = pool_item) do
-    prefix = "Boost ##{pool_item.id}: "
+    prefix = "Vote ##{pool_item.id}: "
 
     prefix <> String.slice(pool_item.game.title, 0, 45 - String.length(prefix))
   end
@@ -582,16 +582,16 @@ defmodule BacklogWheel.Voting do
     end)
   end
 
-  defp preload_pool_games_with_boosts(%VotingSession{} = voting_session) do
+  defp preload_pool_games_with_votes(%VotingSession{} = voting_session) do
     [voting_session]
-    |> preload_pool_games_with_boosts()
+    |> preload_pool_games_with_votes()
     |> hd()
   end
 
-  defp preload_pool_games_with_boosts(voting_sessions) when is_list(voting_sessions) do
+  defp preload_pool_games_with_votes(voting_sessions) when is_list(voting_sessions) do
     voting_sessions
     |> Repo.preload(
-      voting_session_games: {ordered_voting_session_games_query(), [:game, :voting_boosts]}
+      voting_session_games: {ordered_voting_session_games_query(), [:game, :channel_point_votes]}
     )
     |> Enum.map(fn voting_session ->
       pool_items = Enum.map(voting_session.voting_session_games, &attach_weight/1)
@@ -604,11 +604,12 @@ defmodule BacklogWheel.Voting do
   end
 
   defp attach_weight(%VotingSessionGame{} = voting_session_game) do
-    boost_total = Enum.reduce(voting_session_game.voting_boosts, 0, &(&1.strength + &2))
+    channel_point_vote_total =
+      Enum.reduce(voting_session_game.channel_point_votes, 0, &(&1.strength + &2))
 
     voting_session_game
-    |> Map.put(:boost_total, boost_total)
-    |> Map.put(:final_weight, voting_session_game.base_weight + boost_total)
+    |> Map.put(:channel_point_vote_total, channel_point_vote_total)
+    |> Map.put(:final_weight, voting_session_game.base_weight + channel_point_vote_total)
   end
 
   defp select_weighted_entry([]), do: nil
@@ -662,7 +663,7 @@ defmodule BacklogWheel.Voting do
       "start_degrees" => entry.start_degrees,
       "end_degrees" => entry.end_degrees,
       "base_weight" => entry.base_weight,
-      "boost_total" => entry.boost_total,
+      "channel_point_vote_total" => entry.channel_point_vote_total,
       "final_weight" => entry.weight
     }
   end
@@ -730,14 +731,14 @@ defmodule BacklogWheel.Voting do
     Communities.get_or_create_default_community().id
   end
 
-  defp get_existing_external_boost(attrs) do
+  defp get_existing_external_vote(attrs) do
     source = Map.get(attrs, :source) || Map.get(attrs, "source")
     external_event_id = Map.get(attrs, :external_event_id) || Map.get(attrs, "external_event_id")
 
     if is_nil(source) or is_nil(external_event_id) do
       nil
     else
-      Repo.get_by(VotingBoost, source: source, external_event_id: external_event_id)
+      Repo.get_by(ChannelPointVote, source: source, external_event_id: external_event_id)
     end
   end
 

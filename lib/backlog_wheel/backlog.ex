@@ -362,7 +362,7 @@ defmodule BacklogWheel.Backlog do
       "game_id" => game.id,
       "title" => game.title,
       "base_weight" => 1,
-      "boost_total" => 0,
+      "channel_point_vote_total" => 0,
       "final_weight" => 1
     }
   end

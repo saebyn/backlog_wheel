@@ -6,9 +6,9 @@ defmodule BacklogWheel.VotingTest do
   alias BacklogWheel.Voting
 
   alias BacklogWheel.Voting.{
+    ChannelPointVote,
     Viewer,
     ViewerIdentity,
-    VotingBoost,
     VotingSession,
     VotingSessionGame
   }
@@ -231,7 +231,7 @@ defmodule BacklogWheel.VotingTest do
       assert first_updated.twitch_reward_id == "reward-#{first_pool_item.id}"
 
       assert first_updated.twitch_reward_title ==
-               "Boost ##{first_pool_item.id}: First Twitch Candidate"
+               "Vote ##{first_pool_item.id}: First Twitch Candidate"
 
       assert first_updated.twitch_reward_cost == 321
       assert first_updated.twitch_reward_status == "enabled"
@@ -240,7 +240,7 @@ defmodule BacklogWheel.VotingTest do
       assert second_updated.twitch_reward_id == "reward-#{second_pool_item.id}"
 
       assert second_updated.twitch_reward_title ==
-               "Boost ##{second_pool_item.id}: Second Twitch Candidate"
+               "Vote ##{second_pool_item.id}: Second Twitch Candidate"
 
       assert second_updated.twitch_reward_cost == 321
       assert second_updated.twitch_reward_status == "enabled"
@@ -271,7 +271,7 @@ defmodule BacklogWheel.VotingTest do
                Voting.start_twitch_voting(voting_session, client: BacklogWheel.FakeTwitchClient)
 
       assert BacklogWheel.FakeTwitchClient.reward_attrs(pool_item.id).title ==
-               "Boost ##{pool_item.id}: No Typing Required"
+               "Vote ##{pool_item.id}: No Typing Required"
     end
 
     test "remove_twitch_rewards/2 deletes rewards and keeps voting status unchanged" do
@@ -301,7 +301,7 @@ defmodule BacklogWheel.VotingTest do
       assert [updated_pool_item] = updated_session.voting_session_games
       assert updated_pool_item.id == pool_item.id
       assert updated_pool_item.twitch_reward_id == reward_id
-      assert updated_pool_item.twitch_reward_title == "Boost ##{pool_item.id}: Temporary Reward"
+      assert updated_pool_item.twitch_reward_title == "Vote ##{pool_item.id}: Temporary Reward"
       assert updated_pool_item.twitch_reward_cost == 321
       assert updated_pool_item.twitch_reward_status == "deleted"
       assert updated_pool_item.twitch_reward_deletion_status == "deleted"
@@ -443,7 +443,7 @@ defmodule BacklogWheel.VotingTest do
     end
   end
 
-  describe "voting_boosts" do
+  describe "channel_point_votes" do
     test "ingest_twitch_reward_redemption/1 records a channel point vote" do
       voting_session = voting_session_fixture(%{status: "open"})
       game = game_fixture(%{title: "Redeemable Game"})
@@ -452,13 +452,13 @@ defmodule BacklogWheel.VotingTest do
       pool_item
       |> VotingSessionGame.twitch_reward_changeset(%{
         twitch_reward_id: "reward-1",
-        twitch_reward_title: "Boost ##{pool_item.id}: Redeemable Game",
+        twitch_reward_title: "Vote ##{pool_item.id}: Redeemable Game",
         twitch_reward_cost: 100,
         twitch_reward_status: "enabled"
       })
       |> Repo.update!()
 
-      assert {:ok, %VotingBoost{} = boost} =
+      assert {:ok, %ChannelPointVote{} = vote} =
                Voting.ingest_twitch_reward_redemption(%{
                  "id" => "redemption-1",
                  "user_id" => "twitch-user-1",
@@ -466,17 +466,17 @@ defmodule BacklogWheel.VotingTest do
                  "reward" => %{"id" => "reward-1"}
                })
 
-      assert boost.voting_session_game_id == pool_item.id
-      assert boost.strength == 1
-      assert boost.source == "twitch_channel_points"
-      assert boost.external_event_id == "redemption-1"
+      assert vote.voting_session_game_id == pool_item.id
+      assert vote.strength == 1
+      assert vote.source == "twitch_channel_points"
+      assert vote.external_event_id == "redemption-1"
 
       identity =
         Repo.get_by!(ViewerIdentity, platform: "twitch", platform_user_id: "twitch-user-1")
 
       viewer = Repo.get!(Viewer, identity.viewer_id)
       assert viewer.display_name == "Redeemer"
-      assert boost.viewer_id == viewer.id
+      assert vote.viewer_id == viewer.id
     end
 
     test "ingest_twitch_reward_redemption/1 reuses Twitch viewer identities" do
@@ -489,13 +489,13 @@ defmodule BacklogWheel.VotingTest do
       pool_item
       |> VotingSessionGame.twitch_reward_changeset(%{
         twitch_reward_id: "reward-2",
-        twitch_reward_title: "Boost ##{pool_item.id}: Known Viewer Game",
+        twitch_reward_title: "Vote ##{pool_item.id}: Known Viewer Game",
         twitch_reward_cost: 100,
         twitch_reward_status: "enabled"
       })
       |> Repo.update!()
 
-      assert {:ok, boost} =
+      assert {:ok, vote} =
                Voting.ingest_twitch_reward_redemption(%{
                  id: "redemption-2",
                  user_id: "twitch-user-2",
@@ -503,7 +503,7 @@ defmodule BacklogWheel.VotingTest do
                  reward: %{id: "reward-2"}
                })
 
-      assert boost.viewer_id == viewer.id
+      assert vote.viewer_id == viewer.id
       assert Repo.aggregate(Viewer, :count, :id) == 1
     end
 
@@ -515,7 +515,7 @@ defmodule BacklogWheel.VotingTest do
       pool_item
       |> VotingSessionGame.twitch_reward_changeset(%{
         twitch_reward_id: "reward-3",
-        twitch_reward_title: "Boost ##{pool_item.id}: Duplicate Redemption Game",
+        twitch_reward_title: "Vote ##{pool_item.id}: Duplicate Redemption Game",
         twitch_reward_cost: 100,
         twitch_reward_status: "enabled"
       })
@@ -528,11 +528,11 @@ defmodule BacklogWheel.VotingTest do
         "reward" => %{"id" => "reward-3"}
       }
 
-      assert {:ok, first_boost} = Voting.ingest_twitch_reward_redemption(attrs)
-      assert {:ok, second_boost} = Voting.ingest_twitch_reward_redemption(attrs)
+      assert {:ok, first_vote} = Voting.ingest_twitch_reward_redemption(attrs)
+      assert {:ok, second_vote} = Voting.ingest_twitch_reward_redemption(attrs)
 
-      assert first_boost.id == second_boost.id
-      assert Repo.aggregate(VotingBoost, :count, :id) == 1
+      assert first_vote.id == second_vote.id
+      assert Repo.aggregate(ChannelPointVote, :count, :id) == 1
     end
 
     test "ingest_twitch_reward_redemption/1 ignores unknown and inactive rewards" do
@@ -543,7 +543,7 @@ defmodule BacklogWheel.VotingTest do
       pool_item
       |> VotingSessionGame.twitch_reward_changeset(%{
         twitch_reward_id: "closed-reward",
-        twitch_reward_title: "Boost ##{pool_item.id}: Closed Reward Game",
+        twitch_reward_title: "Vote ##{pool_item.id}: Closed Reward Game",
         twitch_reward_cost: 100,
         twitch_reward_status: "enabled"
       })
@@ -561,108 +561,108 @@ defmodule BacklogWheel.VotingTest do
                "reward" => %{"id" => "closed-reward"}
              }) == {:ignored, :unknown_twitch_reward}
 
-      assert Repo.aggregate(VotingBoost, :count, :id) == 0
+      assert Repo.aggregate(ChannelPointVote, :count, :id) == 0
     end
 
-    test "record_boost/3 records a positive boost against a session game" do
+    test "record_vote/3 records a positive vote against a session game" do
       voting_session_game = voting_session_game_fixture(voting_session_fixture(), game_fixture())
-      viewer = viewer_fixture(%{display_name: "Boost Viewer"})
+      viewer = viewer_fixture(%{display_name: "Vote Viewer"})
 
-      assert {:ok, %VotingBoost{} = voting_boost} =
-               Voting.record_boost(voting_session_game, viewer, %{
+      assert {:ok, %ChannelPointVote{} = channel_point_vote} =
+               Voting.record_vote(voting_session_game, viewer, %{
                  strength: 5,
                  source: "twitch",
                  external_event_id: "event-1"
                })
 
-      assert voting_boost.voting_session_game_id == voting_session_game.id
-      assert voting_boost.viewer_id == viewer.id
-      assert voting_boost.strength == 5
-      assert voting_boost.source == "twitch"
-      assert voting_boost.external_event_id == "event-1"
+      assert channel_point_vote.voting_session_game_id == voting_session_game.id
+      assert channel_point_vote.viewer_id == viewer.id
+      assert channel_point_vote.strength == 5
+      assert channel_point_vote.source == "twitch"
+      assert channel_point_vote.external_event_id == "event-1"
     end
 
-    test "record_boost/2 can record a local admin boost without a viewer" do
+    test "record_vote/2 can record a local admin vote without a viewer" do
       voting_session_game = voting_session_game_fixture(voting_session_fixture(), game_fixture())
 
-      assert {:ok, %VotingBoost{} = voting_boost} =
-               Voting.record_boost(voting_session_game, %{strength: 2, source: "local"})
+      assert {:ok, %ChannelPointVote{} = channel_point_vote} =
+               Voting.record_vote(voting_session_game, %{strength: 2, source: "local"})
 
-      assert voting_boost.viewer_id == nil
-      assert voting_boost.strength == 2
-      assert voting_boost.source == "local"
+      assert channel_point_vote.viewer_id == nil
+      assert channel_point_vote.strength == 2
+      assert channel_point_vote.source == "local"
     end
 
-    test "record_boost/3 rejects non-positive strengths" do
+    test "record_vote/3 rejects non-positive strengths" do
       voting_session_game = voting_session_game_fixture(voting_session_fixture(), game_fixture())
       viewer = viewer_fixture(%{display_name: "Negative Viewer"})
 
       assert {:error, changeset} =
-               Voting.record_boost(voting_session_game, viewer, %{strength: -1, source: "twitch"})
+               Voting.record_vote(voting_session_game, viewer, %{strength: -1, source: "twitch"})
 
       assert %{strength: ["must be greater than 0"]} = errors_on(changeset)
     end
 
-    test "record_boost/3 is idempotent for duplicate external events" do
+    test "record_vote/3 is idempotent for duplicate external events" do
       voting_session_game = voting_session_game_fixture(voting_session_fixture(), game_fixture())
       viewer = viewer_fixture(%{display_name: "Idempotent Viewer"})
 
-      assert {:ok, first_boost} =
-               Voting.record_boost(voting_session_game, viewer, %{
+      assert {:ok, first_vote} =
+               Voting.record_vote(voting_session_game, viewer, %{
                  strength: 3,
                  source: "twitch",
                  external_event_id: "event-2"
                })
 
-      assert {:ok, second_boost} =
-               Voting.record_boost(voting_session_game, viewer, %{
+      assert {:ok, second_vote} =
+               Voting.record_vote(voting_session_game, viewer, %{
                  strength: 99,
                  source: "twitch",
                  external_event_id: "event-2"
                })
 
-      assert first_boost.id == second_boost.id
-      assert first_boost.strength == second_boost.strength
-      assert Repo.aggregate(VotingBoost, :count, :id) == 1
+      assert first_vote.id == second_vote.id
+      assert first_vote.strength == second_vote.strength
+      assert Repo.aggregate(ChannelPointVote, :count, :id) == 1
     end
 
-    test "record_boost/3 allows repeated boosts without an external event id" do
+    test "record_vote/3 allows repeated votes without an external event id" do
       voting_session_game = voting_session_game_fixture(voting_session_fixture(), game_fixture())
       viewer = viewer_fixture(%{display_name: "Repeat Viewer"})
 
-      assert {:ok, first_boost} =
-               Voting.record_boost(voting_session_game, viewer, %{strength: 1, source: "local"})
+      assert {:ok, first_vote} =
+               Voting.record_vote(voting_session_game, viewer, %{strength: 1, source: "local"})
 
-      assert {:ok, second_boost} =
-               Voting.record_boost(voting_session_game, viewer, %{strength: 1, source: "local"})
+      assert {:ok, second_vote} =
+               Voting.record_vote(voting_session_game, viewer, %{strength: 1, source: "local"})
 
-      assert first_boost.id != second_boost.id
-      assert Repo.aggregate(VotingBoost, :count, :id) == 2
+      assert first_vote.id != second_vote.id
+      assert Repo.aggregate(ChannelPointVote, :count, :id) == 2
     end
 
-    test "record_boost/2 broadcasts voting session changes" do
+    test "record_vote/2 broadcasts voting session changes" do
       voting_session = voting_session_fixture()
       voting_session_game = voting_session_game_fixture(voting_session, game_fixture())
 
       assert :ok = Voting.subscribe_to_voting_session(voting_session)
 
-      assert {:ok, _boost} =
-               Voting.record_boost(voting_session_game, %{strength: 1, source: "local"})
+      assert {:ok, _vote} =
+               Voting.record_vote(voting_session_game, %{strength: 1, source: "local"})
 
       assert_receive {:voting_session_changed, id}
       assert id == voting_session.id
     end
 
-    test "voting_session_game_weight/1 calculates final weight from boosts" do
+    test "voting_session_game_weight/1 calculates final weight from votes" do
       voting_session_game =
         voting_session_game_fixture(voting_session_fixture(), game_fixture(), %{base_weight: 2})
 
-      voting_boost_fixture(voting_session_game, nil, %{strength: 3})
-      voting_boost_fixture(voting_session_game, nil, %{strength: 4})
+      channel_point_vote_fixture(voting_session_game, nil, %{strength: 3})
+      channel_point_vote_fixture(voting_session_game, nil, %{strength: 4})
 
       assert Voting.voting_session_game_weight(voting_session_game) == %{
                base_weight: 2,
-               boost_total: 7,
+               channel_point_vote_total: 7,
                final_weight: 9
              }
     end
@@ -670,21 +670,24 @@ defmodule BacklogWheel.VotingTest do
     test "list_voting_session_wheel_entries/1 returns final weights for the wheel" do
       voting_session = voting_session_fixture()
       base_game = game_fixture(%{title: "Base Weight Game"})
-      boosted_game = game_fixture(%{title: "Boosted Weight Game", external_id: "boosted"})
+      voted_game = game_fixture(%{title: "Voted Weight Game", external_id: "voted"})
       base_pool_item = voting_session_game_fixture(voting_session, base_game, %{base_weight: 2})
 
-      boosted_pool_item =
-        voting_session_game_fixture(voting_session, boosted_game, %{base_weight: 1})
+      voted_pool_item =
+        voting_session_game_fixture(voting_session, voted_game, %{base_weight: 1})
 
-      voting_boost_fixture(boosted_pool_item, nil, %{strength: 4})
+      channel_point_vote_fixture(voted_pool_item, nil, %{strength: 4})
 
       entries = Voting.list_voting_session_wheel_entries(voting_session)
 
-      assert Enum.map(entries, & &1.title) == ["Base Weight Game", "Boosted Weight Game"]
+      assert Enum.map(entries, & &1.title) == ["Base Weight Game", "Voted Weight Game"]
 
-      assert Enum.map(entries, &{&1.pool_item.id, &1.weight, &1.base_weight, &1.boost_total}) == [
+      assert Enum.map(
+               entries,
+               &{&1.pool_item.id, &1.weight, &1.base_weight, &1.channel_point_vote_total}
+             ) == [
                {base_pool_item.id, 2, 2, 0},
-               {boosted_pool_item.id, 5, 1, 4}
+               {voted_pool_item.id, 5, 1, 4}
              ]
     end
 
@@ -729,8 +732,8 @@ defmodule BacklogWheel.VotingTest do
       second_pool_item =
         voting_session_game_fixture(voting_session, second_game, %{base_weight: 1})
 
-      voting_boost_fixture(first_pool_item, nil, %{strength: 3})
-      voting_boost_fixture(second_pool_item, nil, %{strength: 1})
+      channel_point_vote_fixture(first_pool_item, nil, %{strength: 3})
+      channel_point_vote_fixture(second_pool_item, nil, %{strength: 1})
 
       assert {:ok, %{spin: spin, spin_payload: payload}} =
                Voting.spin_voting_session_wheel(voting_session)
@@ -762,7 +765,7 @@ defmodule BacklogWheel.VotingTest do
                "start_degrees" => 0.0,
                "end_degrees" => 257.14285714285717,
                "base_weight" => 2,
-               "boost_total" => 3,
+               "channel_point_vote_total" => 3,
                "final_weight" => 5
              }
 
@@ -773,7 +776,7 @@ defmodule BacklogWheel.VotingTest do
                "start_degrees" => 257.14285714285717,
                "end_degrees" => 360.0,
                "base_weight" => 1,
-               "boost_total" => 1,
+               "channel_point_vote_total" => 1,
                "final_weight" => 2
              }
 

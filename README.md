@@ -118,6 +118,10 @@ Behavior today:
 - Starting Twitch voting creates one positive channel point vote reward per game in the voting session.
 - Redemption ingestion is not implemented yet.
 
+## Terminology
+
+Current code should use product language like voting sessions, wheel candidates, votes, and channel point votes. Prefer `ChannelPointVote`, `record_vote/2`, `record_vote/3`, and `channel_point_vote_total` in new code.
+
 ## Tests
 
 Run the test suite:

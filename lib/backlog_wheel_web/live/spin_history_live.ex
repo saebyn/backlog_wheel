@@ -64,7 +64,7 @@ defmodule BacklogWheelWeb.SpinHistoryLive do
               </p>
               <p class="mt-1 text-xs text-base-content/60">
                 Starting votes {winner_entry["base_weight"]} + channel point votes {winner_entry[
-                  "boost_total"
+                  "channel_point_vote_total"
                 ]} · {snapshot_entry_count(spin)} entries snapshotted
               </p>
             </div>

@@ -120,23 +120,23 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     assert has_element?(view, "#selected-session-status", "cancelled")
   end
 
-  test "records local admin boosts and shows final weight", %{conn: conn} do
+  test "records local admin votes and shows final weight", %{conn: conn} do
     voting_session = voting_session_fixture()
-    game = game_fixture(%{title: "Boostable Game"})
+    game = game_fixture(%{title: "Voteable Game"})
     pool_item = voting_session_game_fixture(voting_session, game, %{base_weight: 2})
 
     {:ok, view, _html} = live(conn, ~p"/voting")
 
     assert has_element?(view, "#pool-game-base-weight-#{pool_item.id}", "2")
-    assert has_element?(view, "#pool-game-boost-total-#{pool_item.id}", "+0")
+    assert has_element?(view, "#pool-game-channel-point-vote-total-#{pool_item.id}", "+0")
     assert has_element?(view, "#pool-game-final-weight-#{pool_item.id}", "2")
 
-    assert view |> element("#boost-pool-game-#{pool_item.id}") |> render_click()
-    assert has_element?(view, "#pool-game-boost-total-#{pool_item.id}", "+1")
+    assert view |> element("#vote-pool-game-#{pool_item.id}") |> render_click()
+    assert has_element?(view, "#pool-game-channel-point-vote-total-#{pool_item.id}", "+1")
     assert has_element?(view, "#pool-game-final-weight-#{pool_item.id}", "3")
 
-    assert view |> element("#boost-pool-game-#{pool_item.id}") |> render_click()
-    assert has_element?(view, "#pool-game-boost-total-#{pool_item.id}", "+2")
+    assert view |> element("#vote-pool-game-#{pool_item.id}") |> render_click()
+    assert has_element?(view, "#pool-game-channel-point-vote-total-#{pool_item.id}", "+2")
     assert has_element?(view, "#pool-game-final-weight-#{pool_item.id}", "4")
   end
 
@@ -234,7 +234,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     pool_item
     |> BacklogWheel.Voting.VotingSessionGame.twitch_reward_changeset(%{
       twitch_reward_id: "reward-#{pool_item.id}",
-      twitch_reward_title: "Boost ##{pool_item.id}: Rewarded Game",
+      twitch_reward_title: "Vote ##{pool_item.id}: Rewarded Game",
       twitch_reward_cost: 100,
       twitch_reward_status: "enabled"
     })
@@ -262,7 +262,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     pool_item
     |> BacklogWheel.Voting.VotingSessionGame.twitch_reward_changeset(%{
       twitch_reward_id: "reward-#{pool_item.id}",
-      twitch_reward_title: "Boost ##{pool_item.id}: Failed Cleanup Game",
+      twitch_reward_title: "Vote ##{pool_item.id}: Failed Cleanup Game",
       twitch_reward_cost: 100,
       twitch_reward_status: "enabled",
       twitch_reward_deletion_status: "failed",
@@ -302,16 +302,16 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
 
   test "refreshes selected session weights from pubsub", %{conn: conn} do
     voting_session = voting_session_fixture()
-    game = game_fixture(%{title: "Externally Boosted Game"})
+    game = game_fixture(%{title: "Externally Voted Game"})
     pool_item = voting_session_game_fixture(voting_session, game, %{base_weight: 2})
 
     {:ok, view, _html} = live(conn, ~p"/voting")
 
     assert has_element?(view, "#pool-game-final-weight-#{pool_item.id}", "2")
 
-    voting_boost_fixture(pool_item, nil, %{strength: 5})
+    channel_point_vote_fixture(pool_item, nil, %{strength: 5})
 
-    assert has_element?(view, "#pool-game-boost-total-#{pool_item.id}", "+5")
+    assert has_element?(view, "#pool-game-channel-point-vote-total-#{pool_item.id}", "+5")
     assert has_element?(view, "#pool-game-final-weight-#{pool_item.id}", "7")
   end
 end

@@ -5,7 +5,7 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
   import BacklogWheel.VotingFixtures
 
   alias BacklogWheel.Repo
-  alias BacklogWheel.Voting.VotingBoost
+  alias BacklogWheel.Voting.ChannelPointVote
   alias BacklogWheel.Voting.VotingSessionGame
 
   @eventsub_secret "eventsub-secret"
@@ -44,7 +44,7 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
     pool_item
     |> VotingSessionGame.twitch_reward_changeset(%{
       twitch_reward_id: "webhook-reward",
-      twitch_reward_title: "Boost ##{pool_item.id}: Webhook Reward Game",
+      twitch_reward_title: "Vote ##{pool_item.id}: Webhook Reward Game",
       twitch_reward_cost: 100,
       twitch_reward_status: "enabled"
     })
@@ -58,10 +58,10 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
       |> post(~p"/twitch/eventsub", body)
 
     assert response(conn, 204) == ""
-    assert [%VotingBoost{} = boost] = Repo.all(VotingBoost)
-    assert boost.voting_session_game_id == pool_item.id
-    assert boost.source == "twitch_channel_points"
-    assert boost.external_event_id == "webhook-redemption"
+    assert [%ChannelPointVote{} = vote] = Repo.all(ChannelPointVote)
+    assert vote.voting_session_game_id == pool_item.id
+    assert vote.source == "twitch_channel_points"
+    assert vote.external_event_id == "webhook-redemption"
   end
 
   test "rejects invalid Twitch EventSub signatures", %{conn: conn} do
@@ -76,7 +76,7 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
       |> post(~p"/twitch/eventsub", body)
 
     assert response(conn, 403) == ""
-    assert Repo.aggregate(VotingBoost, :count, :id) == 0
+    assert Repo.aggregate(ChannelPointVote, :count, :id) == 0
   end
 
   test "ignores signed redemptions for unknown rewards", %{conn: conn} do
@@ -88,7 +88,7 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
       |> post(~p"/twitch/eventsub", body)
 
     assert response(conn, 204) == ""
-    assert Repo.aggregate(VotingBoost, :count, :id) == 0
+    assert Repo.aggregate(ChannelPointVote, :count, :id) == 0
   end
 
   defp redemption_notification_body(redemption_id, reward_id) do

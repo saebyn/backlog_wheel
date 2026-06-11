@@ -34,7 +34,7 @@ defmodule BacklogWheelWeb.TwitchEventSubController do
          "event" => event
        }) do
     case Voting.ingest_twitch_reward_redemption(event) do
-      {:ok, _boost} ->
+      {:ok, _vote} ->
         send_resp(conn, :no_content, "")
 
       {:ignored, reason} ->

@@ -3,14 +3,14 @@ defmodule BacklogWheel.Voting.Viewer do
   import Ecto.Changeset
 
   alias BacklogWheel.Communities.Community
-  alias BacklogWheel.Voting.{ViewerIdentity, VotingBoost}
+  alias BacklogWheel.Voting.{ChannelPointVote, ViewerIdentity}
 
   schema "viewers" do
     field :display_name, :string
 
     belongs_to :community, Community
     has_many :viewer_identities, ViewerIdentity
-    has_many :voting_boosts, VotingBoost
+    has_many :channel_point_votes, ChannelPointVote
 
     timestamps(type: :utc_datetime)
   end

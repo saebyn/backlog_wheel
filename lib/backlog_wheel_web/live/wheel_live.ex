@@ -154,7 +154,7 @@ defmodule BacklogWheelWeb.WheelLive do
                     </div>
                   </div>
                   <p class="mt-1 text-xs text-base-content/60">
-                    Starting votes {candidate.base_weight} + channel point votes {candidate.boost_total}
+                    Starting votes {candidate.base_weight} + channel point votes {candidate.channel_point_vote_total}
                   </p>
                 </div>
               </div>

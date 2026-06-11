@@ -23,7 +23,7 @@ defmodule BacklogWheelWeb.WheelLiveTest do
     first_pool_item = voting_session_game_fixture(voting_session, first_game, %{base_weight: 1})
     second_pool_item = voting_session_game_fixture(voting_session, second_game, %{base_weight: 2})
 
-    voting_boost_fixture(second_pool_item, nil, %{strength: 3})
+    channel_point_vote_fixture(second_pool_item, nil, %{strength: 3})
 
     {:ok, view, _html} = live(conn, ~p"/wheel?voting_session_id=#{voting_session.id}")
 
@@ -133,14 +133,14 @@ defmodule BacklogWheelWeb.WheelLiveTest do
 
   test "refreshes selected voting session weights from pubsub", %{conn: conn} do
     voting_session = voting_session_fixture()
-    game = game_fixture(%{title: "Live Boost Game"})
+    game = game_fixture(%{title: "Live Vote Game"})
     pool_item = voting_session_game_fixture(voting_session, game, %{base_weight: 1})
 
     {:ok, view, _html} = live(conn, ~p"/wheel?voting_session_id=#{voting_session.id}")
 
     assert has_element?(view, "#wheel-candidate-#{pool_item.id}", "1")
 
-    voting_boost_fixture(pool_item, nil, %{strength: 3})
+    channel_point_vote_fixture(pool_item, nil, %{strength: 3})
 
     assert has_element?(view, "#wheel-candidate-#{pool_item.id}", "4")
     assert has_element?(view, "#wheel-total-weight", "Total weight: 4")

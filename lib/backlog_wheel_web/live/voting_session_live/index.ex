@@ -180,10 +180,10 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                               Channel Point Votes
                             </p>
                             <p
-                              id={"pool-game-boost-total-#{pool_item.id}"}
+                              id={"pool-game-channel-point-vote-total-#{pool_item.id}"}
                               class="text-lg font-black text-primary"
                             >
-                              +{pool_item.boost_total}
+                              +{pool_item.channel_point_vote_total}
                             </p>
                           </div>
                           <div class="rounded-xl bg-base-100 p-2">
@@ -229,8 +229,8 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                       </div>
                       <div class="flex shrink-0 flex-col gap-2">
                         <.button
-                          id={"boost-pool-game-#{pool_item.id}"}
-                          phx-click="boost_pool_game"
+                          id={"vote-pool-game-#{pool_item.id}"}
+                          phx-click="vote_pool_game"
                           phx-value-id={pool_item.id}
                         >
                           +1 Vote
@@ -424,9 +424,9 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     {:noreply, refresh(socket)}
   end
 
-  def handle_event("boost_pool_game", %{"id" => id}, socket) do
+  def handle_event("vote_pool_game", %{"id" => id}, socket) do
     pool_item = Enum.find(socket.assigns.pool_items, &(&1.id == String.to_integer(id)))
-    {:ok, _boost} = Voting.record_boost(pool_item, %{strength: 1, source: "local"})
+    {:ok, _vote} = Voting.record_vote(pool_item, %{strength: 1, source: "local"})
 
     {:noreply, refresh(socket)}
   end
