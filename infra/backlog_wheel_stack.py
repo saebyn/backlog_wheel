@@ -26,7 +26,6 @@ class BacklogWheelStack(Stack):
 
         domain_name = self.node.try_get_context("domainName") or "wheel.streamosaic.app"
         hosted_zone_domain = self.node.try_get_context("hostedZoneDomain") or "streamosaic.app"
-        hosted_zone_id = self.node.try_get_context("hostedZoneId") or "Z026769531Q5JHNBET0M8"
         record_name = domain_name.removesuffix(f".{hosted_zone_domain}")
 
         vpc = ec2.Vpc.from_lookup(
@@ -163,11 +162,10 @@ class BacklogWheelStack(Stack):
             enable_execute_command=True,
         )
 
-        hosted_zone = route53.HostedZone.from_hosted_zone_attributes(
+        hosted_zone = route53.HostedZone.from_lookup(
             self,
             "HostedZone",
-            hosted_zone_id=hosted_zone_id,
-            zone_name=hosted_zone_domain,
+            domain_name=hosted_zone_domain,
         )
         certificate = acm.Certificate(
             self,

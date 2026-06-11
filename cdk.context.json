@@ -1,0 +1,44 @@
+{
+  "vpc-provider:account=159222827421:filter.isDefault=true:region=us-west-2:returnAsymmetricSubnets=true": {
+    "vpcId": "vpc-df2bdbba",
+    "vpcCidrBlock": "172.31.0.0/16",
+    "ownerAccountId": "159222827421",
+    "availabilityZones": [],
+    "subnetGroups": [
+      {
+        "name": "Public",
+        "type": "Public",
+        "subnets": [
+          {
+            "subnetId": "subnet-3446a743",
+            "cidr": "172.31.16.0/20",
+            "availabilityZone": "us-west-2a",
+            "routeTableId": "rtb-d3df22b6"
+          },
+          {
+            "subnetId": "subnet-939655f6",
+            "cidr": "172.31.32.0/20",
+            "availabilityZone": "us-west-2b",
+            "routeTableId": "rtb-d3df22b6"
+          },
+          {
+            "subnetId": "subnet-4861610e",
+            "cidr": "172.31.0.0/20",
+            "availabilityZone": "us-west-2c",
+            "routeTableId": "rtb-d3df22b6"
+          },
+          {
+            "subnetId": "subnet-f03797db",
+            "cidr": "172.31.48.0/20",
+            "availabilityZone": "us-west-2d",
+            "routeTableId": "rtb-d3df22b6"
+          }
+        ]
+      }
+    ]
+  },
+  "hosted-zone:account=159222827421:domainName=streamosaic.app:region=us-west-2": {
+    "Id": "/hostedzone/Z026769531Q5JHNBET0M8",
+    "Name": "streamosaic.app."
+  }
+}

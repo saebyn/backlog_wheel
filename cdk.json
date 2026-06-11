@@ -1,8 +1,9 @@
 {
   "app": "python3 infra/app.py",
   "context": {
+    "account": "159222827421",
+    "region": "us-west-2",
     "domainName": "wheel.streamosaic.app",
-    "hostedZoneDomain": "streamosaic.app",
-    "hostedZoneId": "Z026769531Q5JHNBET0M8"
+    "hostedZoneDomain": "streamosaic.app"
   }
 }
