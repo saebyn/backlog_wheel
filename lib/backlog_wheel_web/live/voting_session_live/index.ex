@@ -11,7 +11,12 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} wide>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      current_community={@current_community}
+      wide
+    >
       <div class="grid gap-6 lg:grid-cols-[20rem_1fr]">
         <aside class="space-y-4 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl">
           <.header>
@@ -316,7 +321,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
   @impl true
   def handle_event("create_session", _params, socket) do
-    {:ok, session} = Voting.create_voting_session()
+    {:ok, session} = Voting.create_voting_session(socket.assigns.current_community, %{})
 
     {:noreply,
      socket
@@ -411,7 +416,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   end
 
   def handle_event("add_pool_game", %{"id" => id}, socket) do
-    game = Backlog.get_game!(id)
+    game = Backlog.get_game!(socket.assigns.current_community, id)
     {:ok, _pool_item} = Voting.add_game_to_session(socket.assigns.selected_session, game)
 
     {:noreply, refresh(socket)}
@@ -441,7 +446,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   end
 
   defp refresh(socket) do
-    sessions = Voting.list_voting_sessions()
+    sessions = Voting.list_voting_sessions(socket.assigns.current_community)
     selected_session = selected_session(sessions, socket.assigns.selected_session_id)
     pool_items = if selected_session, do: selected_session.voting_session_games, else: []
 

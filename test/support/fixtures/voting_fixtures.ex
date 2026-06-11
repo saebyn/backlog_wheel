@@ -8,7 +8,15 @@ defmodule BacklogWheel.VotingFixtures do
   Generate a voting session.
   """
   def voting_session_fixture(attrs \\ %{}) do
-    {:ok, voting_session} = BacklogWheel.Voting.create_voting_session(attrs)
+    {community, attrs} = Map.pop(attrs, :community)
+
+    community =
+      community || Process.get(:test_community) ||
+        BacklogWheel.BacklogFixtures.community_fixture()
+
+    Process.put(:test_community, community)
+
+    {:ok, voting_session} = BacklogWheel.Voting.create_voting_session(community, attrs)
 
     voting_session
   end
@@ -27,10 +35,18 @@ defmodule BacklogWheel.VotingFixtures do
   Generate a viewer.
   """
   def viewer_fixture(attrs \\ %{}) do
+    {community, attrs} = Map.pop(attrs, :community)
+
+    community =
+      community || Process.get(:test_community) ||
+        BacklogWheel.BacklogFixtures.community_fixture()
+
+    Process.put(:test_community, community)
+
     {:ok, viewer} =
       attrs
       |> Enum.into(%{display_name: "some viewer"})
-      |> BacklogWheel.Voting.create_viewer()
+      |> then(&BacklogWheel.Voting.create_viewer(community, &1))
 
     viewer
   end

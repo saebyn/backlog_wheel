@@ -2,7 +2,6 @@ defmodule BacklogWheel.BacklogTest do
   use BacklogWheel.DataCase
 
   alias BacklogWheel.Backlog
-  alias BacklogWheel.Communities
 
   describe "games" do
     alias BacklogWheel.Backlog.Game
@@ -12,9 +11,31 @@ defmodule BacklogWheel.BacklogTest do
 
     @invalid_attrs %{title: nil}
 
-    test "list_games/0 returns all games" do
-      game = game_fixture()
-      assert Backlog.list_games() == [game]
+    test "list_games/1 returns games for a community" do
+      community = community_fixture()
+      game = game_fixture(%{community: community})
+      assert Backlog.list_games(community) == [game]
+    end
+
+    test "scoped games only return records for the given community" do
+      first_community = community_fixture(%{slug: "first-backlog"})
+      second_community = community_fixture(%{slug: "second-backlog"})
+      first_game = game_fixture(%{community: first_community, title: "First Community Game"})
+      second_game = game_fixture(%{community: second_community, title: "Second Community Game"})
+
+      assert Backlog.list_games(first_community, %{}) == [first_game]
+      assert Backlog.list_games(second_community, %{}) == [second_game]
+
+      assert_raise Ecto.NoResultsError, fn ->
+        Backlog.get_game!(first_community, second_game.id)
+      end
+    end
+
+    test "scoped create_game/2 attaches the current community" do
+      community = community_fixture(%{slug: "created-backlog"})
+
+      assert {:ok, game} = Backlog.create_game(community, %{title: "Scoped Game"})
+      assert game.community_id == community.id
     end
 
     test "get_game!/1 returns the game with given id" do
@@ -22,8 +43,11 @@ defmodule BacklogWheel.BacklogTest do
       assert Backlog.get_game!(game.id) == game
     end
 
-    test "list_games/1 searches, filters, and sorts games" do
+    test "list_games/2 searches, filters, and sorts games" do
+      community = community_fixture()
+
       game_fixture(%{
+        community: community,
         title: "Apex Legends",
         platform: "steam",
         external_id: "1172470",
@@ -33,6 +57,7 @@ defmodule BacklogWheel.BacklogTest do
       })
 
       game_fixture(%{
+        community: community,
         title: "Baldur's Gate 3",
         platform: "steam",
         external_id: "1086940",
@@ -42,17 +67,34 @@ defmodule BacklogWheel.BacklogTest do
       })
 
       assert [%Game{title: "Apex Legends"}] =
-               Backlog.list_games(%{"q" => "apex", "filter" => "wheel", "sort" => "title"})
+               Backlog.list_games(community, %{
+                 "q" => "apex",
+                 "filter" => "wheel",
+                 "sort" => "title"
+               })
 
       assert [%Game{title: "Baldur's Gate 3"}, %Game{title: "Apex Legends"}] =
-               Backlog.list_games(%{"filter" => "steam", "sort" => "last_played"})
+               Backlog.list_games(community, %{"filter" => "steam", "sort" => "last_played"})
     end
 
-    test "game_counts/0 returns curation summary counts" do
-      game_fixture(%{external_id: "one", include_in_wheel: true, played_on_stream: false})
-      game_fixture(%{external_id: "two", include_in_wheel: false, played_on_stream: true})
+    test "game_counts/1 returns curation summary counts" do
+      community = community_fixture()
 
-      assert Backlog.game_counts() == %{
+      game_fixture(%{
+        community: community,
+        external_id: "one",
+        include_in_wheel: true,
+        played_on_stream: false
+      })
+
+      game_fixture(%{
+        community: community,
+        external_id: "two",
+        include_in_wheel: false,
+        played_on_stream: true
+      })
+
+      assert Backlog.game_counts(community) == %{
                total: 2,
                wheel: 1,
                excluded: 1,
@@ -61,9 +103,12 @@ defmodule BacklogWheel.BacklogTest do
              }
     end
 
-    test "update_visible_games_include_in_wheel/2 updates matching games" do
+    test "update_visible_games_include_in_wheel/3 updates matching games" do
+      community = community_fixture()
+
       steam_game =
         game_fixture(%{
+          community: community,
           title: "Steam Game",
           platform: "steam",
           external_id: "1",
@@ -72,21 +117,55 @@ defmodule BacklogWheel.BacklogTest do
 
       manual_game =
         game_fixture(%{
+          community: community,
           title: "Manual Game",
           platform: "manual",
           external_id: "2",
           include_in_wheel: false
         })
 
-      assert {1, _} = Backlog.update_visible_games_include_in_wheel(%{"filter" => "steam"}, true)
+      assert {1, _} =
+               Backlog.update_visible_games_include_in_wheel(
+                 community,
+                 %{"filter" => "steam"},
+                 true
+               )
 
       assert Backlog.get_game!(steam_game.id).include_in_wheel == true
       assert Backlog.get_game!(manual_game.id).include_in_wheel == false
     end
 
-    test "list_wheel_candidates/0 returns included games including played games" do
+    test "scoped bulk wheel inclusion ignores other communities" do
+      first_community = community_fixture(%{slug: "first-bulk"})
+      second_community = community_fixture(%{slug: "second-bulk"})
+
+      first_game =
+        game_fixture(%{community: first_community, platform: "steam", external_id: "first-bulk"})
+
+      second_game =
+        game_fixture(%{
+          community: second_community,
+          platform: "steam",
+          external_id: "second-bulk"
+        })
+
+      assert {1, _} =
+               Backlog.update_visible_games_include_in_wheel(
+                 first_community,
+                 %{"filter" => "steam"},
+                 false
+               )
+
+      assert Backlog.get_game!(first_community, first_game.id).include_in_wheel == false
+      assert Backlog.get_game!(second_community, second_game.id).include_in_wheel == true
+    end
+
+    test "list_wheel_candidates/1 returns included games including played games" do
+      community = community_fixture()
+
       played_game =
         game_fixture(%{
+          community: community,
           title: "Played Candidate",
           external_id: "played-candidate",
           include_in_wheel: true,
@@ -95,6 +174,7 @@ defmodule BacklogWheel.BacklogTest do
 
       unplayed_game =
         game_fixture(%{
+          community: community,
           title: "Unplayed Candidate",
           external_id: "unplayed-candidate",
           include_in_wheel: true,
@@ -102,22 +182,23 @@ defmodule BacklogWheel.BacklogTest do
         })
 
       game_fixture(%{
+        community: community,
         title: "Excluded Game",
         external_id: "excluded-game",
         include_in_wheel: false
       })
 
-      assert Backlog.list_wheel_candidates() == [played_game, unplayed_game]
+      assert Backlog.list_wheel_candidates(community) == [played_game, unplayed_game]
     end
 
-    test "spin_wheel/0 records a spin for a candidate" do
-      game = game_fixture(%{include_in_wheel: true, played_on_stream: true})
-      default_community = Communities.get_default_community!()
+    test "spin_wheel/1 records a spin for a candidate" do
+      community = community_fixture()
+      game = game_fixture(%{community: community, include_in_wheel: true, played_on_stream: true})
 
-      assert {:ok, %{game: selected_game, spin: spin}} = Backlog.spin_wheel()
+      assert {:ok, %{game: selected_game, spin: spin}} = Backlog.spin_wheel(community)
       assert selected_game.id == game.id
       assert spin.game_id == game.id
-      assert spin.community_id == default_community.id
+      assert spin.community_id == community.id
       assert spin.source == "wheel"
       assert spin.snapshot["source"] == "wheel"
       assert spin.snapshot["winning_game_id"] == game.id
@@ -129,16 +210,17 @@ defmodule BacklogWheel.BacklogTest do
       assert entry["channel_point_vote_total"] == 0
       assert entry["final_weight"] == 1
       assert %DateTime{} = spin.spun_at
-      assert [recent_spin] = Backlog.list_recent_spins()
+      assert [recent_spin] = Backlog.list_recent_spins(community)
       assert recent_spin.game.id == game.id
     end
 
-    test "latest_voting_session_spin/1 returns the newest session spin" do
-      voting_session = voting_session_fixture()
-      game = game_fixture(%{external_id: "latest-session-spin"})
+    test "latest_voting_session_spin/2 returns the newest session spin" do
+      community = community_fixture()
+      voting_session = voting_session_fixture(%{community: community})
+      game = game_fixture(%{community: community, external_id: "latest-session-spin"})
 
       {:ok, older_spin} =
-        Backlog.create_spin(%{
+        Backlog.create_spin(community, %{
           game_id: game.id,
           voting_session_id: voting_session.id,
           spun_at: ~U[2026-06-06 12:00:00Z],
@@ -146,33 +228,37 @@ defmodule BacklogWheel.BacklogTest do
         })
 
       {:ok, newer_spin} =
-        Backlog.create_spin(%{
+        Backlog.create_spin(community, %{
           game_id: game.id,
           voting_session_id: voting_session.id,
           spun_at: ~U[2026-06-06 12:01:00Z],
           source: "voting_session"
         })
 
-      assert Backlog.latest_voting_session_spin(voting_session.id).id == newer_spin.id
-      refute Backlog.latest_voting_session_spin(voting_session.id).id == older_spin.id
+      assert Backlog.latest_voting_session_spin(community, voting_session.id).id == newer_spin.id
+      refute Backlog.latest_voting_session_spin(community, voting_session.id).id == older_spin.id
     end
 
     test "delete_spin/1 deletes a spin history entry" do
-      game = game_fixture(%{include_in_wheel: true})
-      {:ok, spin} = Backlog.create_spin(%{game_id: game.id, spun_at: ~U[2026-06-06 12:00:00Z]})
+      community = community_fixture()
+      game = game_fixture(%{community: community, include_in_wheel: true})
+
+      {:ok, spin} =
+        Backlog.create_spin(community, %{game_id: game.id, spun_at: ~U[2026-06-06 12:00:00Z]})
 
       assert {:ok, _spin} = Backlog.delete_spin(spin)
-      assert Backlog.list_recent_spins() == []
+      assert Backlog.list_recent_spins(community) == []
     end
 
-    test "spin_wheel/0 returns an error when there are no candidates" do
-      game_fixture(%{include_in_wheel: false})
+    test "spin_wheel/1 returns an error when there are no candidates" do
+      community = community_fixture()
+      game_fixture(%{community: community, include_in_wheel: false})
 
-      assert {:error, :no_candidates} = Backlog.spin_wheel()
+      assert {:error, :no_candidates} = Backlog.spin_wheel(community)
     end
 
-    test "create_game/1 with valid data creates a game" do
-      default_community = Communities.get_default_community!()
+    test "create_game/2 with valid data creates a game" do
+      community = community_fixture()
 
       valid_attrs = %{
         title: "some title",
@@ -183,28 +269,47 @@ defmodule BacklogWheel.BacklogTest do
         last_played_at: ~U[2026-06-05 17:55:00Z]
       }
 
-      assert {:ok, %Game{} = game} = Backlog.create_game(valid_attrs)
+      assert {:ok, %Game{} = game} = Backlog.create_game(community, valid_attrs)
       assert game.title == "some title"
       assert game.platform == "some platform"
       assert game.external_id == "some external_id"
-      assert game.community_id == default_community.id
+      assert game.community_id == community.id
       assert game.include_in_wheel == true
       assert game.played_on_stream == true
       assert game.last_played_at == ~U[2026-06-05 17:55:00Z]
     end
 
-    test "create_spin/1 attaches the default community" do
-      default_community = Communities.get_default_community!()
-      game = game_fixture(%{include_in_wheel: true})
+    test "create_spin/2 attaches the given community" do
+      community = community_fixture()
+      game = game_fixture(%{community: community, include_in_wheel: true})
 
       assert {:ok, spin} =
-               Backlog.create_spin(%{game_id: game.id, spun_at: ~U[2026-06-06 12:00:00Z]})
+               Backlog.create_spin(community, %{
+                 game_id: game.id,
+                 spun_at: ~U[2026-06-06 12:00:00Z]
+               })
 
-      assert spin.community_id == default_community.id
+      assert spin.community_id == community.id
     end
 
-    test "create_game/1 defaults optional metadata" do
-      assert {:ok, %Game{} = game} = Backlog.create_game(%{title: "Untitled Game"})
+    test "scoped create_spin/2 rejects games from another community" do
+      first_community = community_fixture(%{slug: "first-spin"})
+      second_community = community_fixture(%{slug: "second-spin"})
+      game = game_fixture(%{community: second_community})
+
+      assert {:error, changeset} =
+               Backlog.create_spin(first_community, %{
+                 game_id: game.id,
+                 spun_at: ~U[2026-06-06 12:00:00Z]
+               })
+
+      assert %{game_id: ["does not belong to this community"]} = errors_on(changeset)
+    end
+
+    test "create_game/2 defaults optional metadata" do
+      community = community_fixture()
+
+      assert {:ok, %Game{} = game} = Backlog.create_game(community, %{title: "Untitled Game"})
 
       assert game.platform == "manual"
       assert game.external_id == nil
@@ -213,8 +318,10 @@ defmodule BacklogWheel.BacklogTest do
       assert game.last_played_at == nil
     end
 
-    test "create_game/1 with invalid data returns error changeset" do
-      assert {:error, %Ecto.Changeset{}} = Backlog.create_game(@invalid_attrs)
+    test "create_game/2 with invalid data returns error changeset" do
+      community = community_fixture()
+
+      assert {:error, %Ecto.Changeset{}} = Backlog.create_game(community, @invalid_attrs)
     end
 
     test "update_game/2 with valid data updates the game" do
@@ -264,9 +371,11 @@ defmodule BacklogWheel.BacklogTest do
       assert game.played_on_stream == false
     end
 
-    test "import_steam_games/1 imports new Steam games included on the wheel" do
+    test "import_steam_games/2 imports new Steam games included on the wheel" do
+      community = community_fixture()
+
       assert {:ok, %{imported: 2, updated: 0, skipped: 0, errors: []}} =
-               Backlog.import_steam_games([
+               Backlog.import_steam_games(community, [
                  %{
                    appid: 10,
                    name: "Counter-Strike",
@@ -276,20 +385,29 @@ defmodule BacklogWheel.BacklogTest do
                  %{appid: 70, name: "Half-Life"}
                ])
 
-      assert %Game{} = counter_strike = Backlog.get_game_by_platform_external_id("steam", "10")
+      assert %Game{} =
+               counter_strike =
+               Backlog.get_game_by_platform_external_id(community, "steam", "10")
+
       assert counter_strike.title == "Counter-Strike"
       assert counter_strike.image_url == "https://example.com/counter-strike.jpg"
       assert counter_strike.include_in_wheel == true
       assert counter_strike.last_played_at == ~U[2024-06-01 00:00:00Z]
 
-      assert %Game{} = half_life = Backlog.get_game_by_platform_external_id("steam", "70")
+      assert %Game{} =
+               half_life =
+               Backlog.get_game_by_platform_external_id(community, "steam", "70")
+
       assert half_life.title == "Half-Life"
       assert half_life.include_in_wheel == true
     end
 
-    test "import_steam_games/1 skips existing Steam games and preserves local edits" do
+    test "import_steam_games/2 skips existing Steam games and preserves local edits" do
+      community = community_fixture()
+
       existing =
         game_fixture(%{
+          community: community,
           title: "My Edited Title",
           platform: "steam",
           external_id: "10",
@@ -297,7 +415,7 @@ defmodule BacklogWheel.BacklogTest do
         })
 
       assert {:ok, %{imported: 0, updated: 1, skipped: 0, errors: []}} =
-               Backlog.import_steam_games([
+               Backlog.import_steam_games(community, [
                  %{appid: 10, name: "Counter-Strike", last_played_at: ~U[2024-06-01 00:00:00Z]}
                ])
 
@@ -306,9 +424,12 @@ defmodule BacklogWheel.BacklogTest do
       assert Backlog.get_game!(existing.id).last_played_at == ~U[2024-06-01 00:00:00Z]
     end
 
-    test "import_steam_games/1 updates last played time for existing Steam games" do
+    test "import_steam_games/2 updates last played time for existing Steam games" do
+      community = community_fixture()
+
       existing =
         game_fixture(%{
+          community: community,
           title: "My Edited Title",
           platform: "steam",
           external_id: "10",
@@ -316,7 +437,7 @@ defmodule BacklogWheel.BacklogTest do
         })
 
       assert {:ok, %{imported: 0, updated: 1, skipped: 0, errors: []}} =
-               Backlog.import_steam_games([
+               Backlog.import_steam_games(community, [
                  %{appid: 10, name: "Counter-Strike", last_played_at: ~U[2024-06-01 00:00:00Z]}
                ])
 
@@ -325,9 +446,12 @@ defmodule BacklogWheel.BacklogTest do
       assert game.last_played_at == ~U[2024-06-01 00:00:00Z]
     end
 
-    test "import_steam_games/1 updates image URL for existing Steam games" do
+    test "import_steam_games/2 updates image URL for existing Steam games" do
+      community = community_fixture()
+
       existing =
         game_fixture(%{
+          community: community,
           title: "My Edited Title",
           platform: "steam",
           external_id: "10",
@@ -335,7 +459,7 @@ defmodule BacklogWheel.BacklogTest do
         })
 
       assert {:ok, %{imported: 0, updated: 1, skipped: 0, errors: []}} =
-               Backlog.import_steam_games([
+               Backlog.import_steam_games(community, [
                  %{appid: 10, name: "Counter-Strike", image_url: "https://example.com/icon.jpg"}
                ])
 
@@ -344,25 +468,30 @@ defmodule BacklogWheel.BacklogTest do
       assert game.image_url == "https://example.com/icon.jpg"
     end
 
-    test "import_steam_games/1 skips existing Steam games when Steam has no last played time" do
+    test "import_steam_games/2 skips existing Steam games when Steam has no last played time" do
+      community = community_fixture()
+
       existing =
         game_fixture(%{
+          community: community,
           platform: "steam",
           external_id: "10",
           last_played_at: ~U[2024-05-01 00:00:00Z]
         })
 
       assert {:ok, %{imported: 0, updated: 0, skipped: 1, errors: []}} =
-               Backlog.import_steam_games([
+               Backlog.import_steam_games(community, [
                  %{appid: 10, name: "Counter-Strike", last_played_at: nil}
                ])
 
       assert Backlog.get_game!(existing.id).last_played_at == ~U[2024-05-01 00:00:00Z]
     end
 
-    test "import_steam_games/1 reports invalid entries" do
+    test "import_steam_games/2 reports invalid entries" do
+      community = community_fixture()
+
       assert {:ok, %{imported: 0, updated: 0, skipped: 0, errors: [_error]}} =
-               Backlog.import_steam_games([%{appid: 10}])
+               Backlog.import_steam_games(community, [%{appid: 10}])
     end
 
     test "delete_game/1 deletes the game" do

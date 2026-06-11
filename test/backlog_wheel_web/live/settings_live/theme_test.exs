@@ -57,14 +57,14 @@ defmodule BacklogWheelWeb.SettingsLive.ThemeTest do
 
     assert has_element?(view, "#flash-info", "Theme updated successfully")
 
-    community = Communities.get_default_community!()
+    community = Communities.get_community!(Process.get(:test_community).id)
 
     assert community.light_primary_color == "#123abc"
     assert community.dark_background_color == "#111827"
   end
 
   test "renders saved theme variables in the app shell", %{conn: conn} do
-    community = Communities.get_or_create_default_community()
+    community = Process.get(:test_community)
 
     assert {:ok, _community} =
              Communities.update_community_theme(community, %{
@@ -79,7 +79,7 @@ defmodule BacklogWheelWeb.SettingsLive.ThemeTest do
   end
 
   test "resets theme settings", %{conn: conn} do
-    community = Communities.get_or_create_default_community()
+    community = Process.get(:test_community)
 
     assert {:ok, _community} =
              Communities.update_community_theme(community, %{
@@ -92,7 +92,7 @@ defmodule BacklogWheelWeb.SettingsLive.ThemeTest do
     assert view |> element("#reset-theme-button") |> render_click()
     assert has_element?(view, "#flash-info", "Theme reset to defaults")
 
-    community = Communities.get_default_community!()
+    community = Communities.get_community!(Process.get(:test_community).id)
 
     assert community.light_primary_color == nil
     assert community.dark_background_color == nil

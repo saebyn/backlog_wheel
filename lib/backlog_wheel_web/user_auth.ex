@@ -3,14 +3,18 @@ defmodule BacklogWheelWeb.UserAuth do
   import Plug.Conn
   use BacklogWheelWeb, :verified_routes
 
-  alias BacklogWheel.Accounts
+  alias BacklogWheel.{Accounts, Communities}
 
   def init(action), do: action
 
   def call(conn, action), do: apply(__MODULE__, action, [conn, []])
 
   def fetch_current_user(conn, _opts) do
-    assign(conn, :current_user, Accounts.get_user(get_session(conn, :user_id)))
+    user = Accounts.get_user(get_session(conn, :user_id))
+
+    conn
+    |> assign(:current_user, user)
+    |> assign(:current_community, Communities.current_admin_community_for_user(user))
   end
 
   def require_authenticated_user(%{assigns: %{current_user: nil}} = conn, _opts) do
@@ -22,6 +26,15 @@ defmodule BacklogWheelWeb.UserAuth do
   end
 
   def require_authenticated_user(conn, _opts), do: conn
+
+  def require_admin_community(%{assigns: %{current_community: nil}} = conn, _opts) do
+    conn
+    |> put_flash(:error, "No owner or admin community is linked to this account")
+    |> redirect(to: ~p"/")
+    |> halt()
+  end
+
+  def require_admin_community(conn, _opts), do: conn
 
   def log_in_user(conn, user) do
     return_to = get_session(conn, :user_return_to) || ~p"/voting"
@@ -42,16 +55,33 @@ defmodule BacklogWheelWeb.UserAuth do
 
   def on_mount(:require_authenticated_user, _params, session, socket) do
     user = Accounts.get_user(Map.get(session, "user_id"))
+    community = Communities.current_admin_community_for_user(user)
 
-    if user do
-      {:cont, Phoenix.Component.assign(socket, :current_user, user)}
-    else
-      socket =
-        socket
-        |> Phoenix.LiveView.put_flash(:error, "Sign in with Discord to continue")
-        |> Phoenix.LiveView.redirect(to: ~p"/login")
+    cond do
+      is_nil(user) ->
+        socket =
+          socket
+          |> Phoenix.LiveView.put_flash(:error, "Sign in with Discord to continue")
+          |> Phoenix.LiveView.redirect(to: ~p"/login")
 
-      {:halt, socket}
+        {:halt, socket}
+
+      is_nil(community) ->
+        socket =
+          socket
+          |> Phoenix.LiveView.put_flash(
+            :error,
+            "No owner or admin community is linked to this account"
+          )
+          |> Phoenix.LiveView.redirect(to: ~p"/")
+
+        {:halt, socket}
+
+      true ->
+        {:cont,
+         socket
+         |> Phoenix.Component.assign(:current_user, user)
+         |> Phoenix.Component.assign(:current_community, community)}
     end
   end
 

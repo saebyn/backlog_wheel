@@ -7,7 +7,7 @@ defmodule BacklogWheelWeb.GameLive.SteamImport do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_community={@current_community}>
       <.header>
         Import Steam Library
         <:subtitle>
@@ -91,7 +91,7 @@ defmodule BacklogWheelWeb.GameLive.SteamImport do
 
     case Client.fetch_owned_games() do
       {:ok, steam_games} ->
-        {:ok, summary} = Backlog.import_steam_games(steam_games)
+        {:ok, summary} = Backlog.import_steam_games(socket.assigns.current_community, steam_games)
 
         {:noreply,
          socket

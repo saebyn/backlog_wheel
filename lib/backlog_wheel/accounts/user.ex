@@ -2,6 +2,8 @@ defmodule BacklogWheel.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias BacklogWheel.Communities.CommunityMembership
+
   @roles ~w(admin streamer)
 
   schema "users" do
@@ -9,6 +11,8 @@ defmodule BacklogWheel.Accounts.User do
     field :username, :string
     field :avatar_hash, :string
     field :role, :string
+
+    has_many :community_memberships, CommunityMembership
 
     timestamps(type: :utc_datetime)
   end

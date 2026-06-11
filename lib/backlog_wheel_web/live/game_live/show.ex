@@ -6,7 +6,7 @@ defmodule BacklogWheelWeb.GameLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_community={@current_community}>
       <.header>
         {@game.title}
         <:subtitle>Backlog game details.</:subtitle>
@@ -56,6 +56,6 @@ defmodule BacklogWheelWeb.GameLive.Show do
     {:ok,
      socket
      |> assign(:page_title, "Show Game")
-     |> assign(:game, Backlog.get_game!(id))}
+     |> assign(:game, Backlog.get_game!(socket.assigns.current_community, id))}
   end
 end

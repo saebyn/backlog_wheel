@@ -29,7 +29,6 @@ defmodule BacklogWheel.DataCase do
 
   setup tags do
     BacklogWheel.DataCase.setup_sandbox(tags)
-    BacklogWheel.Communities.get_or_create_default_community()
     :ok
   end
 

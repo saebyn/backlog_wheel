@@ -6,7 +6,7 @@ defmodule BacklogWheelWeb.GameLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_community={@current_community}>
       <.header>
         Listing Games
         <:actions>
@@ -162,7 +162,7 @@ defmodule BacklogWheelWeb.GameLive.Index do
 
   @impl true
   def handle_event("delete", %{"id" => id}, socket) do
-    game = Backlog.get_game!(id)
+    game = Backlog.get_game!(socket.assigns.current_community, id)
     {:ok, _} = Backlog.delete_game(game)
 
     {:noreply, refresh_games(socket)}
@@ -170,7 +170,7 @@ defmodule BacklogWheelWeb.GameLive.Index do
 
   @impl true
   def handle_event("toggle_include", %{"id" => id}, socket) do
-    game = Backlog.get_game!(id)
+    game = Backlog.get_game!(socket.assigns.current_community, id)
     {:ok, _game} = Backlog.toggle_game_include_in_wheel(game)
 
     {:noreply, refresh_games(socket)}
@@ -178,7 +178,7 @@ defmodule BacklogWheelWeb.GameLive.Index do
 
   @impl true
   def handle_event("toggle_played", %{"id" => id}, socket) do
-    game = Backlog.get_game!(id)
+    game = Backlog.get_game!(socket.assigns.current_community, id)
     {:ok, _game} = Backlog.toggle_game_played_on_stream(game)
 
     {:noreply, refresh_games(socket)}
@@ -204,7 +204,11 @@ defmodule BacklogWheelWeb.GameLive.Index do
   @impl true
   def handle_event("include_visible", _params, socket) do
     {updated_count, _} =
-      Backlog.update_visible_games_include_in_wheel(socket.assigns.filters, true)
+      Backlog.update_visible_games_include_in_wheel(
+        socket.assigns.current_community,
+        socket.assigns.filters,
+        true
+      )
 
     {:noreply,
      socket
@@ -215,7 +219,11 @@ defmodule BacklogWheelWeb.GameLive.Index do
   @impl true
   def handle_event("exclude_visible", _params, socket) do
     {updated_count, _} =
-      Backlog.update_visible_games_include_in_wheel(socket.assigns.filters, false)
+      Backlog.update_visible_games_include_in_wheel(
+        socket.assigns.current_community,
+        socket.assigns.filters,
+        false
+      )
 
     {:noreply,
      socket
@@ -224,11 +232,11 @@ defmodule BacklogWheelWeb.GameLive.Index do
   end
 
   defp refresh_games(socket) do
-    games = Backlog.list_games(socket.assigns.filters)
+    games = Backlog.list_games(socket.assigns.current_community, socket.assigns.filters)
 
     socket
     |> assign(:filter_form, to_form(socket.assigns.filters, as: :filters))
-    |> assign(:counts, Backlog.game_counts())
+    |> assign(:counts, Backlog.game_counts(socket.assigns.current_community))
     |> assign(:visible_count, length(games))
     |> stream(:games, games, reset: true)
   end

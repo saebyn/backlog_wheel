@@ -18,7 +18,12 @@ defmodule BacklogWheelWeb.WheelLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user} wide>
+    <Layouts.app
+      flash={@flash}
+      current_user={@current_user}
+      current_community={@current_community}
+      wide
+    >
       <section id="wheel-page" class="min-h-[calc(100vh-7rem)] overflow-hidden">
         <div class="grid min-h-[calc(100vh-7rem)] gap-6 lg:grid-cols-[1fr_22rem] lg:items-stretch">
           <div
@@ -325,7 +330,10 @@ defmodule BacklogWheelWeb.WheelLive do
       {:noreply,
        socket
        |> assign(:selected_game, nil)
-       |> assign(:pending_game, Backlog.get_game!(payload["gameId"]))
+       |> assign(
+         :pending_game,
+         Backlog.get_game!(socket.assigns.current_community, payload["gameId"])
+       )
        |> assign(:pending_spin_id, payload["spinId"])
        |> assign(:spinning?, true)}
     else
@@ -345,7 +353,7 @@ defmodule BacklogWheelWeb.WheelLive do
   end
 
   defp refresh_wheel(socket) do
-    voting_sessions = Voting.list_voting_sessions()
+    voting_sessions = Voting.list_voting_sessions(socket.assigns.current_community)
     selected_session = selected_session(voting_sessions, socket.assigns.selected_session_id)
 
     candidates =
@@ -364,15 +372,18 @@ defmodule BacklogWheelWeb.WheelLive do
     |> assign(:candidates, candidates)
     |> assign(:candidate_count, length(candidates))
     |> assign(:total_weight, total_weight(candidates))
-    |> assign(:initial_rotation, initial_rotation(selected_session))
-    |> assign(:recent_spins, Backlog.list_recent_spins())
+    |> assign(
+      :initial_rotation,
+      initial_rotation(socket.assigns.current_community, selected_session)
+    )
+    |> assign(:recent_spins, Backlog.list_recent_spins(socket.assigns.current_community, 10))
     |> subscribe_to_selected_session()
   end
 
-  defp initial_rotation(nil), do: 0
+  defp initial_rotation(_community, nil), do: 0
 
-  defp initial_rotation(selected_session) do
-    case Backlog.latest_voting_session_spin(selected_session.id) do
+  defp initial_rotation(community, selected_session) do
+    case Backlog.latest_voting_session_spin(community, selected_session.id) do
       %{snapshot: %{"landing_degrees" => landing_degrees}} when is_number(landing_degrees) ->
         normalize_degrees(360 - landing_degrees)
 

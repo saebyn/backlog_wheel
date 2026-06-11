@@ -59,7 +59,8 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     assert view |> element("#add-session-game-#{excluded_game.id}") |> render_click()
     assert has_element?(view, "#voting-session-pool", excluded_game.title)
 
-    voting_session = Voting.get_voting_session!(voting_session.id)
+    voting_session = Voting.get_voting_session!(Process.get(:test_community), voting_session.id)
+
     [pool_item] = voting_session.voting_session_games
 
     assert view |> element("#remove-pool-game-#{pool_item.id}") |> render_click()

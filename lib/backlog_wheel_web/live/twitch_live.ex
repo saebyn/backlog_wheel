@@ -6,7 +6,7 @@ defmodule BacklogWheelWeb.TwitchLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_community={@current_community}>
       <div class="mx-auto max-w-3xl space-y-6">
         <section class="rounded-[2rem] border border-base-300 bg-base-100 p-6 shadow-xl">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

@@ -7,7 +7,7 @@ defmodule BacklogWheel.Backlog do
   alias BacklogWheel.Repo
 
   alias BacklogWheel.Backlog.{Game, Spin}
-  alias BacklogWheel.Communities
+  alias BacklogWheel.Communities.Community
 
   @doc """
   Returns the list of games.
@@ -18,9 +18,9 @@ defmodule BacklogWheel.Backlog do
       [%Game{}, ...]
 
   """
-  def list_games(filters \\ %{}) do
+  def list_games(%Community{} = community, filters \\ %{}) do
     filters
-    |> game_query()
+    |> game_query(community)
     |> order_games(filters)
     |> Repo.all()
   end
@@ -28,23 +28,25 @@ defmodule BacklogWheel.Backlog do
   @doc """
   Returns summary counts for backlog curation.
   """
-  def game_counts do
+  def game_counts(%Community{} = community) do
+    query = from(game in Game, where: game.community_id == ^community.id)
+
     %{
-      total: Repo.aggregate(Game, :count, :id),
-      wheel: Game |> where([game], game.include_in_wheel) |> Repo.aggregate(:count, :id),
-      excluded: Game |> where([game], not game.include_in_wheel) |> Repo.aggregate(:count, :id),
-      played: Game |> where([game], game.played_on_stream) |> Repo.aggregate(:count, :id),
-      unplayed: Game |> where([game], not game.played_on_stream) |> Repo.aggregate(:count, :id)
+      total: Repo.aggregate(query, :count, :id),
+      wheel: query |> where([game], game.include_in_wheel) |> Repo.aggregate(:count, :id),
+      excluded: query |> where([game], not game.include_in_wheel) |> Repo.aggregate(:count, :id),
+      played: query |> where([game], game.played_on_stream) |> Repo.aggregate(:count, :id),
+      unplayed: query |> where([game], not game.played_on_stream) |> Repo.aggregate(:count, :id)
     }
   end
 
   @doc """
   Updates wheel inclusion for games matching the given filters.
   """
-  def update_visible_games_include_in_wheel(filters, include_in_wheel)
+  def update_visible_games_include_in_wheel(%Community{} = community, filters, include_in_wheel)
       when is_boolean(include_in_wheel) do
     filters
-    |> game_query()
+    |> game_query(community)
     |> Repo.update_all(set: [include_in_wheel: include_in_wheel])
   end
 
@@ -53,8 +55,9 @@ defmodule BacklogWheel.Backlog do
 
   Played-on-stream games remain eligible when included on the wheel.
   """
-  def list_wheel_candidates do
+  def list_wheel_candidates(%Community{} = community) do
     Game
+    |> where([game], game.community_id == ^community.id)
     |> where([game], game.include_in_wheel)
     |> order_by([game], asc: game.title)
     |> Repo.all()
@@ -63,8 +66,9 @@ defmodule BacklogWheel.Backlog do
   @doc """
   Returns recent recorded spins.
   """
-  def list_recent_spins(limit \\ 10) do
+  def list_recent_spins(%Community{} = community, limit \\ 10) do
     Spin
+    |> where([spin], spin.community_id == ^community.id)
     |> preload([:game, :voting_session])
     |> order_by([spin], desc: spin.spun_at)
     |> limit(^limit)
@@ -74,9 +78,11 @@ defmodule BacklogWheel.Backlog do
   @doc """
   Returns the latest recorded spin for a voting session.
   """
-  def latest_voting_session_spin(voting_session_id) when is_integer(voting_session_id) do
+  def latest_voting_session_spin(%Community{} = community, voting_session_id)
+      when is_integer(voting_session_id) do
     Spin
     |> where([spin], spin.voting_session_id == ^voting_session_id)
+    |> where([spin], spin.community_id == ^community.id)
     |> order_by([spin], desc: spin.spun_at, desc: spin.id)
     |> limit(1)
     |> Repo.one()
@@ -85,9 +91,10 @@ defmodule BacklogWheel.Backlog do
   @doc """
   Records a spin for a game.
   """
-  def create_spin(attrs) do
-    %Spin{community_id: default_community_id()}
+  def create_spin(%Community{} = community, attrs) do
+    %Spin{community_id: community.id}
     |> Spin.changeset(attrs)
+    |> validate_game_belongs_to_community(community)
     |> Repo.insert()
   end
 
@@ -95,6 +102,10 @@ defmodule BacklogWheel.Backlog do
   Gets a single spin.
   """
   def get_spin!(id), do: Repo.get!(Spin, id)
+
+  def get_spin!(%Community{} = community, id) do
+    Repo.get_by!(Spin, id: id, community_id: community.id)
+  end
 
   @doc """
   Deletes a spin history entry.
@@ -106,15 +117,15 @@ defmodule BacklogWheel.Backlog do
   @doc """
   Selects one wheel candidate uniformly at random and records the spin.
   """
-  def spin_wheel do
-    case list_wheel_candidates() do
+  def spin_wheel(%Community{} = community) do
+    case list_wheel_candidates(community) do
       [] ->
         {:error, :no_candidates}
 
       candidates ->
         game = Enum.random(candidates)
 
-        case create_spin(%{
+        case create_spin(community, %{
                game_id: game.id,
                spun_at: DateTime.utc_now(),
                source: "wheel",
@@ -129,8 +140,9 @@ defmodule BacklogWheel.Backlog do
   @doc """
   Returns the list of games from a specific platform.
   """
-  def list_games_by_platform(platform) do
+  def list_games_by_platform(%Community{} = community, platform) do
     Game
+    |> where([game], game.community_id == ^community.id)
     |> where([game], game.platform == ^platform)
     |> Repo.all()
   end
@@ -151,12 +163,16 @@ defmodule BacklogWheel.Backlog do
   """
   def get_game!(id), do: Repo.get!(Game, id)
 
+  def get_game!(%Community{} = community, id) do
+    Repo.get_by!(Game, id: id, community_id: community.id)
+  end
+
   @doc """
   Gets a game by platform and external id.
   """
-  def get_game_by_platform_external_id(platform, external_id)
+  def get_game_by_platform_external_id(%Community{} = community, platform, external_id)
       when is_binary(platform) and is_binary(external_id) do
-    Repo.get_by(Game, platform: platform, external_id: external_id)
+    Repo.get_by(Game, community_id: community.id, platform: platform, external_id: external_id)
   end
 
   @doc """
@@ -171,8 +187,8 @@ defmodule BacklogWheel.Backlog do
       {:error, %Ecto.Changeset{}}
 
   """
-  def create_game(attrs) do
-    %Game{community_id: default_community_id()}
+  def create_game(%Community{} = community, attrs) do
+    %Game{community_id: community.id}
     |> Game.changeset(attrs)
     |> Repo.insert()
   end
@@ -183,10 +199,10 @@ defmodule BacklogWheel.Backlog do
   Existing Steam games are preserved so local edits are not overwritten.
   New Steam imports are included on the wheel by default.
   """
-  def import_steam_games(games) when is_list(games) do
+  def import_steam_games(%Community{} = community, games) when is_list(games) do
     Enum.reduce(games, %{imported: 0, updated: 0, skipped: 0, errors: []}, fn game_attrs,
                                                                               summary ->
-      case import_steam_game(game_attrs) do
+      case import_steam_game(community, game_attrs) do
         {:ok, :imported} -> update_in(summary.imported, &(&1 + 1))
         {:ok, :updated} -> update_in(summary.updated, &(&1 + 1))
         {:ok, :skipped} -> update_in(summary.skipped, &(&1 + 1))
@@ -197,11 +213,11 @@ defmodule BacklogWheel.Backlog do
     |> then(&{:ok, &1})
   end
 
-  defp import_steam_game(%{appid: appid, name: name} = game_attrs)
+  defp import_steam_game(%Community{} = community, %{appid: appid, name: name} = game_attrs)
        when not is_nil(appid) and is_binary(name) do
     external_id = to_string(appid)
 
-    case get_game_by_platform_external_id("steam", external_id) do
+    case get_game_by_platform_external_id(community, "steam", external_id) do
       %Game{} = game ->
         update_attrs =
           game_attrs
@@ -219,7 +235,7 @@ defmodule BacklogWheel.Backlog do
         end
 
       nil ->
-        case create_game(%{
+        case create_game(community, %{
                title: name,
                platform: "steam",
                external_id: external_id,
@@ -233,7 +249,7 @@ defmodule BacklogWheel.Backlog do
     end
   end
 
-  defp import_steam_game(game_attrs),
+  defp import_steam_game(_community, game_attrs),
     do: {:error, %{game: game_attrs, errors: :invalid_steam_game}}
 
   @doc """
@@ -297,12 +313,9 @@ defmodule BacklogWheel.Backlog do
     Game.changeset(game, attrs)
   end
 
-  defp default_community_id do
-    Communities.get_or_create_default_community().id
-  end
-
-  defp game_query(filters) do
+  defp game_query(filters, %Community{} = community) do
     Game
+    |> where([game], game.community_id == ^community.id)
     |> filter_by_search(Map.get(filters, "q", ""))
     |> filter_by_kind(Map.get(filters, "filter", "all"))
   end
@@ -365,5 +378,21 @@ defmodule BacklogWheel.Backlog do
       "channel_point_vote_total" => 0,
       "final_weight" => 1
     }
+  end
+
+  defp validate_game_belongs_to_community(changeset, %Community{} = community) do
+    case Ecto.Changeset.get_field(changeset, :game_id) do
+      nil ->
+        changeset
+
+      game_id ->
+        if Repo.exists?(
+             from(game in Game, where: game.id == ^game_id and game.community_id == ^community.id)
+           ) do
+          changeset
+        else
+          Ecto.Changeset.add_error(changeset, :game_id, "does not belong to this community")
+        end
+    end
   end
 end

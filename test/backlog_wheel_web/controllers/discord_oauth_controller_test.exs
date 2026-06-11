@@ -4,6 +4,7 @@ defmodule BacklogWheelWeb.DiscordOAuthControllerTest do
   @moduletag :unauthenticated
 
   alias BacklogWheel.Accounts
+  alias BacklogWheel.Communities
 
   alias BacklogWheel.Discord
 
@@ -110,6 +111,9 @@ defmodule BacklogWheelWeb.DiscordOAuthControllerTest do
         role: "admin"
       })
       |> Repo.insert!()
+
+    community = test_community_fixture()
+    {:ok, _membership} = Communities.create_membership(user, community, "owner")
 
     conn = Plug.Test.init_test_session(conn, user_id: user.id)
 

@@ -35,6 +35,8 @@ defmodule BacklogWheel.Backlog.Game do
       :last_played_at
     ])
     |> validate_required([:title, :community_id])
-    |> unique_constraint([:platform, :external_id], name: :games_platform_external_id_index)
+    |> unique_constraint([:community_id, :platform, :external_id],
+      name: :games_community_platform_external_id_index
+    )
   end
 end

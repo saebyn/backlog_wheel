@@ -14,6 +14,8 @@ defmodule BacklogWheelWeb.SpinHistoryLiveTest do
   end
 
   test "lists recent spins with game details", %{conn: conn} do
+    community = Process.get(:test_community)
+
     game =
       game_fixture(%{
         title: "History Game",
@@ -21,7 +23,7 @@ defmodule BacklogWheelWeb.SpinHistoryLiveTest do
       })
 
     {:ok, _spin} =
-      Backlog.create_spin(%{
+      Backlog.create_spin(community, %{
         game_id: game.id,
         source: "wheel",
         spun_at: ~U[2026-06-06 12:00:00Z]
@@ -36,11 +38,12 @@ defmodule BacklogWheelWeb.SpinHistoryLiveTest do
   end
 
   test "shows snapshotted winner odds context", %{conn: conn} do
+    community = Process.get(:test_community)
     winner = game_fixture(%{title: "Snapshot History Winner"})
     other = game_fixture(%{title: "Snapshot History Other", external_id: "history-other"})
 
     {:ok, spin} =
-      Backlog.create_spin(%{
+      Backlog.create_spin(community, %{
         game_id: winner.id,
         source: "voting_session",
         spun_at: ~U[2026-06-06 12:00:00Z],
@@ -82,10 +85,11 @@ defmodule BacklogWheelWeb.SpinHistoryLiveTest do
   end
 
   test "deletes spin history entries", %{conn: conn} do
+    community = Process.get(:test_community)
     game = game_fixture(%{title: "Delete Me"})
 
     {:ok, spin} =
-      Backlog.create_spin(%{
+      Backlog.create_spin(community, %{
         game_id: game.id,
         source: "wheel",
         spun_at: ~U[2026-06-06 12:00:00Z]

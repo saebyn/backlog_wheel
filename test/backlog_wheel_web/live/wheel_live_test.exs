@@ -49,6 +49,7 @@ defmodule BacklogWheelWeb.WheelLiveTest do
   test "spins a voting session, records, and reveals a selected game after animation", %{
     conn: conn
   } do
+    community = Process.get(:test_community)
     voting_session = voting_session_fixture()
     game = game_fixture(%{title: "Voting Wheel Game", include_in_wheel: false})
     voting_session_game_fixture(voting_session, game)
@@ -78,7 +79,7 @@ defmodule BacklogWheelWeb.WheelLiveTest do
     assert has_element?(view, "#wheel-spinning")
     refute has_element?(view, "#spin-history", game.title)
 
-    [spin] = Backlog.list_recent_spins()
+    [spin] = Backlog.list_recent_spins(community)
     assert spin.source == "voting_session"
 
     assert render_hook(view, "spin_finished", %{"spinId" => spin.id})

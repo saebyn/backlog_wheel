@@ -13,6 +13,7 @@ defmodule BacklogWheelWeb.Router do
 
   pipeline :authenticated_browser do
     plug BacklogWheelWeb.UserAuth, :require_authenticated_user
+    plug BacklogWheelWeb.UserAuth, :require_admin_community
   end
 
   pipeline :api do

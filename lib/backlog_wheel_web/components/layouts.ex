@@ -34,13 +34,14 @@ defmodule BacklogWheelWeb.Layouts do
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
 
   attr :current_user, :map, default: nil, doc: "the signed-in streamer/admin user"
+  attr :current_community, :map, default: nil, doc: "the scoped owner/admin community"
 
   attr :wide, :boolean, default: false, doc: "use the full viewport width for the content"
 
   slot :inner_block, required: true
 
   def app(assigns) do
-    assigns = assign_new(assigns, :theme_style, fn -> default_theme_style() end)
+    assigns = assign_new(assigns, :theme_style, fn -> theme_style(assigns.current_community) end)
 
     ~H"""
     <div id="app-theme" class="theme-scope" style={@theme_style}>
@@ -111,10 +112,11 @@ defmodule BacklogWheelWeb.Layouts do
     """
   end
 
-  defp default_theme_style do
-    Communities.get_or_create_default_community()
-    |> Communities.theme_style()
+  defp theme_style(nil) do
+    Communities.default_theme_style()
   end
+
+  defp theme_style(community), do: Communities.theme_style(community)
 
   @doc """
   Shows the flash group with standard titles and content.

@@ -10,4 +10,4 @@
 # We recommend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
 
-BacklogWheel.Communities.get_or_create_default_community()
+# No seed data is required.

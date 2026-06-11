@@ -61,6 +61,26 @@ defmodule BacklogWheelWeb.ConnCase do
       )
       |> BacklogWheel.Repo.insert!()
 
+    community = Map.get(attrs, :community) || test_community_fixture()
+    Process.put(:test_community, community)
+
+    {:ok, _membership} = BacklogWheel.Communities.create_membership(user, community, "owner")
+
     Plug.Test.init_test_session(conn, user_id: user.id)
+  end
+
+  def test_community_fixture do
+    suffix = System.unique_integer([:positive])
+
+    community =
+      %BacklogWheel.Communities.Community{}
+      |> BacklogWheel.Communities.Community.changeset(%{
+        name: "Test Community #{suffix}",
+        slug: "test-community-#{suffix}"
+      })
+      |> BacklogWheel.Repo.insert!()
+
+    Process.put(:test_community, community)
+    community
   end
 end

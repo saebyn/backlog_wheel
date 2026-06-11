@@ -3,37 +3,47 @@ defmodule BacklogWheel.Communities do
   The Communities context.
   """
 
-  alias BacklogWheel.Communities.Community
+  import Ecto.Query, warn: false
+
+  alias BacklogWheel.Accounts.User
+  alias BacklogWheel.Communities.{Community, CommunityMembership}
   alias BacklogWheel.Communities.Theme
   alias BacklogWheel.Repo
 
-  @default_slug "default"
+  def get_community!(id), do: Repo.get!(Community, id)
 
   @doc """
-  Gets the default community.
+  Returns CSS custom properties for the built-in public page theme.
   """
-  def get_default_community! do
-    Repo.get_by!(Community, slug: @default_slug)
+  def default_theme_style do
+    %{}
+    |> Theme.resolve()
+    |> Theme.style()
   end
 
   @doc """
-  Gets or creates the default community for this single-community app.
+  Creates a membership connecting a user to a community.
   """
-  def get_or_create_default_community do
-    case Repo.get_by(Community, slug: @default_slug) do
-      %Community{} = community ->
-        community
-
-      nil ->
-        attrs = default_community_attrs()
-
-        %Community{}
-        |> Community.changeset(attrs)
-        |> Repo.insert!(on_conflict: :nothing, conflict_target: :slug)
-
-        get_default_community!()
-    end
+  def create_membership(%User{} = user, %Community{} = community, role) when is_binary(role) do
+    %CommunityMembership{}
+    |> CommunityMembership.changeset(%{user_id: user.id, community_id: community.id, role: role})
+    |> Repo.insert()
   end
+
+  @doc """
+  Returns the first owner/admin community for authenticated app access.
+  """
+  def current_admin_community_for_user(%User{} = user) do
+    Community
+    |> join(:inner, [community], membership in assoc(community, :memberships))
+    |> where([_community, membership], membership.user_id == ^user.id)
+    |> where([_community, membership], membership.role in ^CommunityMembership.admin_roles())
+    |> order_by([community, membership], asc: membership.id, asc: community.id)
+    |> limit(1)
+    |> Repo.one()
+  end
+
+  def current_admin_community_for_user(nil), do: nil
 
   @doc """
   Returns a changeset for editing community theme settings.
@@ -74,9 +84,5 @@ defmodule BacklogWheel.Communities do
     community
     |> resolved_theme()
     |> Theme.style()
-  end
-
-  defp default_community_attrs do
-    %{name: "Default Community", slug: @default_slug}
   end
 end

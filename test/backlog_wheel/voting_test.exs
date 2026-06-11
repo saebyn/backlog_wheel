@@ -1,7 +1,6 @@
 defmodule BacklogWheel.VotingTest do
   use BacklogWheel.DataCase
 
-  alias BacklogWheel.Communities
   alias BacklogWheel.Backlog
   alias BacklogWheel.Voting
 
@@ -19,29 +18,56 @@ defmodule BacklogWheel.VotingTest do
   import BacklogWheel.VotingFixtures
 
   describe "voting_sessions" do
-    test "create_voting_session/1 creates a session for the default community" do
-      default_community = Communities.get_default_community!()
+    test "create_voting_session/1 creates a session for a community" do
+      community = community_fixture()
 
-      assert {:ok, %VotingSession{} = voting_session} = Voting.create_voting_session()
-      assert voting_session.community_id == default_community.id
+      assert {:ok, %VotingSession{} = voting_session} = Voting.create_voting_session(community)
+      assert voting_session.community_id == community.id
       assert voting_session.status == "draft"
     end
 
-    test "create_voting_session/1 represents session status" do
+    test "scoped sessions only return records for the given community" do
+      first_community = community_fixture(%{slug: "first-voting"})
+      second_community = community_fixture(%{slug: "second-voting"})
+      first_session = voting_session_fixture(%{community: first_community})
+      second_session = voting_session_fixture(%{community: second_community})
+
+      assert Enum.map(Voting.list_voting_sessions(first_community), & &1.id) == [first_session.id]
+
+      assert Enum.map(Voting.list_voting_sessions(second_community), & &1.id) == [
+               second_session.id
+             ]
+
+      assert_raise Ecto.NoResultsError, fn ->
+        Voting.get_voting_session!(first_community, second_session.id)
+      end
+    end
+
+    test "create_voting_session/2 attaches the current community" do
+      community = community_fixture(%{slug: "created-voting"})
+
+      assert {:ok, voting_session} = Voting.create_voting_session(community, %{})
+      assert voting_session.community_id == community.id
+    end
+
+    test "create_voting_session/2 represents session status" do
+      community = community_fixture()
+
       assert {:ok, %VotingSession{} = voting_session} =
-               Voting.create_voting_session(%{status: "open"})
+               Voting.create_voting_session(community, %{status: "open"})
 
       assert voting_session.status == "open"
 
-      assert {:error, changeset} = Voting.create_voting_session(%{status: "invalid"})
+      assert {:error, changeset} = Voting.create_voting_session(community, %{status: "invalid"})
       assert %{status: ["is invalid"]} = errors_on(changeset)
     end
   end
 
   describe "voting_session_games" do
     test "add_game_to_session/3 adds a game to the session pool with a base weight" do
-      voting_session = voting_session_fixture()
-      game = game_fixture(%{title: "Vote Candidate"})
+      community = community_fixture()
+      voting_session = voting_session_fixture(%{community: community})
+      game = game_fixture(%{community: community, title: "Vote Candidate"})
 
       assert {:ok, %VotingSessionGame{} = voting_session_game} =
                Voting.add_game_to_session(voting_session, game, %{base_weight: 3})
@@ -51,9 +77,20 @@ defmodule BacklogWheel.VotingTest do
       assert voting_session_game.base_weight == 3
     end
 
+    test "add_game_to_session/3 rejects games from another community" do
+      first_community = community_fixture(%{slug: "first-pool"})
+      second_community = community_fixture(%{slug: "second-pool"})
+      voting_session = voting_session_fixture(%{community: first_community})
+      game = game_fixture(%{community: second_community})
+
+      assert Voting.add_game_to_session(voting_session, game) ==
+               {:error, :game_not_in_session_community}
+    end
+
     test "add_game_to_session/3 defaults base weight" do
-      voting_session = voting_session_fixture()
-      game = game_fixture(%{title: "Default Weight Candidate"})
+      community = community_fixture()
+      voting_session = voting_session_fixture(%{community: community})
+      game = game_fixture(%{community: community, title: "Default Weight Candidate"})
 
       assert {:ok, %VotingSessionGame{} = voting_session_game} =
                Voting.add_game_to_session(voting_session, game)
@@ -61,12 +98,13 @@ defmodule BacklogWheel.VotingTest do
       assert voting_session_game.base_weight == 1
     end
 
-    test "get_voting_session!/1 preloads pool games" do
-      voting_session = voting_session_fixture()
-      game = game_fixture(%{title: "Preloaded Candidate"})
+    test "get_voting_session!/2 preloads pool games" do
+      community = community_fixture()
+      voting_session = voting_session_fixture(%{community: community})
+      game = game_fixture(%{community: community, title: "Preloaded Candidate"})
       voting_session_game_fixture(voting_session, game, %{base_weight: 2})
 
-      voting_session = Voting.get_voting_session!(voting_session.id)
+      voting_session = Voting.get_voting_session!(community, voting_session.id)
 
       assert [voting_session_game] = voting_session.voting_session_games
       assert voting_session_game.base_weight == 2
@@ -74,8 +112,9 @@ defmodule BacklogWheel.VotingTest do
     end
 
     test "add_game_to_session/3 requires positive base weight" do
-      voting_session = voting_session_fixture()
-      game = game_fixture(%{title: "Invalid Weight Candidate"})
+      community = community_fixture()
+      voting_session = voting_session_fixture(%{community: community})
+      game = game_fixture(%{community: community, title: "Invalid Weight Candidate"})
 
       assert {:error, changeset} =
                Voting.add_game_to_session(voting_session, game, %{base_weight: 0})
@@ -84,8 +123,9 @@ defmodule BacklogWheel.VotingTest do
     end
 
     test "add_game_to_session/3 prevents duplicate games in one session" do
-      voting_session = voting_session_fixture()
-      game = game_fixture(%{title: "Duplicate Candidate"})
+      community = community_fixture()
+      voting_session = voting_session_fixture(%{community: community})
+      game = game_fixture(%{community: community, title: "Duplicate Candidate"})
       voting_session_game_fixture(voting_session, game)
 
       assert {:error, changeset} = Voting.add_game_to_session(voting_session, game)
@@ -93,16 +133,28 @@ defmodule BacklogWheel.VotingTest do
     end
 
     test "populate_session_from_wheel_candidates/1 adds wheel-eligible games" do
-      voting_session = voting_session_fixture()
+      community = community_fixture()
+      voting_session = voting_session_fixture(%{community: community})
 
       first_game =
-        game_fixture(%{title: "First Candidate", include_in_wheel: true, external_id: "first"})
+        game_fixture(%{
+          community: community,
+          title: "First Candidate",
+          include_in_wheel: true,
+          external_id: "first"
+        })
 
       second_game =
-        game_fixture(%{title: "Second Candidate", include_in_wheel: true, external_id: "second"})
+        game_fixture(%{
+          community: community,
+          title: "Second Candidate",
+          include_in_wheel: true,
+          external_id: "second"
+        })
 
       excluded_game =
         game_fixture(%{
+          community: community,
           title: "Excluded Candidate",
           include_in_wheel: false,
           external_id: "excluded"
@@ -114,7 +166,7 @@ defmodule BacklogWheel.VotingTest do
       assert Enum.map(voting_session_games, & &1.game_id) == [first_game.id, second_game.id]
       assert Enum.map(voting_session_games, & &1.base_weight) == [1, 1]
 
-      voting_session = Voting.get_voting_session!(voting_session.id)
+      voting_session = Voting.get_voting_session!(community, voting_session.id)
 
       assert Enum.map(voting_session.voting_session_games, & &1.game_id) == [
                first_game.id,
@@ -125,17 +177,24 @@ defmodule BacklogWheel.VotingTest do
     end
 
     test "populate_session_from_wheel_candidates/1 avoids duplicate pool games" do
-      voting_session = voting_session_fixture()
+      community = community_fixture()
+      voting_session = voting_session_fixture(%{community: community})
 
       existing_game =
         game_fixture(%{
+          community: community,
           title: "Existing Candidate",
           include_in_wheel: true,
           external_id: "existing"
         })
 
       new_game =
-        game_fixture(%{title: "New Candidate", include_in_wheel: true, external_id: "new"})
+        game_fixture(%{
+          community: community,
+          title: "New Candidate",
+          include_in_wheel: true,
+          external_id: "new"
+        })
 
       voting_session_game_fixture(voting_session, existing_game, %{base_weight: 4})
 
@@ -144,7 +203,7 @@ defmodule BacklogWheel.VotingTest do
 
       assert Enum.map(voting_session_games, & &1.game_id) == [new_game.id]
 
-      voting_session = Voting.get_voting_session!(voting_session.id)
+      voting_session = Voting.get_voting_session!(community, voting_session.id)
 
       assert Enum.map(voting_session.voting_session_games, & &1.game_id) == [
                existing_game.id,
@@ -397,11 +456,13 @@ defmodule BacklogWheel.VotingTest do
   end
 
   describe "viewers" do
-    test "create_viewer/1 creates a viewer for the default community" do
-      default_community = Communities.get_default_community!()
+    test "create_viewer/2 creates a viewer for a community" do
+      community = community_fixture()
 
-      assert {:ok, %Viewer{} = viewer} = Voting.create_viewer(%{display_name: "Viewer One"})
-      assert viewer.community_id == default_community.id
+      assert {:ok, %Viewer{} = viewer} =
+               Voting.create_viewer(community, %{display_name: "Viewer One"})
+
+      assert viewer.community_id == community.id
       assert viewer.display_name == "Viewer One"
     end
 

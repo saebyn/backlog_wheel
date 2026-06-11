@@ -8,6 +8,9 @@ defmodule BacklogWheel.BacklogFixtures do
   Generate a game.
   """
   def game_fixture(attrs \\ %{}) do
+    {community, attrs} = Map.pop(attrs, :community)
+    community = community || Process.get(:test_community) || community_fixture()
+
     {:ok, game} =
       attrs
       |> Enum.into(%{
@@ -19,8 +22,24 @@ defmodule BacklogWheel.BacklogFixtures do
         played_on_stream: true,
         title: "some title"
       })
-      |> BacklogWheel.Backlog.create_game()
+      |> then(&BacklogWheel.Backlog.create_game(community, &1))
 
     game
+  end
+
+  def community_fixture(attrs \\ %{}) do
+    attrs =
+      Enum.into(attrs, %{
+        name: "Community #{System.unique_integer([:positive])}",
+        slug: "community-#{System.unique_integer([:positive])}"
+      })
+
+    community =
+      %BacklogWheel.Communities.Community{}
+      |> BacklogWheel.Communities.Community.changeset(attrs)
+      |> BacklogWheel.Repo.insert!()
+
+    Process.put(:test_community, community)
+    community
   end
 end

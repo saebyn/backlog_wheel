@@ -4,6 +4,9 @@ defmodule BacklogWheelWeb.GameLiveTest do
   import Phoenix.LiveViewTest
   import BacklogWheel.BacklogFixtures
 
+  alias BacklogWheel.Backlog.Game
+  alias BacklogWheel.Repo
+
   @create_attrs %{
     title: "some title",
     platform: "some platform",
@@ -74,6 +77,48 @@ defmodule BacklogWheelWeb.GameLiveTest do
       assert html =~ "Game created successfully"
       assert html =~ "some title"
       assert html =~ "https://example.com/create-image.jpg"
+    end
+
+    test "created games are assigned to the logged-in community", %{conn: conn} do
+      community = community_fixture(%{slug: "live-created-games"})
+      conn = conn |> recycle() |> log_in_test_user(%{community: community})
+
+      {:ok, form_live, _html} = live(conn, ~p"/games/new")
+
+      assert {:ok, _index_live, _html} =
+               form_live
+               |> form("#game-form", game: @create_attrs)
+               |> render_submit()
+               |> follow_redirect(conn, ~p"/games")
+
+      assert %Game{community_id: community_id} =
+               Repo.get_by(Game, title: "some title", community_id: community.id)
+
+      assert community_id == community.id
+    end
+
+    test "lists only games for the logged-in community", %{conn: conn} do
+      first_community = community_fixture(%{slug: "first-live-list"})
+      second_community = community_fixture(%{slug: "second-live-list"})
+      first_game = game_fixture(%{community: first_community, title: "First Live Game"})
+      second_game = game_fixture(%{community: second_community, title: "Second Live Game"})
+      conn = conn |> recycle() |> log_in_test_user(%{community: first_community})
+
+      {:ok, index_live, _html} = live(conn, ~p"/games")
+
+      assert has_element?(index_live, "#games-#{first_game.id}")
+      refute has_element?(index_live, "#games-#{second_game.id}")
+    end
+
+    test "rejects direct access to another community game", %{conn: conn} do
+      first_community = community_fixture(%{slug: "first-live-direct"})
+      second_community = community_fixture(%{slug: "second-live-direct"})
+      game = game_fixture(%{community: second_community})
+      conn = conn |> recycle() |> log_in_test_user(%{community: first_community})
+
+      assert_raise Ecto.NoResultsError, fn ->
+        live(conn, ~p"/games/#{game}")
+      end
     end
 
     test "updates game in listing", %{conn: conn, game: game} do

@@ -8,6 +8,7 @@ defmodule BacklogWheel.Voting do
   alias BacklogWheel.Backlog.Game
   alias BacklogWheel.Backlog
   alias BacklogWheel.Communities
+  alias BacklogWheel.Communities.Community
   alias BacklogWheel.Repo
   alias BacklogWheel.Twitch
 
@@ -54,13 +55,11 @@ defmodule BacklogWheel.Voting do
   end
 
   @doc """
-  Returns voting sessions for the default community.
+  Returns voting sessions for a community.
   """
-  def list_voting_sessions do
-    default_community_id = default_community_id()
-
+  def list_voting_sessions(%Community{} = community) do
     VotingSession
-    |> where([session], session.community_id == ^default_community_id)
+    |> where([session], session.community_id == ^community.id)
     |> order_by([session], desc: session.inserted_at, desc: session.id)
     |> Repo.all()
     |> preload_pool_games_with_votes()
@@ -69,18 +68,18 @@ defmodule BacklogWheel.Voting do
   @doc """
   Gets a voting session with its game pool.
   """
-  def get_voting_session!(id) do
+  def get_voting_session!(%Community{} = community, id) do
     VotingSession
-    |> Repo.get!(id)
+    |> Repo.get_by!(id: id, community_id: community.id)
     |> Repo.preload(:community)
     |> preload_pool_games_with_votes()
   end
 
   @doc """
-  Creates a voting session for the default community.
+  Creates a voting session for a community.
   """
-  def create_voting_session(attrs \\ %{}) do
-    %VotingSession{community_id: default_community_id()}
+  def create_voting_session(%Community{} = community, attrs \\ %{}) do
+    %VotingSession{community_id: community.id}
     |> VotingSession.changeset(attrs)
     |> Repo.insert()
   end
@@ -107,10 +106,10 @@ defmodule BacklogWheel.Voting do
           {:ok, session}
 
         {:error, :no_twitch_rewards} ->
-          {:ok, get_voting_session!(session.id)}
+          {:ok, reload_voting_session!(session)}
 
         {:error, reason} ->
-          {:error, {:twitch_reward_cleanup_failed, get_voting_session!(session.id), reason}}
+          {:error, {:twitch_reward_cleanup_failed, reload_voting_session!(session), reason}}
       end
     end
   end
@@ -125,7 +124,7 @@ defmodule BacklogWheel.Voting do
          {:ok, credential} <- fetch_twitch_credential(config, client),
          {:ok, _pool_items} <- create_twitch_rewards(voting_session, config, credential, client),
          {:ok, session} <- update_voting_session_status(voting_session, "open") do
-      {:ok, get_voting_session!(session.id)}
+      {:ok, reload_voting_session!(session)}
     end
   end
 
@@ -134,7 +133,7 @@ defmodule BacklogWheel.Voting do
   """
   def remove_twitch_rewards(%VotingSession{} = voting_session, opts \\ []) do
     client = Keyword.get(opts, :client, Twitch.client())
-    voting_session = get_voting_session!(voting_session.id)
+    voting_session = reload_voting_session!(voting_session)
     pool_items = twitch_reward_pool_items(voting_session)
 
     case pool_items do
@@ -145,7 +144,7 @@ defmodule BacklogWheel.Voting do
         with {:ok, config} <- Twitch.config(),
              {:ok, credential} <- fetch_twitch_credential(config, client),
              {:ok, _pool_items} <- delete_twitch_rewards(pool_items, config, credential, client) do
-          {:ok, get_voting_session!(voting_session.id)}
+          {:ok, reload_voting_session!(voting_session)}
         else
           {:error, {:twitch_reward_deletion_failed, _count} = reason} ->
             {:error, reason}
@@ -158,10 +157,10 @@ defmodule BacklogWheel.Voting do
   end
 
   @doc """
-  Creates a viewer for the default community.
+  Creates a viewer for a community.
   """
-  def create_viewer(attrs) do
-    %Viewer{community_id: default_community_id()}
+  def create_viewer(%Community{} = community, attrs) do
+    %Viewer{community_id: community.id}
     |> Viewer.changeset(attrs)
     |> Repo.insert()
   end
@@ -179,10 +178,14 @@ defmodule BacklogWheel.Voting do
   Adds a game to a voting session pool.
   """
   def add_game_to_session(%VotingSession{} = voting_session, %Game{} = game, attrs \\ %{}) do
-    %VotingSessionGame{voting_session_id: voting_session.id, game_id: game.id}
-    |> VotingSessionGame.changeset(attrs)
-    |> Repo.insert()
-    |> broadcast_voting_session_change()
+    if game.community_id == voting_session.community_id do
+      %VotingSessionGame{voting_session_id: voting_session.id, game_id: game.id}
+      |> VotingSessionGame.changeset(attrs)
+      |> Repo.insert()
+      |> broadcast_voting_session_change()
+    else
+      {:error, :game_not_in_session_community}
+    end
   end
 
   @doc """
@@ -305,7 +308,9 @@ defmodule BacklogWheel.Voting do
             spun_at: spun_at
           })
 
-        case Backlog.create_spin(%{
+        community = Communities.get_community!(voting_session.community_id)
+
+        case Backlog.create_spin(community, %{
                game_id: entry.game.id,
                voting_session_id: voting_session.id,
                spun_at: spun_at,
@@ -451,7 +456,7 @@ defmodule BacklogWheel.Voting do
   end
 
   defp create_twitch_rewards(%VotingSession{} = voting_session, config, credential, client) do
-    voting_session = get_voting_session!(voting_session.id)
+    voting_session = reload_voting_session!(voting_session)
 
     case voting_session.voting_session_games do
       [] ->
@@ -634,7 +639,11 @@ defmodule BacklogWheel.Voting do
     end
   end
 
-  defp reload_voting_session!(%VotingSession{id: id}), do: get_voting_session!(id)
+  defp reload_voting_session!(%VotingSession{id: id, community_id: community_id}) do
+    community_id
+    |> Communities.get_community!()
+    |> get_voting_session!(id)
+  end
 
   defp spin_snapshot(%VotingSession{} = voting_session, entries, winning_entry, spin_data) do
     total_weight = Enum.reduce(entries, 0, &(&1.weight + &2))
@@ -725,10 +734,6 @@ defmodule BacklogWheel.Voting do
       voting_session_game
     end)
     |> then(&{:ok, &1})
-  end
-
-  defp default_community_id do
-    Communities.get_or_create_default_community().id
   end
 
   defp get_existing_external_vote(attrs) do

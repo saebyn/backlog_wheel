@@ -7,7 +7,7 @@ defmodule BacklogWheelWeb.GameLive.Form do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_community={@current_community}>
       <.header>
         {@page_title}
         <:subtitle>Keep track of games that may appear on the future backlog wheel.</:subtitle>
@@ -54,7 +54,7 @@ defmodule BacklogWheelWeb.GameLive.Form do
   defp return_to(_), do: "index"
 
   defp apply_action(socket, :edit, %{"id" => id}) do
-    game = Backlog.get_game!(id)
+    game = Backlog.get_game!(socket.assigns.current_community, id)
 
     socket
     |> assign(:page_title, "Edit Game")
@@ -63,7 +63,7 @@ defmodule BacklogWheelWeb.GameLive.Form do
   end
 
   defp apply_action(socket, :new, _params) do
-    game = %Game{}
+    game = %Game{community_id: socket.assigns.current_community.id}
 
     socket
     |> assign(:page_title, "New Game")
@@ -95,7 +95,7 @@ defmodule BacklogWheelWeb.GameLive.Form do
   end
 
   defp save_game(socket, :new, game_params) do
-    case Backlog.create_game(game_params) do
+    case Backlog.create_game(socket.assigns.current_community, game_params) do
       {:ok, game} ->
         {:noreply,
          socket

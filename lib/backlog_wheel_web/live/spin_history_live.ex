@@ -6,7 +6,7 @@ defmodule BacklogWheelWeb.SpinHistoryLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_user={@current_user}>
+    <Layouts.app flash={@flash} current_user={@current_user} current_community={@current_community}>
       <.header>
         Spin History
         <:subtitle>Recent wheel results, newest first.</:subtitle>
@@ -95,14 +95,14 @@ defmodule BacklogWheelWeb.SpinHistoryLive do
 
   @impl true
   def handle_event("delete_spin", %{"id" => id}, socket) do
-    spin = Backlog.get_spin!(id)
+    spin = Backlog.get_spin!(socket.assigns.current_community, id)
     {:ok, _spin} = Backlog.delete_spin(spin)
 
     {:noreply, refresh_spins(socket)}
   end
 
   defp refresh_spins(socket) do
-    assign(socket, :spins, Backlog.list_recent_spins(100))
+    assign(socket, :spins, Backlog.list_recent_spins(socket.assigns.current_community, 100))
   end
 
   defp winner_snapshot_entry(%{

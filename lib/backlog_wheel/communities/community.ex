@@ -3,7 +3,7 @@ defmodule BacklogWheel.Communities.Community do
   import Ecto.Changeset
 
   alias BacklogWheel.Backlog.{Game, Spin}
-  alias BacklogWheel.Communities.Theme
+  alias BacklogWheel.Communities.{CommunityMembership, Theme}
   alias BacklogWheel.Voting.{Viewer, ViewerIdentity, VotingSession}
 
   schema "communities" do
@@ -17,6 +17,7 @@ defmodule BacklogWheel.Communities.Community do
     field :dark_background_color, :string
 
     has_many :games, Game
+    has_many :memberships, CommunityMembership
     has_many :spins, Spin
     has_many :viewers, Viewer
     has_many :viewer_identities, ViewerIdentity

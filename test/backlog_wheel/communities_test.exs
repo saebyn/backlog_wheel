@@ -4,38 +4,34 @@ defmodule BacklogWheel.CommunitiesTest do
   alias BacklogWheel.Communities
   alias BacklogWheel.Communities.Community
 
-  describe "default community" do
-    test "exists in data case setup" do
-      assert %Community{name: "Default Community", slug: "default"} =
-               Communities.get_default_community!()
-    end
+  import BacklogWheel.BacklogFixtures
 
-    test "get_or_create_default_community/0 returns the default community" do
-      assert %Community{name: "Default Community", slug: "default"} =
-               Communities.get_or_create_default_community()
-    end
-
-    test "get_or_create_default_community/0 does not duplicate the default community" do
-      first = Communities.get_or_create_default_community()
-      second = Communities.get_or_create_default_community()
-
-      assert first.id == second.id
-      assert Repo.aggregate(Community, :count, :id) == 1
-    end
-
+  describe "communities" do
     test "slug is unique" do
+      community_fixture(%{name: "Original", slug: "duplicate"})
+
       assert {:error, changeset} =
                %Community{}
-               |> Community.changeset(%{name: "Duplicate", slug: "default"})
+               |> Community.changeset(%{name: "Duplicate", slug: "duplicate"})
                |> Repo.insert()
 
       assert %{slug: ["has already been taken"]} = errors_on(changeset)
     end
   end
 
+  describe "default theme" do
+    test "returns CSS custom properties without a persisted community" do
+      style = Communities.default_theme_style()
+
+      assert style =~ "--theme-light-primary:"
+      assert style =~ "--theme-dark-background:"
+      refute Repo.get_by(Community, slug: "default")
+    end
+  end
+
   describe "community theme" do
     test "updates theme settings" do
-      community = Communities.get_default_community!()
+      community = community_fixture()
 
       assert {:ok, %Community{} = community} =
                Communities.update_community_theme(community, %{
@@ -50,7 +46,7 @@ defmodule BacklogWheel.CommunitiesTest do
     end
 
     test "normalizes blank theme fields to nil" do
-      community = Communities.get_default_community!()
+      community = community_fixture()
 
       assert {:ok, community} =
                Communities.update_community_theme(community, %{
@@ -63,7 +59,7 @@ defmodule BacklogWheel.CommunitiesTest do
     end
 
     test "rejects invalid colors" do
-      community = Communities.get_default_community!()
+      community = community_fixture()
 
       changeset =
         Communities.change_community_theme(community, %{"light_primary_color" => "orange"})
@@ -72,7 +68,7 @@ defmodule BacklogWheel.CommunitiesTest do
     end
 
     test "resolves missing dark colors from light colors" do
-      community = Communities.get_default_community!()
+      community = community_fixture()
 
       assert {:ok, community} =
                Communities.update_community_theme(community, %{
@@ -90,7 +86,7 @@ defmodule BacklogWheel.CommunitiesTest do
     end
 
     test "explicit dark overrides derived colors" do
-      community = Communities.get_default_community!()
+      community = community_fixture()
 
       assert {:ok, community} =
                Communities.update_community_theme(community, %{
@@ -102,7 +98,7 @@ defmodule BacklogWheel.CommunitiesTest do
     end
 
     test "returns CSS custom properties" do
-      community = Communities.get_default_community!()
+      community = community_fixture()
 
       assert {:ok, community} =
                Communities.update_community_theme(community, %{
@@ -116,7 +112,7 @@ defmodule BacklogWheel.CommunitiesTest do
     end
 
     test "resets theme settings" do
-      community = Communities.get_default_community!()
+      community = community_fixture()
 
       assert {:ok, community} =
                Communities.update_community_theme(community, %{
@@ -129,5 +125,39 @@ defmodule BacklogWheel.CommunitiesTest do
       assert community.light_primary_color == nil
       assert community.dark_background_color == nil
     end
+  end
+
+  describe "memberships" do
+    test "resolves the first owner/admin community for a user" do
+      user = user_fixture()
+      viewer_community = community_fixture(%{slug: "viewer-only"})
+      admin_community = community_fixture(%{slug: "admin-community"})
+
+      assert {:ok, _membership} = Communities.create_membership(user, viewer_community, "viewer")
+      assert {:ok, _membership} = Communities.create_membership(user, admin_community, "admin")
+
+      assert Communities.current_admin_community_for_user(user).id == admin_community.id
+    end
+
+    test "ignores users with only viewer membership" do
+      user = user_fixture()
+      community = community_fixture(%{slug: "viewer-community"})
+
+      assert {:ok, _membership} = Communities.create_membership(user, community, "viewer")
+      assert Communities.current_admin_community_for_user(user) == nil
+    end
+  end
+
+  defp user_fixture(attrs \\ %{}) do
+    attrs =
+      Enum.into(attrs, %{
+        discord_id: "discord-#{System.unique_integer([:positive])}",
+        username: "Test User",
+        role: "admin"
+      })
+
+    %BacklogWheel.Accounts.User{}
+    |> BacklogWheel.Accounts.User.changeset(attrs)
+    |> Repo.insert!()
   end
 end
