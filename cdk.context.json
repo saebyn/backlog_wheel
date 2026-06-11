@@ -40,5 +40,11 @@
   "hosted-zone:account=159222827421:domainName=streamosaic.app:region=us-west-2": {
     "Id": "/hostedzone/Z026769531Q5JHNBET0M8",
     "Name": "streamosaic.app."
-  }
+  },
+  "acknowledged-issue-numbers": [
+    34892,
+    34892,
+    32775,
+    32775
+  ]
 }
