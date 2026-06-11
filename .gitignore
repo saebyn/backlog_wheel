@@ -41,3 +41,6 @@ npm-debug.log
 
 # Environment variable files, which may contain sensitive information.
 .envrc
+
+# AWS CDK output
+/cdk.out/

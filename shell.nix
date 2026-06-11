@@ -11,6 +11,13 @@ pkgs.mkShellNoCC {
     pre-commit
     tailwindcss_4
     watchman
+
+    # Deployment / AWS CDK
+    awscli2
+    python3
+    uv
+    jq
+    nodePackages.aws-cdk
   ];
 
   shellHook = ''
