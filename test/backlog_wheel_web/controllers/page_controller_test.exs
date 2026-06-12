@@ -1,6 +1,8 @@
 defmodule BacklogWheelWeb.PageControllerTest do
   use BacklogWheelWeb.ConnCase
 
+  @moduletag :unauthenticated
+
   test "GET /", %{conn: conn} do
     conn = get(conn, ~p"/")
     response = html_response(conn, 200)

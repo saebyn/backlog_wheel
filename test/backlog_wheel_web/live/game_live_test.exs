@@ -110,6 +110,24 @@ defmodule BacklogWheelWeb.GameLiveTest do
       refute has_element?(index_live, "#games-#{second_game.id}")
     end
 
+    test "isolates games between two logged-in users and communities", %{conn: conn} do
+      first_community = community_fixture(%{slug: "first-user-community"})
+      second_community = community_fixture(%{slug: "second-user-community"})
+      first_game = game_fixture(%{community: first_community, title: "First User Game"})
+      second_game = game_fixture(%{community: second_community, title: "Second User Game"})
+
+      first_conn = conn |> recycle() |> log_in_test_user(%{community: first_community})
+      second_conn = build_conn() |> log_in_test_user(%{community: second_community})
+
+      {:ok, first_view, _html} = live(first_conn, ~p"/games")
+      assert has_element?(first_view, "#games-#{first_game.id}")
+      refute has_element?(first_view, "#games-#{second_game.id}")
+
+      {:ok, second_view, _html} = live(second_conn, ~p"/games")
+      assert has_element?(second_view, "#games-#{second_game.id}")
+      refute has_element?(second_view, "#games-#{first_game.id}")
+    end
+
     test "rejects direct access to another community game", %{conn: conn} do
       first_community = community_fixture(%{slug: "first-live-direct"})
       second_community = community_fixture(%{slug: "second-live-direct"})
