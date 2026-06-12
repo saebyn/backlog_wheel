@@ -24,8 +24,6 @@ config :backlog_wheel, BacklogWheelWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 config :backlog_wheel,
-  steam_api_key: System.get_env("STEAM_API_KEY"),
-  steam_id64: System.get_env("STEAM_ID64"),
   discord: [
     client_id: System.get_env("DISCORD_CLIENT_ID"),
     client_secret: System.get_env("DISCORD_CLIENT_SECRET")

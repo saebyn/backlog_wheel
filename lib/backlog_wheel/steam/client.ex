@@ -6,15 +6,17 @@ defmodule BacklogWheel.Steam.Client do
   Valve docs do not consistently list it. Treat it as optional metadata.
   """
 
+  alias BacklogWheel.Communities.Community
+
   @owned_games_url "https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/"
 
-  def configured? do
-    steam_api_key() not in [nil, ""] and steam_id64() not in [nil, ""]
+  def configured?(%Community{} = community) do
+    community.steam_api_key not in [nil, ""] and community.steam_id64 not in [nil, ""]
   end
 
-  def fetch_owned_games do
-    with {:ok, api_key} <- fetch_config(:api_key, steam_api_key()),
-         {:ok, steam_id} <- fetch_config(:steam_id64, steam_id64()),
+  def fetch_owned_games(%Community{} = community) do
+    with {:ok, api_key} <- fetch_config(:api_key, community.steam_api_key),
+         {:ok, steam_id} <- fetch_config(:steam_id64, community.steam_id64),
          {:ok, %{status: 200, body: body}} <- request_owned_games(api_key, steam_id) do
       {:ok, normalize_owned_games(body)}
     else
@@ -79,12 +81,4 @@ defmodule BacklogWheel.Steam.Client do
 
   defp fetch_config(_name, value) when value not in [nil, ""], do: {:ok, value}
   defp fetch_config(name, _value), do: {:error, {:missing_config, name}}
-
-  defp steam_api_key do
-    Application.get_env(:backlog_wheel, :steam_api_key) || System.get_env("STEAM_API_KEY")
-  end
-
-  defp steam_id64 do
-    Application.get_env(:backlog_wheel, :steam_id64) || System.get_env("STEAM_ID64")
-  end
 end

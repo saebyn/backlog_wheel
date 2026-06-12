@@ -2,6 +2,7 @@ defmodule BacklogWheelWeb.GameLive.SteamImport do
   use BacklogWheelWeb, :live_view
 
   alias BacklogWheel.Backlog
+  alias BacklogWheel.Communities
   alias BacklogWheel.Steam.Client
 
   @impl true
@@ -24,9 +25,8 @@ defmodule BacklogWheelWeb.GameLive.SteamImport do
         <div class="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
           <h2 class="text-lg font-semibold">Configuration</h2>
           <p class="mt-2 text-sm text-base-content/70">
-            Set <code>STEAM_API_KEY</code>
-            and <code>STEAM_ID64</code>
-            in your local environment, then reload the dev shell.
+            Save Steam credentials for {@community.name}. They are stored with this community and
+            reused across app instances.
           </p>
 
           <div class="mt-4">
@@ -41,6 +41,36 @@ defmodule BacklogWheelWeb.GameLive.SteamImport do
               {if @configured?, do: "Steam configured", else: "Steam config missing"}
             </span>
           </div>
+
+          <.form
+            for={@form}
+            id="steam-credential-form"
+            phx-change="validate_credentials"
+            phx-submit="save_credentials"
+            class="mt-6 grid gap-4 lg:grid-cols-2"
+          >
+            <.input
+              field={@form[:steam_api_key]}
+              type="password"
+              label="Steam API key"
+              placeholder="Paste your Steam Web API key"
+            />
+            <.input
+              field={@form[:steam_id64]}
+              type="text"
+              label="Steam ID64"
+              placeholder="76561198000000000"
+            />
+            <div class="flex flex-wrap gap-3 lg:col-span-2">
+              <.button
+                id="save-steam-credentials-button"
+                phx-disable-with="Saving..."
+                variant="primary"
+              >
+                Save Steam Credentials
+              </.button>
+            </div>
+          </.form>
         </div>
 
         <div class="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
@@ -77,21 +107,47 @@ defmodule BacklogWheelWeb.GameLive.SteamImport do
 
   @impl true
   def mount(_params, _session, socket) do
+    community = socket.assigns.current_community
+
     {:ok,
      socket
      |> assign(:page_title, "Import Steam Library")
-     |> assign(:configured?, Client.configured?())
+     |> assign(:community, community)
+     |> assign_steam_form(community)
      |> assign(:importing?, false)
      |> assign(:summary, nil)}
+  end
+
+  @impl true
+  def handle_event("validate_credentials", %{"community" => community_params}, socket) do
+    changeset =
+      Communities.change_community_steam_credential(socket.assigns.community, community_params)
+
+    {:noreply, assign(socket, :form, to_form(changeset, action: :validate))}
+  end
+
+  @impl true
+  def handle_event("save_credentials", %{"community" => community_params}, socket) do
+    case Communities.update_community_steam_credential(socket.assigns.community, community_params) do
+      {:ok, community} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Steam credentials saved")
+         |> assign(:community, community)
+         |> assign_steam_form(community)}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :form, to_form(changeset))}
+    end
   end
 
   @impl true
   def handle_event("import", _params, socket) do
     socket = assign(socket, :importing?, true)
 
-    case Client.fetch_owned_games() do
+    case Client.fetch_owned_games(socket.assigns.community) do
       {:ok, steam_games} ->
-        {:ok, summary} = Backlog.import_steam_games(socket.assigns.current_community, steam_games)
+        {:ok, summary} = Backlog.import_steam_games(socket.assigns.community, steam_games)
 
         {:noreply,
          socket
@@ -111,4 +167,10 @@ defmodule BacklogWheelWeb.GameLive.SteamImport do
   defp format_error({:missing_config, :steam_id64}), do: "STEAM_ID64 is missing"
   defp format_error({:steam_http_error, status}), do: "Steam returned HTTP #{status}"
   defp format_error(reason), do: inspect(reason)
+
+  defp assign_steam_form(socket, community) do
+    socket
+    |> assign(:form, to_form(Communities.change_community_steam_credential(community)))
+    |> assign(:configured?, Client.configured?(community))
+  end
 end

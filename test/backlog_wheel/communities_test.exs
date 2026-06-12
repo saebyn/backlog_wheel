@@ -127,6 +127,45 @@ defmodule BacklogWheel.CommunitiesTest do
     end
   end
 
+  describe "community Steam credentials" do
+    test "updates Steam credentials" do
+      community = community_fixture()
+
+      assert {:ok, %Community{} = community} =
+               Communities.update_community_steam_credential(community, %{
+                 "steam_api_key" => "api-key",
+                 "steam_id64" => "76561198000000000"
+               })
+
+      assert community.steam_api_key == "api-key"
+      assert community.steam_id64 == "76561198000000000"
+      assert Communities.steam_configured?(community)
+    end
+
+    test "normalizes blank Steam credential fields to nil" do
+      community = community_fixture()
+
+      assert {:ok, community} =
+               Communities.update_community_steam_credential(community, %{
+                 "steam_api_key" => "  ",
+                 "steam_id64" => ""
+               })
+
+      assert community.steam_api_key == nil
+      assert community.steam_id64 == nil
+      refute Communities.steam_configured?(community)
+    end
+
+    test "requires both Steam credential fields when one is present" do
+      community = community_fixture()
+
+      changeset =
+        Communities.change_community_steam_credential(community, %{"steam_api_key" => "api-key"})
+
+      assert %{steam_id64: ["can't be blank"]} = errors_on(changeset)
+    end
+  end
+
   describe "memberships" do
     test "resolves the first owner/admin community for a user" do
       user = user_fixture()

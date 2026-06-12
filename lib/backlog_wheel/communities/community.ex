@@ -15,6 +15,8 @@ defmodule BacklogWheel.Communities.Community do
     field :dark_primary_color, :string
     field :dark_accent_color, :string
     field :dark_background_color, :string
+    field :steam_api_key, :string
+    field :steam_id64, :string
 
     has_many :games, Game
     has_many :memberships, CommunityMembership
@@ -57,6 +59,33 @@ defmodule BacklogWheel.Communities.Community do
     |> validate_format(:dark_background_color, ~r/^#(?:[0-9a-fA-F]{3}){1,2}$/,
       message: "must be a hex color"
     )
+  end
+
+  @doc false
+  def steam_credential_changeset(community, attrs) do
+    community
+    |> cast(attrs, [:steam_api_key, :steam_id64])
+    |> normalize_blanks([:steam_api_key, :steam_id64])
+    |> validate_steam_credential_pair()
+  end
+
+  defp validate_steam_credential_pair(changeset) do
+    api_key = get_field(changeset, :steam_api_key)
+    steam_id64 = get_field(changeset, :steam_id64)
+
+    cond do
+      api_key in [nil, ""] and steam_id64 in [nil, ""] ->
+        changeset
+
+      api_key in [nil, ""] ->
+        add_error(changeset, :steam_api_key, "can't be blank")
+
+      steam_id64 in [nil, ""] ->
+        add_error(changeset, :steam_id64, "can't be blank")
+
+      true ->
+        changeset
+    end
   end
 
   defp normalize_blanks(changeset, fields) do

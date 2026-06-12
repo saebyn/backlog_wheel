@@ -4,6 +4,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
   import Phoenix.LiveViewTest
   import BacklogWheel.BacklogFixtures
 
+  alias BacklogWheel.Communities
   alias BacklogWheel.Backlog.Game
   alias BacklogWheel.Repo
 
@@ -262,18 +263,15 @@ defmodule BacklogWheelWeb.GameLiveTest do
 
   describe "Steam import" do
     setup do
-      previous_api_key = Application.get_env(:backlog_wheel, :steam_api_key)
-      previous_steam_id = Application.get_env(:backlog_wheel, :steam_id64)
+      {:ok, community} =
+        Process.get(:test_community)
+        |> Communities.update_community_steam_credential(%{
+          "steam_api_key" => "test-key",
+          "steam_id64" => "76561198000000000"
+        })
 
-      Application.put_env(:backlog_wheel, :steam_api_key, "test-key")
-      Application.put_env(:backlog_wheel, :steam_id64, "76561198000000000")
-
-      on_exit(fn ->
-        restore_env(:steam_api_key, previous_api_key)
-        restore_env(:steam_id64, previous_steam_id)
-      end)
-
-      :ok
+      Process.put(:test_community, community)
+      %{community: community}
     end
 
     test "renders Steam import page", %{conn: conn} do
@@ -281,11 +279,28 @@ defmodule BacklogWheelWeb.GameLiveTest do
 
       assert html =~ "Import Steam Library"
       assert html =~ "Steam configured"
+      assert html =~ "Save Steam Credentials"
       assert html =~ "Imported games are included on the wheel by default"
       assert html =~ "Re-imports refresh last played times"
     end
-  end
 
-  defp restore_env(key, nil), do: Application.delete_env(:backlog_wheel, key)
-  defp restore_env(key, value), do: Application.put_env(:backlog_wheel, key, value)
+    test "saves Steam credentials for the current community", %{conn: conn} do
+      {:ok, import_live, _html} = live(conn, ~p"/games/import/steam")
+
+      import_live
+      |> form("#steam-credential-form",
+        community: %{
+          steam_api_key: "new-key",
+          steam_id64: "76561198111111111"
+        }
+      )
+      |> render_submit()
+
+      assert has_element?(import_live, "#flash-info", "Steam credentials saved")
+
+      community = Communities.get_community!(Process.get(:test_community).id)
+      assert community.steam_api_key == "new-key"
+      assert community.steam_id64 == "76561198111111111"
+    end
+  end
 end

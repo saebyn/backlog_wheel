@@ -62,6 +62,29 @@ defmodule BacklogWheel.Communities do
   end
 
   @doc """
+  Returns a changeset for editing community Steam credentials.
+  """
+  def change_community_steam_credential(%Community{} = community, attrs \\ %{}) do
+    Community.steam_credential_changeset(community, attrs)
+  end
+
+  @doc """
+  Updates community Steam credentials.
+  """
+  def update_community_steam_credential(%Community{} = community, attrs) do
+    community
+    |> Community.steam_credential_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Returns whether a community has enough Steam credential data to import games.
+  """
+  def steam_configured?(%Community{} = community) do
+    community.steam_api_key not in [nil, ""] and community.steam_id64 not in [nil, ""]
+  end
+
+  @doc """
   Clears custom community theme settings so defaults are used.
   """
   def reset_community_theme(%Community{} = community) do
