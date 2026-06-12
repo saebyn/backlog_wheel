@@ -70,14 +70,7 @@ Visit <http://localhost:4000> in your browser. The games CRUD page is available 
 
 ## Steam Import
 
-Steam library import uses the official Steam Web API. Add these values to `.envrc`, then run `direnv allow`:
-
-```sh
-export STEAM_API_KEY="your-steam-web-api-key"
-export STEAM_ID64="your-steam-id64"
-```
-
-Then visit <http://localhost:4000/games/import/steam> and click `Import Steam Library`.
+Steam library import uses the official Steam Web API. Visit <http://localhost:4000/games/import/steam>, save the community's Steam API key and Steam ID64, then click `Import Steam Library`.
 
 Import behavior:
 

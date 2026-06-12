@@ -49,15 +49,13 @@ Deploy the stack from the repository root:
 AWS_PROFILE=your-profile cdk deploy
 ```
 
-The first deploy creates `backlog-wheel/prototype/runtime` with a generated `SECRET_KEY_BASE` and blank optional integration values. Update that secret in AWS Secrets Manager when Discord, Steam, or Twitch integration should be enabled. Keep the JSON keys in place:
+The first deploy creates `backlog-wheel/prototype/runtime` with a generated `SECRET_KEY_BASE` and blank optional integration values. Update that secret in AWS Secrets Manager when Discord or Twitch integration should be enabled. Keep the JSON keys in place:
 
 ```json
 {
   "SECRET_KEY_BASE": "generated-by-secrets-manager",
   "DISCORD_CLIENT_ID": "",
   "DISCORD_CLIENT_SECRET": "",
-  "STEAM_API_KEY": "",
-  "STEAM_ID64": "",
   "TWITCH_CLIENT_ID": "",
   "TWITCH_CLIENT_SECRET": "",
   "TWITCH_BROADCASTER_ID": "",

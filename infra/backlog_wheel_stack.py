@@ -60,8 +60,6 @@ class BacklogWheelStack(Stack):
                     {
                         "DISCORD_CLIENT_ID": "",
                         "DISCORD_CLIENT_SECRET": "",
-                        "STEAM_API_KEY": "",
-                        "STEAM_ID64": "",
                         "TWITCH_CLIENT_ID": "",
                         "TWITCH_CLIENT_SECRET": "",
                         "TWITCH_BROADCASTER_ID": "",
@@ -121,8 +119,6 @@ class BacklogWheelStack(Stack):
                     "SECRET_KEY_BASE",
                     "DISCORD_CLIENT_ID",
                     "DISCORD_CLIENT_SECRET",
-                    "STEAM_API_KEY",
-                    "STEAM_ID64",
                     "TWITCH_CLIENT_ID",
                     "TWITCH_CLIENT_SECRET",
                     "TWITCH_BROADCASTER_ID",
