@@ -27,6 +27,18 @@ defmodule BacklogWheel.BacklogFixtures do
     game
   end
 
+  def game_tag_fixture(attrs \\ %{}) do
+    {community, attrs} = Map.pop(attrs, :community)
+    community = community || Process.get(:test_community) || community_fixture()
+
+    {:ok, game_tag} =
+      attrs
+      |> Enum.into(%{name: "cozy"})
+      |> then(&BacklogWheel.Backlog.create_game_tag(community, &1))
+
+    game_tag
+  end
+
   def community_fixture(attrs \\ %{}) do
     attrs =
       Enum.into(attrs, %{

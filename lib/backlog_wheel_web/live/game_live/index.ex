@@ -41,7 +41,7 @@ defmodule BacklogWheelWeb.GameLive.Index do
         </div>
 
         <.form for={@filter_form} id="game-curation-form" phx-change="filter">
-          <div class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div class="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
             <.input
               field={@filter_form[:q]}
               type="text"
@@ -60,6 +60,12 @@ defmodule BacklogWheelWeb.GameLive.Index do
                 {"Platform", "platform"},
                 {"Wheel status", "wheel"}
               ]}
+            />
+            <.input
+              field={@filter_form[:tag]}
+              type="select"
+              label="Tag"
+              options={tag_filter_options(@tags)}
             />
           </div>
         </.form>
@@ -110,7 +116,17 @@ defmodule BacklogWheelWeb.GameLive.Index do
               />
               <.icon :if={!game.image_url} name="hero-photo" class="size-6 text-base-content/40" />
             </div>
-            <span class="font-semibold">{game.title}</span>
+            <div class="space-y-1">
+              <span class="font-semibold">{game.title}</span>
+              <div :if={game.tags != []} class="flex flex-wrap gap-1">
+                <span
+                  :for={tag <- Enum.sort_by(game.tags, & &1.name)}
+                  class="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary"
+                >
+                  {tag.name}
+                </span>
+              </div>
+            </div>
           </div>
         </:col>
         <:col :let={{_id, game}} label="Platform">{game.platform}</:col>
@@ -188,7 +204,7 @@ defmodule BacklogWheelWeb.GameLive.Index do
   def handle_event("filter", %{"filters" => filter_params}, socket) do
     filters =
       socket.assigns.filters
-      |> Map.merge(Map.take(filter_params, ["q", "sort"]))
+      |> Map.merge(Map.take(filter_params, ["q", "sort", "tag"]))
       |> normalize_filters()
 
     {:noreply, socket |> assign(:filters, filters) |> refresh_games()}
@@ -236,13 +252,14 @@ defmodule BacklogWheelWeb.GameLive.Index do
 
     socket
     |> assign(:filter_form, to_form(socket.assigns.filters, as: :filters))
+    |> assign(:tags, Backlog.list_game_tags(socket.assigns.current_community))
     |> assign(:counts, Backlog.game_counts(socket.assigns.current_community))
     |> assign(:visible_count, length(games))
     |> stream(:games, games, reset: true)
   end
 
   defp default_filters do
-    %{"q" => "", "filter" => "all", "sort" => "title"}
+    %{"q" => "", "filter" => "all", "sort" => "title", "tag" => ""}
   end
 
   defp normalize_filters(filters) do
@@ -259,6 +276,7 @@ defmodule BacklogWheelWeb.GameLive.Index do
         do: sort,
         else: defaults["sort"]
     end)
+    |> Map.update!("tag", &String.trim/1)
   end
 
   defp filter_options do
@@ -279,5 +297,9 @@ defmodule BacklogWheelWeb.GameLive.Index do
       current_filter == filter && "btn-primary",
       current_filter != filter && "btn-ghost"
     ]
+  end
+
+  defp tag_filter_options(tags) do
+    [{"All tags", ""} | Enum.map(tags, &{&1.name, &1.slug})]
   end
 end

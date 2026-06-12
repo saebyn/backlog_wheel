@@ -40,6 +40,17 @@ defmodule BacklogWheelWeb.GameLive.Show do
 
       <.list>
         <:item title="Title">{@game.title}</:item>
+        <:item title="Tags">
+          <div id="game-tags" class="flex flex-wrap gap-2">
+            <span :if={@game.tags == []} class="text-base-content/60">No tags</span>
+            <span
+              :for={tag <- Enum.sort_by(@game.tags, & &1.name)}
+              class="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary"
+            >
+              {tag.name}
+            </span>
+          </div>
+        </:item>
         <:item title="Platform">{@game.platform}</:item>
         <:item title="External ID">{@game.external_id}</:item>
         <:item title="Image URL">{@game.image_url}</:item>

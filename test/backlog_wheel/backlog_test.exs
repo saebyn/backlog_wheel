@@ -77,6 +77,84 @@ defmodule BacklogWheel.BacklogTest do
                Backlog.list_games(community, %{"filter" => "steam", "sort" => "last_played"})
     end
 
+    test "create_game_tag/2 creates tags scoped to a community" do
+      community = community_fixture()
+
+      assert {:ok, tag} = Backlog.create_game_tag(community, %{name: " Cozy "})
+      assert tag.community_id == community.id
+      assert tag.name == "Cozy"
+      assert tag.slug == "cozy"
+
+      assert {:error, changeset} = Backlog.create_game_tag(community, %{name: "cozy"})
+      assert %{community_id: ["has already been taken"]} = errors_on(changeset)
+    end
+
+    test "set_game_tags/3 creates, assigns, replaces, and removes game tags" do
+      community = community_fixture()
+      game = game_fixture(%{community: community})
+
+      assert {:ok, game} = Backlog.set_game_tags(community, game, "cozy, puzzle, cozy")
+      assert Enum.map(game.tags, & &1.slug) |> Enum.sort() == ["cozy", "puzzle"]
+
+      assert {:ok, game} = Backlog.set_game_tags(community, game, "puzzle")
+      assert Enum.map(game.tags, & &1.slug) == ["puzzle"]
+
+      assert {:ok, game} = Backlog.set_game_tags(community, game, "")
+      assert game.tags == []
+    end
+
+    test "add_tag_to_game/3 and remove_tag_from_game/3 manage reusable tags" do
+      community = community_fixture()
+      first_game = game_fixture(%{community: community, title: "First"})
+      second_game = game_fixture(%{community: community, title: "Second", external_id: "second"})
+      tag = game_tag_fixture(%{community: community, name: "short"})
+
+      assert {:ok, first_game} = Backlog.add_tag_to_game(community, first_game, tag)
+      assert {:ok, second_game} = Backlog.add_tag_to_game(community, second_game, tag)
+      assert [%{slug: "short"}] = first_game.tags
+      assert [%{slug: "short"}] = second_game.tags
+
+      assert {:ok, first_game} = Backlog.remove_tag_from_game(community, first_game, tag)
+      assert first_game.tags == []
+      assert [%{slug: "short"}] = Backlog.get_game!(community, second_game.id).tags
+    end
+
+    test "list_games/2 filters by tag" do
+      community = community_fixture()
+      cozy_game = game_fixture(%{community: community, title: "Cozy Game"})
+
+      horror_game =
+        game_fixture(%{community: community, title: "Horror Game", external_id: "horror"})
+
+      assert {:ok, _cozy_game} = Backlog.set_game_tags(community, cozy_game, "cozy")
+      assert {:ok, _horror_game} = Backlog.set_game_tags(community, horror_game, "horror")
+
+      assert [%Game{title: "Cozy Game"}] = Backlog.list_games(community, %{"tag" => "cozy"})
+    end
+
+    test "game tags are isolated between communities" do
+      first_community = community_fixture(%{slug: "first-tags"})
+      second_community = community_fixture(%{slug: "second-tags"})
+      first_game = game_fixture(%{community: first_community})
+      second_game = game_fixture(%{community: second_community})
+      first_tag = game_tag_fixture(%{community: first_community, name: "cozy"})
+      second_tag = game_tag_fixture(%{community: second_community, name: "cozy"})
+
+      assert {:ok, _game} = Backlog.add_tag_to_game(first_community, first_game, first_tag)
+
+      assert {:error, :tag_not_in_community} =
+               Backlog.add_tag_to_game(first_community, first_game, second_tag)
+
+      assert {:error, :game_not_in_community} =
+               Backlog.add_tag_to_game(first_community, second_game, first_tag)
+
+      assert Backlog.list_games(first_community, %{"tag" => "cozy"}) |> Enum.map(& &1.id) == [
+               first_game.id
+             ]
+
+      assert Backlog.list_games(second_community, %{"tag" => "cozy"}) == []
+    end
+
     test "game_counts/1 returns curation summary counts" do
       community = community_fixture()
 

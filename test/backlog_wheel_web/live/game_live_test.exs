@@ -14,6 +14,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
     external_id: "some other external_id",
     image_url: "https://example.com/create-image.jpg",
     include_in_wheel: true,
+    tag_names: "cozy, puzzle",
     played_on_stream: true,
     last_played_at: "2026-06-05T17:55:00Z"
   }
@@ -23,6 +24,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
     external_id: "some updated external_id",
     image_url: "https://example.com/update-image.jpg",
     include_in_wheel: false,
+    tag_names: "short",
     played_on_stream: false,
     last_played_at: "2026-06-06T17:55:00Z"
   }
@@ -32,6 +34,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
     external_id: nil,
     image_url: nil,
     include_in_wheel: false,
+    tag_names: nil,
     played_on_stream: false,
     last_played_at: nil
   }
@@ -78,6 +81,8 @@ defmodule BacklogWheelWeb.GameLiveTest do
       assert html =~ "Game created successfully"
       assert html =~ "some title"
       assert html =~ "https://example.com/create-image.jpg"
+      assert html =~ "cozy"
+      assert html =~ "puzzle"
     end
 
     test "created games are assigned to the logged-in community", %{conn: conn} do
@@ -165,6 +170,39 @@ defmodule BacklogWheelWeb.GameLiveTest do
       assert html =~ "Game updated successfully"
       assert html =~ "some updated title"
       assert html =~ "https://example.com/update-image.jpg"
+      assert html =~ "short"
+    end
+
+    test "edits tags with chip editor", %{conn: conn, game: game} do
+      community = Process.get(:test_community)
+      existing_tag = game_tag_fixture(%{community: community, name: "cozy"})
+
+      {:ok, form_live, _html} = live(conn, ~p"/games/#{game}/edit")
+
+      assert has_element?(form_live, "#game-tag-editor")
+      assert has_element?(form_live, "#available-game-tag-#{existing_tag.slug}", "cozy")
+
+      assert form_live
+             |> element("#tag-name-input")
+             |> render_keydown(%{"key" => "Enter", "value" => "puzzle"})
+
+      assert has_element?(form_live, "#selected-game-tag-puzzle", "puzzle")
+
+      assert form_live |> element("#available-game-tag-cozy", "cozy") |> render_click()
+      assert has_element?(form_live, "#selected-game-tag-cozy", "cozy")
+
+      assert form_live |> element("#selected-game-tag-puzzle", "puzzle") |> render_click()
+      refute has_element?(form_live, "#selected-game-tag-puzzle")
+
+      attrs = Map.put(@update_attrs, :tag_names, "cozy")
+
+      assert {:ok, index_live, _html} =
+               form_live
+               |> form("#game-form", game: attrs)
+               |> render_submit()
+               |> follow_redirect(conn, ~p"/games")
+
+      assert has_element?(index_live, "#games-#{game.id}", "cozy")
     end
 
     test "deletes game in listing", %{conn: conn, game: game} do
@@ -211,6 +249,22 @@ defmodule BacklogWheelWeb.GameLiveTest do
       assert has_element?(index_live, "#games-#{excluded_game.id}")
     end
 
+    test "filters games by tag", %{conn: conn, game: game} do
+      tagged_game = game_fixture(%{title: "Tagged Game", external_id: "tagged-game"})
+
+      {:ok, _tagged_game} =
+        BacklogWheel.Backlog.set_game_tags(Process.get(:test_community), tagged_game, "cozy")
+
+      {:ok, index_live, _html} = live(conn, ~p"/games")
+
+      assert index_live
+             |> form("#game-curation-form", filters: %{tag: "cozy", q: "", sort: "title"})
+             |> render_change()
+
+      assert has_element?(index_live, "#games-#{tagged_game.id}")
+      refute has_element?(index_live, "#games-#{game.id}")
+    end
+
     test "bulk updates visible wheel inclusion", %{conn: conn, game: game} do
       {:ok, index_live, _html} = live(conn, ~p"/games")
 
@@ -230,6 +284,14 @@ defmodule BacklogWheelWeb.GameLiveTest do
 
       assert html =~ "Show Game"
       assert html =~ game.title
+    end
+
+    test "displays tags", %{conn: conn, game: game} do
+      {:ok, game} = BacklogWheel.Backlog.set_game_tags(Process.get(:test_community), game, "cozy")
+
+      {:ok, show_live, _html} = live(conn, ~p"/games/#{game}")
+
+      assert has_element?(show_live, "#game-tags", "cozy")
     end
 
     test "updates game and returns to show", %{conn: conn, game: game} do

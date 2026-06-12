@@ -6,7 +6,7 @@ defmodule BacklogWheel.Backlog do
   import Ecto.Query, warn: false
   alias BacklogWheel.Repo
 
-  alias BacklogWheel.Backlog.{Game, Spin}
+  alias BacklogWheel.Backlog.{Game, GameTag, Spin}
   alias BacklogWheel.Communities.Community
 
   @doc """
@@ -22,7 +22,94 @@ defmodule BacklogWheel.Backlog do
     filters
     |> game_query(community)
     |> order_games(filters)
+    |> preload([:tags])
     |> Repo.all()
+  end
+
+  @doc """
+  Returns all game tags for a community.
+  """
+  def list_game_tags(%Community{} = community) do
+    GameTag
+    |> where([tag], tag.community_id == ^community.id)
+    |> order_by([tag], asc: tag.name)
+    |> Repo.all()
+  end
+
+  @doc """
+  Creates a community-scoped game tag.
+  """
+  def create_game_tag(%Community{} = community, attrs) do
+    name = attrs |> Map.get(:name, Map.get(attrs, "name")) |> normalize_tag_name()
+
+    %GameTag{community_id: community.id}
+    |> GameTag.changeset(%{name: name, slug: tag_slug(name)})
+    |> Repo.insert()
+  end
+
+  @doc """
+  Adds an existing community tag to a community game.
+  """
+  def add_tag_to_game(%Community{} = community, %Game{} = game, %GameTag{} = tag) do
+    with :ok <- validate_game_community(game, community),
+         :ok <- validate_tag_community(tag, community) do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      Repo.insert_all(
+        "game_taggings",
+        [
+          %{
+            game_id: game.id,
+            game_tag_id: tag.id,
+            inserted_at: now,
+            updated_at: now
+          }
+        ],
+        on_conflict: :nothing,
+        conflict_target: [:game_id, :game_tag_id]
+      )
+
+      {:ok, get_game!(community, game.id)}
+    end
+  end
+
+  @doc """
+  Removes a tag from a community game.
+  """
+  def remove_tag_from_game(%Community{} = community, %Game{} = game, %GameTag{} = tag) do
+    with :ok <- validate_game_community(game, community),
+         :ok <- validate_tag_community(tag, community) do
+      from(tagging in "game_taggings",
+        where: tagging.game_id == ^game.id and tagging.game_tag_id == ^tag.id
+      )
+      |> Repo.delete_all()
+
+      {:ok, get_game!(community, game.id)}
+    end
+  end
+
+  @doc """
+  Replaces the tags on a game, creating missing tags in the game's community.
+  """
+  def set_game_tags(%Community{} = community, %Game{} = game, tag_names) do
+    with :ok <- validate_game_community(game, community) do
+      Repo.transaction(fn ->
+        tags =
+          tag_names
+          |> parse_tag_names()
+          |> Enum.map(&get_or_create_game_tag!(community, &1))
+
+        game
+        |> Repo.preload(:tags)
+        |> Ecto.Changeset.change()
+        |> Ecto.Changeset.put_assoc(:tags, tags)
+        |> Repo.update!()
+      end)
+      |> case do
+        {:ok, game} -> {:ok, Repo.preload(game, :tags, force: true)}
+        {:error, error} -> {:error, error}
+      end
+    end
   end
 
   @doc """
@@ -59,6 +146,7 @@ defmodule BacklogWheel.Backlog do
     Game
     |> where([game], game.community_id == ^community.id)
     |> where([game], game.include_in_wheel)
+    |> preload([:tags])
     |> order_by([game], asc: game.title)
     |> Repo.all()
   end
@@ -161,10 +249,13 @@ defmodule BacklogWheel.Backlog do
       ** (Ecto.NoResultsError)
 
   """
-  def get_game!(id), do: Repo.get!(Game, id)
+  def get_game!(id), do: Game |> preload([:tags]) |> Repo.get!(id)
 
   def get_game!(%Community{} = community, id) do
-    Repo.get_by!(Game, id: id, community_id: community.id)
+    Game
+    |> where([game], game.id == ^id and game.community_id == ^community.id)
+    |> preload([:tags])
+    |> Repo.one!()
   end
 
   @doc """
@@ -188,9 +279,27 @@ defmodule BacklogWheel.Backlog do
 
   """
   def create_game(%Community{} = community, attrs) do
-    %Game{community_id: community.id}
-    |> Game.changeset(attrs)
-    |> Repo.insert()
+    tag_names = Map.get(attrs, "tag_names", Map.get(attrs, :tag_names))
+
+    Repo.transaction(fn ->
+      game =
+        %Game{community_id: community.id}
+        |> Game.changeset(attrs)
+        |> Repo.insert!()
+
+      if is_nil(tag_names) do
+        Repo.preload(game, :tags)
+      else
+        {:ok, game} = set_game_tags(community, game, tag_names)
+        game
+      end
+    end)
+    |> case do
+      {:ok, game} -> {:ok, game}
+      {:error, changeset} -> {:error, changeset}
+    end
+  rescue
+    error in Ecto.InvalidChangesetError -> {:error, error.changeset}
   end
 
   @doc """
@@ -265,9 +374,27 @@ defmodule BacklogWheel.Backlog do
 
   """
   def update_game(%Game{} = game, attrs) do
-    game
-    |> Game.changeset(attrs)
-    |> Repo.update()
+    tag_names = Map.get(attrs, "tag_names", Map.get(attrs, :tag_names))
+
+    Repo.transaction(fn ->
+      game =
+        game
+        |> Game.changeset(attrs)
+        |> Repo.update!()
+
+      if is_nil(tag_names) do
+        Repo.preload(game, :tags)
+      else
+        {:ok, game} = set_game_tags(%Community{id: game.community_id}, game, tag_names)
+        game
+      end
+    end)
+    |> case do
+      {:ok, game} -> {:ok, game}
+      {:error, changeset} -> {:error, changeset}
+    end
+  rescue
+    error in Ecto.InvalidChangesetError -> {:error, error.changeset}
   end
 
   @doc """
@@ -310,7 +437,9 @@ defmodule BacklogWheel.Backlog do
 
   """
   def change_game(%Game{} = game, attrs \\ %{}) do
-    Game.changeset(game, attrs)
+    game
+    |> put_loaded_tag_names()
+    |> Game.changeset(attrs)
   end
 
   defp game_query(filters, %Community{} = community) do
@@ -318,6 +447,7 @@ defmodule BacklogWheel.Backlog do
     |> where([game], game.community_id == ^community.id)
     |> filter_by_search(Map.get(filters, "q", ""))
     |> filter_by_kind(Map.get(filters, "filter", "all"))
+    |> filter_by_tag(Map.get(filters, "tag", ""))
   end
 
   defp filter_by_search(query, query_text) when is_binary(query_text) do
@@ -341,6 +471,22 @@ defmodule BacklogWheel.Backlog do
   defp filter_by_kind(query, "manual"), do: where(query, [game], game.platform == "manual")
   defp filter_by_kind(query, _filter), do: query
 
+  defp filter_by_tag(query, tag_slug) when is_binary(tag_slug) do
+    tag_slug = String.trim(tag_slug)
+
+    if tag_slug == "" do
+      query
+    else
+      from(game in query,
+        join: tag in assoc(game, :tags),
+        where: tag.slug == ^tag_slug,
+        distinct: true
+      )
+    end
+  end
+
+  defp filter_by_tag(query, _tag_slug), do: query
+
   defp order_games(query, %{"sort" => "last_played"}) do
     order_by(query, [game], desc: game.last_played_at, asc: game.title)
   end
@@ -360,6 +506,65 @@ defmodule BacklogWheel.Backlog do
   defp order_games(query, _filters) do
     order_by(query, [game], asc: game.title)
   end
+
+  defp put_loaded_tag_names(%Game{tags: %Ecto.Association.NotLoaded{}} = game), do: game
+
+  defp put_loaded_tag_names(%Game{tags: tags} = game),
+    do: %{game | tag_names: format_tag_names(tags)}
+
+  defp format_tag_names(tags) when is_list(tags) do
+    tags
+    |> Enum.map(& &1.name)
+    |> Enum.sort()
+    |> Enum.join(", ")
+  end
+
+  defp parse_tag_names(tag_names) when is_binary(tag_names) do
+    tag_names
+    |> String.split([",", "\n"], trim: true)
+    |> Enum.map(&normalize_tag_name/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq_by(&tag_slug/1)
+  end
+
+  defp parse_tag_names(tag_names) when is_list(tag_names) do
+    tag_names
+    |> Enum.map(&normalize_tag_name/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq_by(&tag_slug/1)
+  end
+
+  defp parse_tag_names(_tag_names), do: []
+
+  defp normalize_tag_name(name) when is_binary(name), do: String.trim(name)
+  defp normalize_tag_name(_name), do: ""
+
+  defp tag_slug(name) when is_binary(name) do
+    name
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/u, "-")
+    |> String.trim("-")
+  end
+
+  defp get_or_create_game_tag!(%Community{} = community, name) do
+    slug = tag_slug(name)
+
+    Repo.get_by(GameTag, community_id: community.id, slug: slug) ||
+      Repo.insert!(
+        %GameTag{community_id: community.id}
+        |> GameTag.changeset(%{name: name, slug: slug})
+      )
+  end
+
+  defp validate_game_community(%Game{community_id: community_id}, %Community{id: community_id}),
+    do: :ok
+
+  defp validate_game_community(_game, _community), do: {:error, :game_not_in_community}
+
+  defp validate_tag_community(%GameTag{community_id: community_id}, %Community{id: community_id}),
+    do: :ok
+
+  defp validate_tag_community(_tag, _community), do: {:error, :tag_not_in_community}
 
   defp wheel_spin_snapshot(candidates, winning_game) do
     %{
