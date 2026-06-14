@@ -27,12 +27,12 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
   end
 
   test "shows Twitch connection status and connect action", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/twitch")
+    {:ok, view, _html} = live(conn, ~p"/settings/twitch")
 
     assert has_element?(view, "#twitch-settings-connection-status", "Not connected")
     assert has_element?(view, "#twitch-settings-config-status", "Configured")
     assert has_element?(view, "#twitch-settings-reward-cost", "123")
-    assert has_element?(view, "nav a, header a", "Twitch")
+    assert has_element?(view, "#settings-nav-theme", "Theme")
     assert has_element?(view, "#connect-twitch", "Connect Twitch")
     assert has_element?(view, "#disconnect-twitch[disabled]")
     assert has_element?(view, "#twitch-settings-eventsub-status", "Missing secret")
@@ -48,7 +48,7 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
       eventsub_secret: "eventsub-secret"
     )
 
-    {:ok, view, _html} = live(conn, ~p"/twitch")
+    {:ok, view, _html} = live(conn, ~p"/settings/twitch")
 
     assert has_element?(view, "#twitch-settings-eventsub-status", "Configured")
     refute has_element?(view, "#twitch-settings-eventsub-warning")
@@ -62,7 +62,7 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
         scopes: "channel:manage:redemptions"
       })
 
-    {:ok, view, _html} = live(conn, ~p"/twitch")
+    {:ok, view, _html} = live(conn, ~p"/settings/twitch")
 
     assert has_element?(view, "#twitch-settings-connection-status", "Connected")
     assert has_element?(view, "#connect-twitch", "Reconnect Twitch")
@@ -77,7 +77,7 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
         scopes: "channel:manage:redemptions"
       })
 
-    {:ok, view, _html} = live(conn, ~p"/twitch")
+    {:ok, view, _html} = live(conn, ~p"/settings/twitch")
 
     assert view |> element("#disconnect-twitch") |> render_click()
 

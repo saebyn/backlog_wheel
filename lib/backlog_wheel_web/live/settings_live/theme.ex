@@ -18,6 +18,13 @@ defmodule BacklogWheelWeb.SettingsLive.Theme do
           >
             <.icon name="hero-swatch" class="size-4" /> Theme
           </.link>
+          <.link
+            id="settings-nav-twitch"
+            navigate={~p"/settings/twitch"}
+            class="mt-1 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-base-content/70 transition hover:bg-base-200 hover:text-base-content"
+          >
+            <.icon name="hero-signal" class="size-4" /> Twitch
+          </.link>
         </aside>
 
         <section class="space-y-6">

@@ -150,7 +150,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                 >
                   Spin these games
                 </.button>
-                <.button id="manage-twitch" href={~p"/twitch"}>
+                <.button id="manage-twitch" href={~p"/settings/twitch"}>
                   Manage Twitch
                 </.button>
                 <.button

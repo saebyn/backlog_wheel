@@ -76,9 +76,6 @@ defmodule BacklogWheelWeb.Layouts do
               <.link navigate={~p"/voting"} class="btn btn-ghost hover-lift">Voting</.link>
             </li>
             <li>
-              <.link navigate={~p"/twitch"} class="btn btn-ghost hover-lift">Twitch</.link>
-            </li>
-            <li>
               <.link navigate={~p"/history"} class="btn btn-ghost hover-lift">History</.link>
             </li>
             <li>
