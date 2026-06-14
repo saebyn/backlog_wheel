@@ -28,6 +28,8 @@ defmodule BacklogWheelWeb.Router do
     get "/auth/discord/start", DiscordOAuthController, :start
     get "/auth/discord/callback", DiscordOAuthController, :callback
     delete "/logout", DiscordOAuthController, :logout
+
+    live "/dashboard", DashboardLive, :show
   end
 
   scope "/", BacklogWheelWeb do

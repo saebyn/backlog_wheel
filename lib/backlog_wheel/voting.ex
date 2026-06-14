@@ -114,6 +114,22 @@ defmodule BacklogWheel.Voting do
   end
 
   @doc """
+  Returns the newest draft/open/locked voting session for a community.
+  """
+  def active_voting_session(%Community{} = community) do
+    VotingSession
+    |> where([session], session.community_id == ^community.id)
+    |> where([session], session.status in ["draft", "open", "locked"])
+    |> order_by([session], desc: session.inserted_at, desc: session.id)
+    |> limit(1)
+    |> Repo.one()
+    |> case do
+      nil -> nil
+      session -> preload_pool_games_with_votes(session)
+    end
+  end
+
+  @doc """
   Gets a community Wheel Format.
   """
   def get_wheel_format!(%Community{} = community, id) do

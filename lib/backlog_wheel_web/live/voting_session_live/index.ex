@@ -346,11 +346,11 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   end
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     {:ok,
      socket
      |> assign(:page_title, "Voting Sessions")
-     |> assign(:selected_session_id, nil)
+     |> assign(:selected_session_id, selected_session_id_param(params))
      |> assign(:subscribed_voting_session_id, nil)
      |> assign(:available_games_filter, "")
      |> refresh()}
@@ -571,6 +571,15 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   defp selected_session(sessions, selected_session_id) do
     Enum.find(sessions, &(&1.id == selected_session_id)) || hd(sessions)
   end
+
+  defp selected_session_id_param(%{"session_id" => session_id}) do
+    case Integer.parse(session_id) do
+      {id, ""} -> id
+      _invalid -> nil
+    end
+  end
+
+  defp selected_session_id_param(_params), do: nil
 
   defp session_button_class(%VotingSession{} = session, selected_session) do
     [

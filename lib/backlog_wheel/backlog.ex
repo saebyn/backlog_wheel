@@ -164,6 +164,18 @@ defmodule BacklogWheel.Backlog do
   end
 
   @doc """
+  Returns the latest recorded spin for a community.
+  """
+  def latest_spin(%Community{} = community) do
+    Spin
+    |> where([spin], spin.community_id == ^community.id)
+    |> preload([:game, :voting_session])
+    |> order_by([spin], desc: spin.spun_at, desc: spin.id)
+    |> limit(1)
+    |> Repo.one()
+  end
+
+  @doc """
   Returns the latest recorded spin for a voting session.
   """
   def latest_voting_session_spin(%Community{} = community, voting_session_id)

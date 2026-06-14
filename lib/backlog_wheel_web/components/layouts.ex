@@ -49,17 +49,23 @@ defmodule BacklogWheelWeb.Layouts do
 
       <header class="navbar sticky top-0 z-30 border-b border-base-content/10 bg-base-100/70 px-4 shadow-sm backdrop-blur-xl sm:px-6 lg:px-8">
         <div class="flex-1">
-          <a href="/" class="flex-1 flex w-fit items-center gap-2">
+          <.link
+            navigate={if(@current_user, do: ~p"/dashboard", else: ~p"/")}
+            class="flex-1 flex w-fit items-center gap-2"
+          >
             <span class="wheel-ring flex size-10 items-center justify-center rounded-full p-[2px] shadow-sm">
               <span class="flex size-full items-center justify-center rounded-full bg-base-100 text-sm font-black text-primary">
                 BW
               </span>
             </span>
             <span class="text-sm font-black tracking-tight">Backlog Wheel</span>
-          </a>
+          </.link>
         </div>
         <div class="flex-none">
           <ul class="flex flex-column items-center gap-2 px-1">
+            <li>
+              <.link navigate={~p"/dashboard"} class="btn btn-ghost hover-lift">Dashboard</.link>
+            </li>
             <li>
               <.link navigate={~p"/wheel"} class="btn btn-ghost hover-lift">Wheel</.link>
             </li>

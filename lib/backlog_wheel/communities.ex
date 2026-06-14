@@ -13,6 +13,16 @@ defmodule BacklogWheel.Communities do
   def get_community!(id), do: Repo.get!(Community, id)
 
   @doc """
+  Returns the first community used for public/default app views.
+  """
+  def default_community do
+    Community
+    |> order_by([community], asc: community.id)
+    |> limit(1)
+    |> Repo.one()
+  end
+
+  @doc """
   Returns CSS custom properties for the built-in public page theme.
   """
   def default_theme_style do
