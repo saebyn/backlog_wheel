@@ -62,6 +62,8 @@ defmodule BacklogWheel.Voting do
   @spin_full_turns 12
   @landing_edge_inset_ratio 0.25
   @landing_edge_inset_degrees 18.0
+  @twitch_reward_title_max_length 45
+  @twitch_reward_pool_max_size 50
   @spin_easing_profile %{
     "type" => "cubic-bezier",
     "x1" => 0.08,
@@ -244,6 +246,34 @@ defmodule BacklogWheel.Voting do
          {:ok, _pool_items} <- create_twitch_rewards(voting_session, config, credential, client),
          {:ok, session} <- update_voting_session_status(voting_session, "open") do
       {:ok, reload_voting_session!(session)}
+    end
+  end
+
+  @doc """
+  Checks whether a voting session can safely create Twitch rewards.
+  """
+  def validate_twitch_reward_creation(%VotingSession{} = voting_session) do
+    voting_session = reload_voting_session!(voting_session)
+    pool_items = voting_session.voting_session_games
+
+    cond do
+      pool_items == [] ->
+        {:error, :empty_pool}
+
+      length(pool_items) > @twitch_reward_pool_max_size ->
+        {:error,
+         {:twitch_reward_pool_too_large, length(pool_items), @twitch_reward_pool_max_size}}
+
+      too_long_title = Enum.find(pool_items, &twitch_reward_title_too_long?/1) ->
+        {:error,
+         {:twitch_reward_title_too_long, twitch_reward_title_for_validation(too_long_title),
+          @twitch_reward_title_max_length}}
+
+      duplicate_titles = duplicate_twitch_reward_titles(pool_items) ->
+        {:error, {:duplicate_twitch_reward_titles, duplicate_titles}}
+
+      true ->
+        :ok
     end
   end
 
@@ -577,22 +607,18 @@ defmodule BacklogWheel.Voting do
   defp create_twitch_rewards(%VotingSession{} = voting_session, config, credential, client) do
     voting_session = reload_voting_session!(voting_session)
 
-    case voting_session.voting_session_games do
-      [] ->
-        {:error, :empty_pool}
-
-      pool_items ->
-        pool_items
-        |> Enum.reduce_while({:ok, []}, fn pool_item, {:ok, created_pool_items} ->
-          case maybe_create_twitch_reward(pool_item, config, credential, client) do
-            {:ok, updated_pool_item} -> {:cont, {:ok, [updated_pool_item | created_pool_items]}}
-            {:error, reason} -> {:halt, {:error, reason}}
-          end
-        end)
-        |> then(fn
-          {:ok, created_pool_items} -> {:ok, Enum.reverse(created_pool_items)}
-          {:error, reason} -> {:error, reason}
-        end)
+    with :ok <- validate_twitch_reward_creation(voting_session) do
+      voting_session.voting_session_games
+      |> Enum.reduce_while({:ok, []}, fn pool_item, {:ok, created_pool_items} ->
+        case maybe_create_twitch_reward(pool_item, config, credential, client) do
+          {:ok, updated_pool_item} -> {:cont, {:ok, [updated_pool_item | created_pool_items]}}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+      end)
+      |> then(fn
+        {:ok, created_pool_items} -> {:ok, Enum.reverse(created_pool_items)}
+        {:error, reason} -> {:error, reason}
+      end)
     end
   end
 
@@ -696,7 +722,36 @@ defmodule BacklogWheel.Voting do
   defp twitch_reward_title(%VotingSessionGame{} = pool_item) do
     prefix = "Vote ##{pool_item.id}: "
 
-    prefix <> String.slice(pool_item.game.title, 0, 45 - String.length(prefix))
+    prefix <>
+      String.slice(
+        pool_item.game.title,
+        0,
+        max(0, @twitch_reward_title_max_length - String.length(prefix))
+      )
+  end
+
+  defp twitch_reward_title_for_validation(%VotingSessionGame{} = pool_item) do
+    if pool_item.twitch_reward_id not in [nil, ""] and
+         pool_item.twitch_reward_deletion_status != "deleted" do
+      pool_item.twitch_reward_title || twitch_reward_title(pool_item)
+    else
+      twitch_reward_title(pool_item)
+    end
+  end
+
+  defp twitch_reward_title_too_long?(%VotingSessionGame{} = pool_item) do
+    String.length(twitch_reward_title_for_validation(pool_item)) > @twitch_reward_title_max_length
+  end
+
+  defp duplicate_twitch_reward_titles(pool_items) do
+    duplicates =
+      pool_items
+      |> Enum.map(&twitch_reward_title_for_validation/1)
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_title, count} -> count > 1 end)
+      |> Enum.map(fn {title, _count} -> title end)
+
+    if duplicates == [], do: nil, else: duplicates
   end
 
   defp twitch_reward_pool_items(%VotingSession{} = voting_session) do

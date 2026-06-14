@@ -237,6 +237,37 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     refute has_element?(view, "#twitch-voting-hint")
   end
 
+  test "blocks starting Twitch voting when pool is too large", %{conn: conn} do
+    voting_session = voting_session_fixture()
+
+    for index <- 1..51 do
+      game =
+        game_fixture(%{
+          title: "Oversized Pool Game #{index}",
+          external_id: "oversized-pool-game-#{index}"
+        })
+
+      voting_session_game_fixture(voting_session, game)
+    end
+
+    {:ok, _credential} =
+      Twitch.save_credential(%{
+        access_token: "access-token",
+        refresh_token: "refresh-token",
+        scopes: "channel:manage:redemptions"
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    assert has_element?(view, "#start-twitch-voting[disabled]")
+
+    assert has_element?(
+             view,
+             "#twitch-voting-hint",
+             "Twitch can create at most 50 reward titles for one vote"
+           )
+  end
+
   test "keeps start Twitch voting enabled for open sessions without rewards", %{conn: conn} do
     voting_session = voting_session_fixture()
     voting_session_game_fixture(voting_session, game_fixture(%{title: "Open But No Reward"}))

@@ -410,6 +410,78 @@ defmodule BacklogWheel.VotingTest do
                {:error, :missing_twitch_credential}
     end
 
+    test "start_twitch_voting/2 rejects pools larger than Twitch reward limits" do
+      voting_session = voting_session_fixture()
+
+      pool_items =
+        for index <- 1..51 do
+          game =
+            game_fixture(%{
+              title: "Large Pool Game #{index}",
+              external_id: "large-pool-game-#{index}"
+            })
+
+          voting_session_game_fixture(voting_session, game)
+        end
+
+      {:ok, _credential} =
+        Twitch.save_credential(%{
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+          scopes: "channel:manage:redemptions"
+        })
+
+      assert Voting.start_twitch_voting(voting_session, client: BacklogWheel.FakeTwitchClient) ==
+               {:error, {:twitch_reward_pool_too_large, 51, 50}}
+
+      assert BacklogWheel.FakeTwitchClient.reward_attrs(hd(pool_items).id) == nil
+    end
+
+    test "validate_twitch_reward_creation/1 rejects long existing reward titles" do
+      voting_session = voting_session_fixture()
+      pool_item = voting_session_game_fixture(voting_session, game_fixture())
+      long_title = String.duplicate("A", 46)
+
+      pool_item
+      |> VotingSessionGame.twitch_reward_changeset(%{
+        twitch_reward_id: "reward-#{pool_item.id}",
+        twitch_reward_title: long_title,
+        twitch_reward_cost: 100,
+        twitch_reward_status: "enabled"
+      })
+      |> Repo.update!()
+
+      assert Voting.validate_twitch_reward_creation(voting_session) ==
+               {:error, {:twitch_reward_title_too_long, long_title, 45}}
+    end
+
+    test "validate_twitch_reward_creation/1 rejects duplicate reward titles" do
+      voting_session = voting_session_fixture()
+      first_pool_item = voting_session_game_fixture(voting_session, game_fixture())
+
+      second_pool_item =
+        voting_session_game_fixture(
+          voting_session,
+          game_fixture(%{external_id: "duplicate-reward-title"})
+        )
+
+      duplicate_title = "Vote for duplicate"
+
+      for pool_item <- [first_pool_item, second_pool_item] do
+        pool_item
+        |> VotingSessionGame.twitch_reward_changeset(%{
+          twitch_reward_id: "reward-#{pool_item.id}",
+          twitch_reward_title: duplicate_title,
+          twitch_reward_cost: 100,
+          twitch_reward_status: "enabled"
+        })
+        |> Repo.update!()
+      end
+
+      assert Voting.validate_twitch_reward_creation(voting_session) ==
+               {:error, {:duplicate_twitch_reward_titles, [duplicate_title]}}
+    end
+
     test "start_twitch_voting/2 does not require viewers to type game names" do
       voting_session = voting_session_fixture()
       game = game_fixture(%{title: "No Typing Required"})

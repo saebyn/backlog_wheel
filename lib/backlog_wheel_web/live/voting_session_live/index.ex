@@ -185,9 +185,10 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
             <p
               :if={@twitch_voting_hint}
               id="twitch-voting-hint"
-              class="rounded-2xl border border-base-300 bg-base-200 px-4 py-3 text-sm text-base-content/70"
+              class="flex items-start gap-3 rounded-2xl border border-warning/40 bg-warning/15 px-4 py-3 text-sm font-semibold text-warning-content shadow-sm"
             >
-              {@twitch_voting_hint}
+              <.icon name="hero-exclamation-triangle" class="mt-0.5 size-5 shrink-0 text-warning" />
+              <span>{@twitch_voting_hint}</span>
             </p>
 
             <div class="grid gap-6 xl:grid-cols-[1fr_22rem]">
@@ -643,25 +644,35 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   end
 
   defp assign_twitch_voting_state(socket, pool_items) do
-    hint = twitch_voting_hint(socket.assigns.twitch_connected?, pool_items)
+    hint =
+      twitch_voting_hint(
+        socket.assigns.twitch_connected?,
+        socket.assigns.selected_session,
+        pool_items
+      )
 
     socket
     |> assign(:twitch_voting_hint, hint)
     |> assign(:can_start_twitch_voting?, is_nil(hint))
   end
 
-  defp twitch_voting_hint(false, _pool_items),
+  defp twitch_voting_hint(false, _selected_session, _pool_items),
     do: "Connect Twitch before starting Twitch voting."
 
-  defp twitch_voting_hint(_connected?, []),
+  defp twitch_voting_hint(_connected?, _selected_session, []),
     do: "Add games to this vote before starting Twitch voting."
 
-  defp twitch_voting_hint(_connected?, pool_items) do
+  defp twitch_voting_hint(_connected?, selected_session, pool_items) do
     if Enum.all?(pool_items, fn pool_item ->
          pool_item.twitch_reward_id not in [nil, ""] and
            pool_item.twitch_reward_deletion_status != "deleted"
        end) do
       "Twitch voting rewards are already created for this session."
+    else
+      case Voting.validate_twitch_reward_creation(selected_session) do
+        :ok -> nil
+        {:error, reason} -> twitch_error(reason)
+      end
     end
   end
 
@@ -682,6 +693,16 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
   defp twitch_error(:empty_pool), do: "Add games to this vote before starting Twitch voting"
   defp twitch_error(:no_twitch_rewards), do: "No Twitch rewards to remove"
+
+  defp twitch_error({:twitch_reward_pool_too_large, count, max_count}),
+    do:
+      "Twitch can create at most #{max_count} reward titles for one vote; this vote has #{count} games."
+
+  defp twitch_error({:twitch_reward_title_too_long, title, max_length}),
+    do: "Twitch reward title is too long (max #{max_length} characters): #{title}"
+
+  defp twitch_error({:duplicate_twitch_reward_titles, [title | _titles]}),
+    do: "Twitch reward titles must be unique; duplicate title: #{title}"
 
   defp twitch_error({:twitch_reward_deletion_failed, count}),
     do: "#{count} Twitch reward cleanup failed"
