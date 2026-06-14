@@ -29,6 +29,7 @@ defmodule BacklogWheelWeb.Router do
 
     get "/", PageController, :home
     get "/login", DiscordOAuthController, :login
+    get "/access-not-enabled", DiscordOAuthController, :access_not_enabled
     get "/auth/discord/start", DiscordOAuthController, :start
     get "/auth/discord/callback", DiscordOAuthController, :callback
     delete "/logout", DiscordOAuthController, :logout

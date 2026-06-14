@@ -185,6 +185,35 @@ defmodule BacklogWheel.CommunitiesTest do
       assert {:ok, _membership} = Communities.create_membership(user, community, "viewer")
       assert Communities.current_admin_community_for_user(user) == nil
     end
+
+    test "blocks membership creation for unallowlisted users" do
+      original_allowlist = Application.get_env(:backlog_wheel, :signup_allowed_discord_ids)
+      Application.put_env(:backlog_wheel, :signup_allowed_discord_ids, "approved-discord")
+
+      on_exit(fn -> restore_env(:signup_allowed_discord_ids, original_allowlist) end)
+
+      user = user_fixture(%{discord_id: "unapproved-discord"})
+      community = community_fixture()
+
+      assert {:error, :signup_not_allowed} =
+               Communities.create_membership(user, community, "owner")
+    end
+  end
+
+  describe "initial community" do
+    test "blocks community creation for unallowlisted users" do
+      original_allowlist = Application.get_env(:backlog_wheel, :signup_allowed_discord_ids)
+      Application.put_env(:backlog_wheel, :signup_allowed_discord_ids, "approved-discord")
+
+      on_exit(fn -> restore_env(:signup_allowed_discord_ids, original_allowlist) end)
+
+      user = user_fixture(%{discord_id: "unapproved-discord"})
+
+      assert {:error, :signup_not_allowed} =
+               Communities.create_initial_community(user, %{"name" => "Blocked Community"})
+
+      refute Repo.get_by(Community, name: "Blocked Community")
+    end
   end
 
   defp user_fixture(attrs \\ %{}) do
@@ -199,4 +228,7 @@ defmodule BacklogWheel.CommunitiesTest do
     |> BacklogWheel.Accounts.User.changeset(attrs)
     |> Repo.insert!()
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:backlog_wheel, key)
+  defp restore_env(key, value), do: Application.put_env(:backlog_wheel, key, value)
 end

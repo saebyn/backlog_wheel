@@ -1,0 +1,42 @@
+<Layouts.app flash={@flash} current_user={@current_user}>
+  <section
+    id="access-not-enabled-page"
+    class="mx-auto max-w-2xl overflow-hidden rounded-[2rem] border border-base-300 bg-base-100 shadow-xl"
+  >
+    <div class="brand-panel p-8 sm:p-10">
+      <p class="text-sm font-black uppercase tracking-[0.24em] text-primary">Access Pending</p>
+      <h1 class="mt-3 text-4xl font-black tracking-tight text-base-content sm:text-5xl">
+        Backlog Wheel is not enabled for this Discord account yet.
+      </h1>
+      <p class="mt-4 max-w-xl text-base leading-7 text-base-content/70">
+        The hosted prototype is currently limited to approved Discord users. Your sign-in worked,
+        but this account is not on the sign-up allowlist, so community setup is disabled.
+      </p>
+    </div>
+
+    <div class="space-y-5 p-8 sm:p-10">
+      <div class="rounded-3xl border border-warning/30 bg-warning/10 p-5 text-sm leading-6">
+        <p class="font-bold text-base-content">What this means</p>
+        <p class="mt-2 text-base-content/70">
+          You cannot create a community, owner membership, games, voting sessions, or other
+          community-owned data until the site owner enables access for your Discord user ID.
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-3 sm:flex-row">
+        <.button id="access-not-enabled-login" href={~p"/login"} class="w-full sm:w-auto">
+          Try another Discord account
+        </.button>
+        <.button
+          :if={@current_user}
+          id="access-not-enabled-logout"
+          href={~p"/logout"}
+          method="delete"
+          class="btn-secondary w-full sm:w-auto"
+        >
+          Sign out
+        </.button>
+      </div>
+    </div>
+  </section>
+</Layouts.app>

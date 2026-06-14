@@ -37,6 +37,10 @@ config :backlog_wheel,
     eventsub_callback_url: System.get_env("TWITCH_EVENTSUB_CALLBACK_URL")
   ]
 
+if signup_allowed_discord_ids = System.get_env("SIGNUP_ALLOWED_DISCORD_IDS") do
+  config :backlog_wheel, signup_allowed_discord_ids: signup_allowed_discord_ids
+end
+
 if config_env() == :prod do
   database_path =
     System.get_env("DATABASE_PATH") ||

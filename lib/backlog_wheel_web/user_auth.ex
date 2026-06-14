@@ -28,21 +28,22 @@ defmodule BacklogWheelWeb.UserAuth do
   def require_authenticated_user(conn, _opts), do: conn
 
   def require_admin_community(%{assigns: %{current_community: nil}} = conn, _opts) do
-    conn
-    |> put_flash(:info, "Create your community to finish setup")
-    |> redirect(to: ~p"/onboarding")
-    |> halt()
+    if Accounts.signup_allowed?(conn.assigns.current_user) do
+      conn
+      |> put_flash(:info, "Create your community to finish setup")
+      |> redirect(to: ~p"/onboarding")
+      |> halt()
+    else
+      conn
+      |> redirect(to: ~p"/access-not-enabled")
+      |> halt()
+    end
   end
 
   def require_admin_community(conn, _opts), do: conn
 
   def log_in_user(conn, user) do
-    return_to =
-      if Communities.current_admin_community_for_user(user) do
-        get_session(conn, :user_return_to) || ~p"/voting"
-      else
-        ~p"/onboarding"
-      end
+    return_to = login_redirect_path(conn, user)
 
     conn
     |> renew_session()
@@ -71,11 +72,16 @@ defmodule BacklogWheelWeb.UserAuth do
 
         {:halt, socket}
 
-      is_nil(community) ->
+      is_nil(community) and Accounts.signup_allowed?(user) ->
         socket =
           socket
           |> Phoenix.LiveView.put_flash(:info, "Create your community to finish setup")
           |> Phoenix.LiveView.redirect(to: ~p"/onboarding")
+
+        {:halt, socket}
+
+      is_nil(community) ->
+        socket = Phoenix.LiveView.redirect(socket, to: ~p"/access-not-enabled")
 
         {:halt, socket}
 
@@ -91,6 +97,19 @@ defmodule BacklogWheelWeb.UserAuth do
     do: put_session(conn, :user_return_to, current_path(conn))
 
   defp maybe_store_return_to(conn), do: conn
+
+  defp login_redirect_path(conn, user) do
+    cond do
+      Communities.current_admin_community_for_user(user) ->
+        get_session(conn, :user_return_to) || ~p"/voting"
+
+      Accounts.signup_allowed?(user) ->
+        ~p"/onboarding"
+
+      true ->
+        ~p"/access-not-enabled"
+    end
+  end
 
   defp renew_session(conn) do
     conn

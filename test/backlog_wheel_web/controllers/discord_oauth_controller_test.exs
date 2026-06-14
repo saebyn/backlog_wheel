@@ -17,6 +17,7 @@ defmodule BacklogWheelWeb.DiscordOAuthControllerTest do
   setup do
     original_config = Application.get_env(:backlog_wheel, :discord)
     original_client = Application.get_env(:backlog_wheel, :discord_client)
+    original_allowlist = Application.get_env(:backlog_wheel, :signup_allowed_discord_ids)
 
     Application.put_env(:backlog_wheel, :discord,
       client_id: "client-id",
@@ -28,6 +29,7 @@ defmodule BacklogWheelWeb.DiscordOAuthControllerTest do
     on_exit(fn ->
       restore_env(:discord, original_config)
       restore_env(:discord_client, original_client)
+      restore_env(:signup_allowed_discord_ids, original_allowlist)
     end)
 
     :ok
@@ -84,18 +86,40 @@ defmodule BacklogWheelWeb.DiscordOAuthControllerTest do
              "Discord authorization state did not match"
   end
 
-  test "callback rejects Discord users missing from the database", %{conn: conn} do
+  test "callback creates an allowlisted Discord user", %{conn: conn} do
+    Application.put_env(:backlog_wheel, :signup_allowed_discord_ids, "discord-user-2")
+
     conn =
       conn
       |> Plug.Test.init_test_session(discord_oauth_state: "state-1")
       |> get(~p"/auth/discord/callback?#{[code: "other-user-code", state: "state-1"]}")
 
-    assert redirected_to(conn) == ~p"/login"
+    assert redirected_to(conn) == ~p"/onboarding"
 
-    assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
-             "This Discord account has not been added to Backlog Wheel"
+    user = Accounts.get_user_by_discord_id("discord-user-2")
+    assert user.username == "other-user"
+    assert user.role == "admin"
+    assert get_session(conn, :user_id) == user.id
+  end
+
+  test "callback redirects unallowlisted Discord users to access page", %{conn: conn} do
+    Application.put_env(:backlog_wheel, :signup_allowed_discord_ids, "discord-user-1")
+
+    conn =
+      conn
+      |> Plug.Test.init_test_session(discord_oauth_state: "state-1")
+      |> get(~p"/auth/discord/callback?#{[code: "other-user-code", state: "state-1"]}")
+
+    assert redirected_to(conn) == ~p"/access-not-enabled"
 
     refute Accounts.get_user_by_discord_id("discord-user-2")
+  end
+
+  test "access not enabled page explains the allowlist", %{conn: conn} do
+    conn = get(conn, ~p"/access-not-enabled")
+
+    assert html_response(conn, 200) =~ "Backlog Wheel is not enabled"
+    assert html_response(conn, 200) =~ "sign-up allowlist"
   end
 
   test "protected LiveViews require login", %{conn: conn} do

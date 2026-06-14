@@ -45,6 +45,11 @@ defmodule BacklogWheelWeb.DiscordOAuthController do
         |> put_flash(:error, "This Discord account has not been added to Backlog Wheel")
         |> redirect(to: ~p"/login")
 
+      {:error, :signup_not_allowed} ->
+        conn
+        |> delete_session(:discord_oauth_state)
+        |> redirect(to: ~p"/access-not-enabled")
+
       {:error, {:missing_config, missing}} ->
         conn
         |> put_flash(:error, "Missing Discord config: #{Enum.join(missing, ", ")}")
@@ -61,6 +66,10 @@ defmodule BacklogWheelWeb.DiscordOAuthController do
     conn
     |> put_flash(:error, "Discord authorization failed: #{error}")
     |> redirect(to: ~p"/login")
+  end
+
+  def access_not_enabled(conn, _params) do
+    render(conn, :access_not_enabled)
   end
 
   def logout(conn, _params), do: BacklogWheelWeb.UserAuth.log_out_user(conn)

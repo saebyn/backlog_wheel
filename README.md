@@ -82,14 +82,17 @@ Import behavior:
 
 ## Discord Login
 
-Discord login protects streamer/admin management pages. Users must already exist in the database with a matching `users.discord_id`; Discord OAuth does not create new users.
+Discord login protects streamer/admin management pages. New Discord users can only complete sign-up when their Discord user ID is included in the sign-up allowlist.
 
 Add these values to `.envrc`, then run `direnv allow`:
 
 ```sh
 export DISCORD_CLIENT_ID="your-discord-client-id"
 export DISCORD_CLIENT_SECRET="your-discord-client-secret"
+export SIGNUP_ALLOWED_DISCORD_IDS="123456789012345678,234567890123456789"
 ```
+
+`SIGNUP_ALLOWED_DISCORD_IDS` is a comma-separated list of Discord user IDs. Allowlisted users can create their initial community and owner membership after Discord login. Users not on the allowlist see an access-not-enabled page and cannot create communities or memberships.
 
 When registering a local development app in the Discord Developer Portal, use this OAuth redirect URL:
 

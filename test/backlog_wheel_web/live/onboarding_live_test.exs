@@ -16,6 +16,20 @@ defmodule BacklogWheelWeb.OnboardingLiveTest do
     assert {:error, {:redirect, %{to: "/onboarding"}}} = live(conn, ~p"/voting")
   end
 
+  @tag :unauthenticated
+  test "redirects unallowlisted users without a community to access not enabled", %{conn: conn} do
+    original_allowlist = Application.get_env(:backlog_wheel, :signup_allowed_discord_ids)
+    Application.put_env(:backlog_wheel, :signup_allowed_discord_ids, "approved-discord")
+
+    on_exit(fn -> restore_env(:signup_allowed_discord_ids, original_allowlist) end)
+
+    user = user_fixture(%{discord_id: "unapproved-discord"})
+    conn = Plug.Test.init_test_session(conn, user_id: user.id)
+
+    assert {:error, {:redirect, %{to: "/access-not-enabled"}}} = live(conn, ~p"/onboarding")
+    assert {:error, {:redirect, %{to: "/access-not-enabled"}}} = live(conn, ~p"/voting")
+  end
+
   test "redirects users with an existing admin community away from onboarding", %{conn: conn} do
     assert {:error, {:redirect, %{to: "/dashboard"}}} = live(conn, ~p"/onboarding")
   end
@@ -78,4 +92,7 @@ defmodule BacklogWheelWeb.OnboardingLiveTest do
     |> BacklogWheel.Accounts.User.changeset(attrs)
     |> Repo.insert!()
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:backlog_wheel, key)
+  defp restore_env(key, value), do: Application.put_env(:backlog_wheel, key, value)
 end

@@ -5,6 +5,7 @@ defmodule BacklogWheel.Communities do
 
   import Ecto.Query, warn: false
 
+  alias BacklogWheel.Accounts
   alias BacklogWheel.Accounts.User
   alias BacklogWheel.Communities.{Community, CommunityMembership}
   alias BacklogWheel.Communities.Theme
@@ -43,6 +44,14 @@ defmodule BacklogWheel.Communities do
   Creates a user's initial owned community and starter data.
   """
   def create_initial_community(%User{} = user, attrs) do
+    if Accounts.signup_allowed?(user) do
+      do_create_initial_community(user, attrs)
+    else
+      {:error, :signup_not_allowed}
+    end
+  end
+
+  defp do_create_initial_community(%User{} = user, attrs) do
     changeset = change_initial_community(attrs)
 
     if changeset.valid? do
@@ -78,9 +87,17 @@ defmodule BacklogWheel.Communities do
   Creates a membership connecting a user to a community.
   """
   def create_membership(%User{} = user, %Community{} = community, role) when is_binary(role) do
-    %CommunityMembership{}
-    |> CommunityMembership.changeset(%{user_id: user.id, community_id: community.id, role: role})
-    |> Repo.insert()
+    if Accounts.signup_allowed?(user) do
+      %CommunityMembership{}
+      |> CommunityMembership.changeset(%{
+        user_id: user.id,
+        community_id: community.id,
+        role: role
+      })
+      |> Repo.insert()
+    else
+      {:error, :signup_not_allowed}
+    end
   end
 
   defp normalize_attrs(attrs) do

@@ -85,6 +85,9 @@ defmodule BacklogWheelWeb.OnboardingLive do
       community ->
         {:ok, redirect(socket, to: ~p"/dashboard")}
 
+      not Accounts.signup_allowed?(user) ->
+        {:ok, redirect(socket, to: ~p"/access-not-enabled")}
+
       true ->
         {:ok,
          socket
@@ -112,6 +115,9 @@ defmodule BacklogWheelWeb.OnboardingLive do
          socket
          |> put_flash(:info, "Community created")
          |> push_navigate(to: ~p"/dashboard")}
+
+      {:error, :signup_not_allowed} ->
+        {:noreply, push_navigate(socket, to: ~p"/access-not-enabled")}
 
       {:error, changeset} ->
         {:noreply, assign_form(socket, changeset)}

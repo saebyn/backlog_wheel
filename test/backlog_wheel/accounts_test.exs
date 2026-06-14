@@ -29,8 +29,27 @@ defmodule BacklogWheel.AccountsTest do
     assert updated_user.role == "admin"
   end
 
-  test "sync_discord_user/1 rejects Discord users missing from the database" do
-    assert Accounts.sync_discord_user(%{"id" => "missing", "username" => "Missing"}) ==
-             {:error, :unauthorized}
+  test "sync_discord_user/1 creates allowlisted Discord users" do
+    original_allowlist = Application.get_env(:backlog_wheel, :signup_allowed_discord_ids)
+    Application.put_env(:backlog_wheel, :signup_allowed_discord_ids, "new-user")
+    on_exit(fn -> restore_env(:signup_allowed_discord_ids, original_allowlist) end)
+
+    assert {:ok, user} = Accounts.sync_discord_user(%{"id" => "new-user", "username" => "New"})
+
+    assert user.discord_id == "new-user"
+    assert user.username == "New"
+    assert user.role == "admin"
   end
+
+  test "sync_discord_user/1 rejects unallowlisted Discord users" do
+    original_allowlist = Application.get_env(:backlog_wheel, :signup_allowed_discord_ids)
+    Application.put_env(:backlog_wheel, :signup_allowed_discord_ids, "approved-user")
+    on_exit(fn -> restore_env(:signup_allowed_discord_ids, original_allowlist) end)
+
+    assert Accounts.sync_discord_user(%{"id" => "missing", "username" => "Missing"}) ==
+             {:error, :signup_not_allowed}
+  end
+
+  defp restore_env(key, nil), do: Application.delete_env(:backlog_wheel, key)
+  defp restore_env(key, value), do: Application.put_env(:backlog_wheel, key, value)
 end

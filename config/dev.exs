@@ -67,6 +67,8 @@ config :backlog_wheel, BacklogWheelWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :backlog_wheel, dev_routes: true
 
+config :backlog_wheel, signup_allowed_discord_ids: :all
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 
