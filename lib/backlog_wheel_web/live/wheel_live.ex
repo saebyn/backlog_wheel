@@ -25,13 +25,13 @@ defmodule BacklogWheelWeb.WheelLive do
       wide
     >
       <section id="wheel-page" class="min-h-[calc(100vh-7rem)] overflow-hidden">
-        <div class="grid min-h-[calc(100vh-7rem)] gap-6 lg:grid-cols-[1fr_22rem] lg:items-stretch">
+        <div class="grid min-h-[calc(100vh-7rem)] gap-6 lg:grid-cols-[1fr_22rem] lg:items-start">
           <div
             id="roulette-wheel-hook"
             phx-hook="RouletteWheel"
             data-voting-session-id={@selected_session && @selected_session.id}
             data-initial-rotation={@initial_rotation}
-            class="relative flex min-h-[70vh] items-center justify-center overflow-hidden rounded-[2rem] border border-base-300 bg-radial-[at_50%_50%] from-base-100 via-base-200 to-base-300 shadow-2xl"
+            class="relative flex min-h-[70vh] items-center justify-center overflow-hidden rounded-[2rem] border border-base-300 bg-radial-[at_50%_50%] from-base-100 via-base-200 to-base-300 shadow-2xl lg:sticky lg:top-24"
           >
             <div class="relative aspect-square w-[min(92vw,calc(100vh-9rem))] max-w-[78rem] rounded-full will-change-transform">
               <div class="pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 -translate-y-5">
@@ -135,6 +135,16 @@ defmodule BacklogWheelWeb.WheelLive do
               </div>
             </section>
 
+            <.button
+              id="spin-wheel-button"
+              variant="primary"
+              phx-click="spin"
+              disabled={!@selected_session || @candidate_count == 0 || @spinning?}
+              class="btn btn-primary btn-lg w-full"
+            >
+              {if @spinning?, do: "Spinning...", else: "Spin Wheel"}
+            </.button>
+
             <section
               :if={@selected_session}
               id="wheel-weight-summary"
@@ -185,16 +195,6 @@ defmodule BacklogWheelWeb.WheelLive do
               <h2 class="mt-3 text-3xl font-black tracking-tight">{@selected_game.title}</h2>
               <p class="mt-2 text-base-content/70">Recorded in spin history.</p>
             </div>
-
-            <.button
-              id="spin-wheel-button"
-              variant="primary"
-              phx-click="spin"
-              disabled={!@selected_session || @candidate_count == 0 || @spinning?}
-              class="btn btn-primary btn-lg w-full"
-            >
-              {if @spinning?, do: "Spinning...", else: "Spin Wheel"}
-            </.button>
 
             <section class="min-h-0 flex-1 space-y-3">
               <h2 class="text-xl font-bold">Recent Spins</h2>
