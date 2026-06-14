@@ -17,8 +17,45 @@ defmodule BacklogWheel.Voting do
     Viewer,
     ViewerIdentity,
     VotingSession,
-    VotingSessionGame
+    VotingSessionGame,
+    WheelFormat
   }
+
+  @default_wheel_formats [
+    %{
+      name: "Fresh backlog",
+      description: "Prioritize games that have never been played on stream.",
+      default_session_title: "Fresh Backlog Vote",
+      default_session_description: "A vote focused on games that have not had stream time yet.",
+      is_default: true,
+      candidate_rules: %{"include_in_wheel" => true, "played_on_stream" => false},
+      weighting_rules: %{"base_weight" => 2, "intent" => "favor_unplayed"}
+    },
+    %{
+      name: "Keep the streak alive",
+      description:
+        "Favor recent winners or recent stream games, with room to cool down long streaks.",
+      default_session_title: "Streak Vote",
+      default_session_description:
+        "A vote for continuing momentum without letting one game dominate forever.",
+      is_default: true,
+      candidate_rules: %{"include_in_wheel" => true},
+      weighting_rules: %{
+        "base_weight" => 1,
+        "favor_recent_activity" => true,
+        "cooldown_long_streaks" => true
+      }
+    },
+    %{
+      name: "Chaos night",
+      description: "Use the broad wheel pool with minimal filtering.",
+      default_session_title: "Chaos Night Vote",
+      default_session_description: "A wide-open vote from the current wheel-eligible backlog.",
+      is_default: true,
+      candidate_rules: %{"include_in_wheel" => true},
+      weighting_rules: %{"base_weight" => 1, "intent" => "minimal_filtering"}
+    }
+  ]
 
   @pubsub BacklogWheel.PubSub
   @spin_duration_ms 30_000
@@ -66,6 +103,48 @@ defmodule BacklogWheel.Voting do
   end
 
   @doc """
+  Returns enabled Wheel Formats for a community.
+  """
+  def list_wheel_formats(%Community{} = community) do
+    WheelFormat
+    |> where([format], format.community_id == ^community.id)
+    |> where([format], format.is_enabled)
+    |> order_by([format], asc: format.name)
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets a community Wheel Format.
+  """
+  def get_wheel_format!(%Community{} = community, id) do
+    Repo.get_by!(WheelFormat, id: id, community_id: community.id)
+  end
+
+  @doc """
+  Creates a Wheel Format for a community.
+  """
+  def create_wheel_format(%Community{} = community, attrs) do
+    %WheelFormat{community_id: community.id}
+    |> WheelFormat.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Seeds the default Wheel Formats for a community if they do not exist yet.
+  """
+  def ensure_default_wheel_formats(%Community{} = community) do
+    formats =
+      Enum.map(@default_wheel_formats, fn attrs ->
+        Repo.get_by(WheelFormat, community_id: community.id, name: attrs.name) ||
+          %WheelFormat{community_id: community.id}
+          |> WheelFormat.changeset(attrs)
+          |> Repo.insert!()
+      end)
+
+    {:ok, formats}
+  end
+
+  @doc """
   Gets a voting session with its game pool.
   """
   def get_voting_session!(%Community{} = community, id) do
@@ -82,6 +161,30 @@ defmodule BacklogWheel.Voting do
     %VotingSession{community_id: community.id}
     |> VotingSession.changeset(attrs)
     |> Repo.insert()
+  end
+
+  @doc """
+  Creates a voting session from a Wheel Format and populates its initial game pool.
+  """
+  def create_voting_session_from_wheel_format(
+        %Community{} = community,
+        %WheelFormat{} = wheel_format
+      ) do
+    if wheel_format.community_id == community.id do
+      Repo.transaction(fn ->
+        {:ok, session} =
+          create_voting_session(community, %{
+            wheel_format_id: wheel_format.id,
+            title: wheel_format.default_session_title,
+            description: wheel_format.default_session_description
+          })
+
+        {:ok, _pool_items} = populate_session_from_wheel_format(session, wheel_format)
+        session
+      end)
+    else
+      {:error, :wheel_format_not_in_community}
+    end
   end
 
   @doc """
@@ -736,6 +839,28 @@ defmodule BacklogWheel.Voting do
     |> then(&{:ok, &1})
   end
 
+  @doc """
+  Populates a voting session pool from a Wheel Format's candidate rules.
+  """
+  def populate_session_from_wheel_format(
+        %VotingSession{} = voting_session,
+        %WheelFormat{} = wheel_format
+      ) do
+    existing_game_ids = existing_session_game_ids(voting_session) |> MapSet.new()
+    base_weight = wheel_format_base_weight(wheel_format)
+
+    voting_session
+    |> list_populatable_format_games(wheel_format)
+    |> Enum.reject(&MapSet.member?(existing_game_ids, &1.id))
+    |> Enum.map(fn game ->
+      {:ok, voting_session_game} =
+        add_game_to_session(voting_session, game, %{base_weight: base_weight})
+
+      voting_session_game
+    end)
+    |> then(&{:ok, &1})
+  end
+
   defp get_existing_external_vote(attrs) do
     source = Map.get(attrs, :source) || Map.get(attrs, "source")
     external_event_id = Map.get(attrs, :external_event_id) || Map.get(attrs, "external_event_id")
@@ -754,6 +879,39 @@ defmodule BacklogWheel.Voting do
     |> order_by([game], asc: game.title)
     |> Repo.all()
   end
+
+  defp list_populatable_format_games(
+         %VotingSession{} = voting_session,
+         %WheelFormat{} = wheel_format
+       ) do
+    query =
+      Game
+      |> where([game], game.community_id == ^voting_session.community_id)
+      |> apply_candidate_rules(wheel_format.candidate_rules || %{})
+
+    query
+    |> order_by([game], asc: game.title)
+    |> Repo.all()
+  end
+
+  defp apply_candidate_rules(query, rules) do
+    Enum.reduce(rules, query, fn
+      {"include_in_wheel", value}, query when is_boolean(value) ->
+        where(query, [game], game.include_in_wheel == ^value)
+
+      {"played_on_stream", value}, query when is_boolean(value) ->
+        where(query, [game], game.played_on_stream == ^value)
+
+      _rule, query ->
+        query
+    end)
+  end
+
+  defp wheel_format_base_weight(%WheelFormat{weighting_rules: %{"base_weight" => weight}})
+       when is_integer(weight) and weight > 0,
+       do: weight
+
+  defp wheel_format_base_weight(_wheel_format), do: 1
 
   defp existing_session_game_ids(%VotingSession{} = voting_session) do
     VotingSessionGame

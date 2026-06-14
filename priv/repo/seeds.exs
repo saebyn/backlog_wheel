@@ -10,4 +10,8 @@
 # We recommend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
 
-# No seed data is required.
+BacklogWheel.Communities.Community
+|> BacklogWheel.Repo.all()
+|> Enum.each(fn community ->
+  {:ok, _formats} = BacklogWheel.Voting.ensure_default_wheel_formats(community)
+end)

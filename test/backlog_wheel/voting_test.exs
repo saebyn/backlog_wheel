@@ -9,7 +9,8 @@ defmodule BacklogWheel.VotingTest do
     Viewer,
     ViewerIdentity,
     VotingSession,
-    VotingSessionGame
+    VotingSessionGame,
+    WheelFormat
   }
 
   alias BacklogWheel.Twitch
@@ -60,6 +61,101 @@ defmodule BacklogWheel.VotingTest do
 
       assert {:error, changeset} = Voting.create_voting_session(community, %{status: "invalid"})
       assert %{status: ["is invalid"]} = errors_on(changeset)
+    end
+
+    test "create_voting_session/2 stores title and description" do
+      community = community_fixture()
+
+      assert {:ok, voting_session} =
+               Voting.create_voting_session(community, %{
+                 title: "Community Vote",
+                 description: "Pick the next game."
+               })
+
+      assert voting_session.title == "Community Vote"
+      assert voting_session.description == "Pick the next game."
+    end
+  end
+
+  describe "wheel_formats" do
+    test "create_wheel_format/2 creates a format for a community" do
+      community = community_fixture()
+
+      assert {:ok, %WheelFormat{} = wheel_format} =
+               Voting.create_wheel_format(community, %{
+                 name: "Fresh backlog",
+                 description: "Unplayed games first.",
+                 default_session_title: "Fresh Vote",
+                 default_session_description: "Pick something untouched.",
+                 candidate_rules: %{"include_in_wheel" => true, "played_on_stream" => false},
+                 weighting_rules: %{"base_weight" => 2, "intent" => "favor_unplayed"}
+               })
+
+      assert wheel_format.community_id == community.id
+      assert wheel_format.name == "Fresh backlog"
+      assert wheel_format.default_session_title == "Fresh Vote"
+      assert wheel_format.candidate_rules["played_on_stream"] == false
+      assert wheel_format.weighting_rules["base_weight"] == 2
+    end
+
+    test "ensure_default_wheel_formats/1 seeds default formats once" do
+      community = community_fixture()
+
+      assert {:ok, formats} = Voting.ensure_default_wheel_formats(community)
+
+      assert Enum.map(formats, & &1.name) == [
+               "Fresh backlog",
+               "Keep the streak alive",
+               "Chaos night"
+             ]
+
+      assert {:ok, formats_again} = Voting.ensure_default_wheel_formats(community)
+      assert Enum.map(formats_again, & &1.id) == Enum.map(formats, & &1.id)
+    end
+
+    test "create_voting_session_from_wheel_format/2 creates and populates a session" do
+      community = community_fixture()
+
+      included_game =
+        game_fixture(%{
+          community: community,
+          title: "Fresh Candidate",
+          include_in_wheel: true,
+          played_on_stream: false,
+          external_id: "fresh-candidate"
+        })
+
+      played_game =
+        game_fixture(%{
+          community: community,
+          title: "Played Candidate",
+          include_in_wheel: true,
+          played_on_stream: true,
+          external_id: "played-candidate"
+        })
+
+      wheel_format =
+        wheel_format_fixture(%{
+          community: community,
+          default_session_title: "Fresh Vote",
+          default_session_description: "Only fresh games.",
+          candidate_rules: %{"include_in_wheel" => true, "played_on_stream" => false},
+          weighting_rules: %{"base_weight" => 3}
+        })
+
+      assert {:ok, voting_session} =
+               Voting.create_voting_session_from_wheel_format(community, wheel_format)
+
+      assert voting_session.title == "Fresh Vote"
+      assert voting_session.description == "Only fresh games."
+      assert voting_session.wheel_format_id == wheel_format.id
+
+      voting_session = Voting.get_voting_session!(community, voting_session.id)
+
+      assert [pool_item] = voting_session.voting_session_games
+      assert pool_item.game_id == included_game.id
+      assert pool_item.base_weight == 3
+      refute Enum.any?(voting_session.voting_session_games, &(&1.game_id == played_game.id))
     end
   end
 

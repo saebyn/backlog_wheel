@@ -4,7 +4,7 @@ defmodule BacklogWheel.Communities.Community do
 
   alias BacklogWheel.Backlog.{Game, Spin}
   alias BacklogWheel.Communities.{CommunityMembership, Theme}
-  alias BacklogWheel.Voting.{Viewer, ViewerIdentity, VotingSession}
+  alias BacklogWheel.Voting.{Viewer, ViewerIdentity, VotingSession, WheelFormat}
 
   schema "communities" do
     field :name, :string
@@ -24,6 +24,7 @@ defmodule BacklogWheel.Communities.Community do
     has_many :viewers, Viewer
     has_many :viewer_identities, ViewerIdentity
     has_many :voting_sessions, VotingSession
+    has_many :wheel_formats, WheelFormat
 
     timestamps(type: :utc_datetime)
   end

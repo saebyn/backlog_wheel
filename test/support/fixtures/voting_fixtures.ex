@@ -22,6 +22,33 @@ defmodule BacklogWheel.VotingFixtures do
   end
 
   @doc """
+  Generate a Wheel Format.
+  """
+  def wheel_format_fixture(attrs \\ %{}) do
+    {community, attrs} = Map.pop(attrs, :community)
+
+    community =
+      community || Process.get(:test_community) ||
+        BacklogWheel.BacklogFixtures.community_fixture()
+
+    Process.put(:test_community, community)
+
+    attrs =
+      Enum.into(attrs, %{
+        name: "Format #{System.unique_integer([:positive])}",
+        description: "A reusable Wheel Format",
+        default_session_title: "Format Vote",
+        default_session_description: "Created from a Wheel Format",
+        candidate_rules: %{"include_in_wheel" => true},
+        weighting_rules: %{"base_weight" => 1}
+      })
+
+    {:ok, wheel_format} = BacklogWheel.Voting.create_wheel_format(community, attrs)
+
+    wheel_format
+  end
+
+  @doc """
   Generate a voting session game.
   """
   def voting_session_game_fixture(voting_session, game, attrs \\ %{}) do

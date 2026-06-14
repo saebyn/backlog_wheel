@@ -23,11 +23,39 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
             Voting Sessions
             <:subtitle>Create game lists, collect channel point votes, and spin a winner.</:subtitle>
             <:actions>
-              <.button id="create-voting-session" variant="primary" phx-click="create_session">
-                <.icon name="hero-plus" /> New Session
+              <.button id="create-voting-session" phx-click="create_session">
+                <.icon name="hero-plus" /> Manual Session
               </.button>
             </:actions>
           </.header>
+
+          <.form
+            for={@wheel_format_form}
+            id="create-session-from-format-form"
+            phx-submit="create_session_from_format"
+          >
+            <div class="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <div>
+                <p class="text-sm font-bold uppercase tracking-[0.18em] text-primary">Wheel Format</p>
+                <p class="mt-1 text-sm text-base-content/70">
+                  Start from a reusable format, then tune the game pool for this vote.
+                </p>
+              </div>
+              <.input
+                field={@wheel_format_form[:wheel_format_id]}
+                type="select"
+                label="Format"
+                options={@wheel_format_options}
+              />
+              <.button
+                id="create-voting-session-from-format"
+                variant="primary"
+                disabled={@wheel_format_options == []}
+              >
+                Create From Format
+              </.button>
+            </div>
+          </.form>
 
           <div id="voting-sessions" phx-update="stream" class="space-y-2">
             <p
@@ -44,7 +72,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
               phx-value-id={session.id}
               class={session_button_class(session, @selected_session)}
             >
-              <span class="font-semibold">Session #{session.id}</span>
+              <span class="font-semibold">{session.title || "Session #{session.id}"}</span>
               <span class="badge badge-ghost capitalize">{session.status}</span>
               <span class="text-xs text-base-content/60">
                 {length(session.voting_session_games)} games
@@ -74,7 +102,16 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                 <p class="text-sm font-semibold uppercase tracking-[0.24em] text-primary">
                   Session #{@selected_session.id}
                 </p>
-                <h1 class="mt-2 text-4xl font-black tracking-tight">Games In This Vote</h1>
+                <h1 id="selected-session-title" class="mt-2 text-4xl font-black tracking-tight">
+                  {@selected_session.title || "Games In This Vote"}
+                </h1>
+                <p
+                  :if={@selected_session.description}
+                  id="selected-session-description"
+                  class="mt-2 max-w-3xl text-base-content/70"
+                >
+                  {@selected_session.description}
+                </p>
                 <div class="mt-3 flex flex-wrap gap-2">
                   <span id="selected-session-status" class="badge badge-primary capitalize">
                     {@selected_session.status}
@@ -330,6 +367,30 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
      |> refresh()}
   end
 
+  def handle_event(
+        "create_session_from_format",
+        %{"wheel_format" => %{"wheel_format_id" => wheel_format_id}},
+        socket
+      ) do
+    wheel_format =
+      Voting.get_wheel_format!(
+        socket.assigns.current_community,
+        String.to_integer(wheel_format_id)
+      )
+
+    {:ok, session} =
+      Voting.create_voting_session_from_wheel_format(
+        socket.assigns.current_community,
+        wheel_format
+      )
+
+    {:noreply,
+     socket
+     |> assign(:selected_session_id, session.id)
+     |> put_flash(:info, "Voting session created from Wheel Format")
+     |> refresh()}
+  end
+
   def handle_event("select_session", %{"id" => id}, socket) do
     {:noreply, socket |> assign(:selected_session_id, String.to_integer(id)) |> refresh()}
   end
@@ -446,7 +507,10 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   end
 
   defp refresh(socket) do
+    {:ok, _formats} = Voting.ensure_default_wheel_formats(socket.assigns.current_community)
+
     sessions = Voting.list_voting_sessions(socket.assigns.current_community)
+    wheel_formats = Voting.list_wheel_formats(socket.assigns.current_community)
     selected_session = selected_session(sessions, socket.assigns.selected_session_id)
     pool_items = if selected_session, do: selected_session.voting_session_games, else: []
 
@@ -457,6 +521,8 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
       filter_available_games(unfiltered_available_games, socket.assigns.available_games_filter)
 
     socket
+    |> assign(:wheel_format_options, wheel_format_options(wheel_formats))
+    |> assign(:wheel_format_form, wheel_format_form(wheel_formats))
     |> assign(:selected_session, selected_session)
     |> assign(:selected_session_id, selected_session && selected_session.id)
     |> assign(:pool_items, pool_items)
@@ -530,6 +596,16 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
   defp available_games_filter_form(filter) do
     to_form(%{"query" => filter}, as: :available_games_filter)
+  end
+
+  defp wheel_format_form([]), do: to_form(%{"wheel_format_id" => ""}, as: :wheel_format)
+
+  defp wheel_format_form([wheel_format | _wheel_formats]) do
+    to_form(%{"wheel_format_id" => wheel_format.id}, as: :wheel_format)
+  end
+
+  defp wheel_format_options(wheel_formats) do
+    Enum.map(wheel_formats, &{&1.name, &1.id})
   end
 
   defp available_games_empty_message([], _available_games, _filter),

@@ -22,6 +22,42 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     assert has_element?(view, "#selected-session-pool-size", "0 games in this vote")
   end
 
+  test "creates a voting session from a Wheel Format", %{conn: conn} do
+    fresh_game =
+      game_fixture(%{
+        title: "Unplayed Format Game",
+        include_in_wheel: true,
+        played_on_stream: false,
+        external_id: "unplayed-format-game"
+      })
+
+    game_fixture(%{
+      title: "Played Format Game",
+      include_in_wheel: true,
+      played_on_stream: true,
+      external_id: "played-format-game"
+    })
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    assert has_element?(view, "#create-session-from-format-form", "Wheel Format")
+
+    fresh_format =
+      Process.get(:test_community)
+      |> Voting.list_wheel_formats()
+      |> Enum.find(&(&1.name == "Fresh backlog"))
+
+    view
+    |> form("#create-session-from-format-form", wheel_format: %{wheel_format_id: fresh_format.id})
+    |> render_submit()
+
+    assert has_element?(view, "#selected-session-title", "Fresh Backlog Vote")
+    assert has_element?(view, "#selected-session-description")
+    assert has_element?(view, "#voting-session-pool", fresh_game.title)
+    refute has_element?(view, "#voting-session-pool", "Played Format Game")
+    assert has_element?(view, "#selected-session-pool-size", "1 games in this vote")
+  end
+
   test "populates pool from wheel-eligible games", %{conn: conn} do
     wheel_game = game_fixture(%{title: "Wheel Candidate", include_in_wheel: true})
 

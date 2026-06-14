@@ -17,7 +17,7 @@ pkgs.mkShellNoCC {
     python3
     uv
     jq
-    nodePackages.aws-cdk
+    aws-cdk-cli
   ];
 
   shellHook = ''
