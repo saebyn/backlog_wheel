@@ -9,6 +9,7 @@ defmodule BacklogWheel.Communities do
   alias BacklogWheel.Communities.{Community, CommunityMembership}
   alias BacklogWheel.Communities.Theme
   alias BacklogWheel.Repo
+  alias BacklogWheel.Voting
 
   def get_community!(id), do: Repo.get!(Community, id)
 
@@ -32,12 +33,82 @@ defmodule BacklogWheel.Communities do
   end
 
   @doc """
+  Returns a changeset for first-run community onboarding.
+  """
+  def change_initial_community(attrs \\ %{}) do
+    Community.onboarding_changeset(%Community{}, attrs)
+  end
+
+  @doc """
+  Creates a user's initial owned community and starter data.
+  """
+  def create_initial_community(%User{} = user, attrs) do
+    changeset = change_initial_community(attrs)
+
+    if changeset.valid? do
+      community_attrs =
+        attrs
+        |> normalize_attrs()
+        |> Map.put("slug", unique_slug(Ecto.Changeset.get_field(changeset, :name)))
+
+      Ecto.Multi.new()
+      |> Ecto.Multi.insert(:community, Community.changeset(%Community{}, community_attrs))
+      |> Ecto.Multi.insert(:membership, fn %{community: community} ->
+        CommunityMembership.changeset(%CommunityMembership{}, %{
+          user_id: user.id,
+          community_id: community.id,
+          role: "owner"
+        })
+      end)
+      |> Ecto.Multi.run(:wheel_formats, fn _repo, %{community: community} ->
+        Voting.ensure_default_wheel_formats(community)
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{community: community}} -> {:ok, community}
+        {:error, :community, changeset, _changes} -> {:error, changeset}
+        {:error, _step, reason, _changes} -> {:error, reason}
+      end
+    else
+      {:error, %{changeset | action: :insert}}
+    end
+  end
+
+  @doc """
   Creates a membership connecting a user to a community.
   """
   def create_membership(%User{} = user, %Community{} = community, role) when is_binary(role) do
     %CommunityMembership{}
     |> CommunityMembership.changeset(%{user_id: user.id, community_id: community.id, role: role})
     |> Repo.insert()
+  end
+
+  defp normalize_attrs(attrs) do
+    Map.new(attrs, fn {key, value} -> {to_string(key), value} end)
+  end
+
+  defp unique_slug(name) do
+    base_slug = slugify(name)
+
+    Stream.iterate(0, &(&1 + 1))
+    |> Stream.map(fn
+      0 -> base_slug
+      suffix -> "#{base_slug}-#{suffix}"
+    end)
+    |> Enum.find(fn slug ->
+      not Repo.exists?(from community in Community, where: community.slug == ^slug)
+    end)
+  end
+
+  defp slugify(name) do
+    name
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/, "-")
+    |> String.trim("-")
+    |> case do
+      "" -> "community"
+      slug -> slug
+    end
   end
 
   @doc """

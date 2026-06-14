@@ -16,6 +16,10 @@ defmodule BacklogWheelWeb.Router do
     plug BacklogWheelWeb.UserAuth, :require_admin_community
   end
 
+  pipeline :authenticated_user_browser do
+    plug BacklogWheelWeb.UserAuth, :require_authenticated_user
+  end
+
   pipeline :api do
     plug :accepts, ["json"]
   end
@@ -30,6 +34,14 @@ defmodule BacklogWheelWeb.Router do
     delete "/logout", DiscordOAuthController, :logout
 
     live "/dashboard", DashboardLive, :show
+  end
+
+  scope "/", BacklogWheelWeb do
+    pipe_through [:browser, :authenticated_user_browser]
+
+    live_session :onboarding do
+      live "/onboarding", OnboardingLive, :new
+    end
   end
 
   scope "/", BacklogWheelWeb do

@@ -29,15 +29,20 @@ defmodule BacklogWheelWeb.UserAuth do
 
   def require_admin_community(%{assigns: %{current_community: nil}} = conn, _opts) do
     conn
-    |> put_flash(:error, "No owner or admin community is linked to this account")
-    |> redirect(to: ~p"/")
+    |> put_flash(:info, "Create your community to finish setup")
+    |> redirect(to: ~p"/onboarding")
     |> halt()
   end
 
   def require_admin_community(conn, _opts), do: conn
 
   def log_in_user(conn, user) do
-    return_to = get_session(conn, :user_return_to) || ~p"/voting"
+    return_to =
+      if Communities.current_admin_community_for_user(user) do
+        get_session(conn, :user_return_to) || ~p"/voting"
+      else
+        ~p"/onboarding"
+      end
 
     conn
     |> renew_session()
@@ -69,11 +74,8 @@ defmodule BacklogWheelWeb.UserAuth do
       is_nil(community) ->
         socket =
           socket
-          |> Phoenix.LiveView.put_flash(
-            :error,
-            "No owner or admin community is linked to this account"
-          )
-          |> Phoenix.LiveView.redirect(to: ~p"/")
+          |> Phoenix.LiveView.put_flash(:info, "Create your community to finish setup")
+          |> Phoenix.LiveView.redirect(to: ~p"/onboarding")
 
         {:halt, socket}
 

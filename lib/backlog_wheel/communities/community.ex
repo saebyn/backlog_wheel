@@ -38,6 +38,13 @@ defmodule BacklogWheel.Communities.Community do
   end
 
   @doc false
+  def onboarding_changeset(community, attrs) do
+    community
+    |> cast(attrs, [:name])
+    |> validate_required([:name])
+  end
+
+  @doc false
   def theme_changeset(community, attrs) do
     community
     |> cast(attrs, Theme.color_fields())

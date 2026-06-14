@@ -282,7 +282,7 @@ defmodule BacklogWheelWeb.DashboardLive do
   @impl true
   def mount(_params, session, socket) do
     user = Accounts.get_user(Map.get(session, "user_id"))
-    community = Communities.default_community()
+    community = current_dashboard_community(user)
 
     {:ok,
      socket
@@ -290,6 +290,12 @@ defmodule BacklogWheelWeb.DashboardLive do
      |> assign(:current_user, user)
      |> assign(:current_community, community)
      |> assign_dashboard(community)}
+  end
+
+  defp current_dashboard_community(nil), do: Communities.default_community()
+
+  defp current_dashboard_community(user) do
+    Communities.current_admin_community_for_user(user) || Communities.default_community()
   end
 
   defp assign_dashboard(socket, nil) do

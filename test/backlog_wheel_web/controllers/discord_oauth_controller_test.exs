@@ -47,7 +47,7 @@ defmodule BacklogWheelWeb.DiscordOAuthControllerTest do
     assert get_session(conn, :discord_oauth_state)
   end
 
-  test "callback exchanges code, refreshes existing user, and logs in", %{conn: conn} do
+  test "callback exchanges code, refreshes existing user, and starts onboarding", %{conn: conn} do
     user =
       %User{}
       |> User.changeset(%{
@@ -62,7 +62,7 @@ defmodule BacklogWheelWeb.DiscordOAuthControllerTest do
       |> Plug.Test.init_test_session(discord_oauth_state: "state-1")
       |> get(~p"/auth/discord/callback?#{[code: "valid-code", state: "state-1"]}")
 
-    assert redirected_to(conn) == ~p"/voting"
+    assert redirected_to(conn) == ~p"/onboarding"
     assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Signed in with Discord"
 
     updated_user = Accounts.get_user_by_discord_id("discord-user-1")
