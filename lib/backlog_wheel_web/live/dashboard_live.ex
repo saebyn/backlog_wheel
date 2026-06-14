@@ -157,7 +157,7 @@ defmodule BacklogWheelWeb.DashboardLive do
               id="dashboard-no-active-session"
               class="mt-6 rounded-3xl bg-base-200 p-5"
             >
-              <p class="font-bold">No draft, open, or locked voting session.</p>
+              <p class="font-bold">No draft, open, or ready-to-spin voting session.</p>
               <p class="mt-2 text-sm leading-6 text-base-content/70">
                 Start a session when you are ready to collect votes or build tonight's pool.
               </p>
@@ -176,8 +176,8 @@ defmodule BacklogWheelWeb.DashboardLive do
               class="mt-6 space-y-4"
             >
               <div class="flex flex-wrap items-center gap-2">
-                <span id="dashboard-active-session-status" class="badge badge-secondary capitalize">
-                  {@active_session.status}
+                <span id="dashboard-active-session-status" class="badge badge-secondary">
+                  {status_label(@active_session.status)}
                 </span>
                 <span class="badge badge-ghost">
                   {length(@active_session.voting_session_games)} games
@@ -311,12 +311,15 @@ defmodule BacklogWheelWeb.DashboardLive do
   end
 
   defp active_session_action(%{status: "open"}) do
-    "Voting is open: monitor vote totals, then lock the session before spinning."
+    "Voting is open: monitor vote totals, then mark the session ready to spin."
   end
 
   defp active_session_action(%{status: "locked"}) do
-    "Voting is locked: spin this session when you are ready to reveal the result."
+    "Ready to spin: spin this session when you are ready to reveal the result."
   end
+
+  defp status_label("locked"), do: "Ready to Spin"
+  defp status_label(status), do: String.capitalize(status)
 
   defp winner_snapshot_entry(%{
          snapshot: %{"entries" => entries, "winning_game_id" => winning_game_id}

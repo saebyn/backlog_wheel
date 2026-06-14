@@ -83,7 +83,7 @@ defmodule BacklogWheelWeb.DashboardLiveTest do
     {:ok, view, _html} = live(conn, ~p"/dashboard")
 
     assert has_element?(view, "#dashboard-active-session-#{session.id}", "Tonight's Vote")
-    assert has_element?(view, "#dashboard-active-session-status", "open")
+    assert has_element?(view, "#dashboard-active-session-status", "Open")
     assert has_element?(view, "#dashboard-active-session-action", "Voting is open")
     assert has_element?(view, "#dashboard-wheel-format-#{format.id}", "Quick Vote")
     assert has_element?(view, "#dashboard-wheel-format-#{format.id}", "Quick Vote Session")

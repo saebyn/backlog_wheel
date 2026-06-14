@@ -217,10 +217,10 @@ defmodule BacklogWheel.Voting do
   end
 
   @doc """
-  Closes or cancels a voting session and attempts to delete its Twitch rewards.
+  Completes or cancels a voting session and attempts to delete its Twitch rewards.
   """
   def close_voting_session(%VotingSession{} = voting_session, status, opts \\ [])
-      when status in ["closed", "cancelled"] do
+      when status in ["completed", "closed", "cancelled"] do
     with {:ok, session} <- update_voting_session_status(voting_session, status) do
       case remove_twitch_rewards(session, opts) do
         {:ok, session} ->
@@ -468,6 +468,11 @@ defmodule BacklogWheel.Voting do
                snapshot: snapshot
              }) do
           {:ok, spin} ->
+            {:ok, _session} =
+              voting_session
+              |> VotingSession.changeset(%{status: "completed"})
+              |> Repo.update()
+
             spin = Repo.preload(spin, :game)
             payload = spin_start_payload(spin, snapshot)
             broadcast_voting_session_spin_started(voting_session.id, payload)

@@ -17,8 +17,35 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
       current_community={@current_community}
       wide
     >
+      <nav
+        id="voting-page-jump-nav"
+        aria-label="Voting page sections"
+        class="mb-4 rounded-2xl border border-base-300 bg-base-100/90 p-3 shadow-sm backdrop-blur xl:hidden"
+      >
+        <p class="px-2 text-xs font-bold uppercase tracking-[0.18em] text-base-content/50">
+          Jump to
+        </p>
+        <div class="mt-2 flex gap-2 overflow-x-auto pb-1">
+          <.link href="#voting-creation-section" class="btn btn-ghost btn-sm shrink-0">
+            Voting creation
+          </.link>
+          <.link href="#session-admin-section" class="btn btn-ghost btn-sm shrink-0">
+            Session admin
+          </.link>
+          <.link href="#voting-games-section" class="btn btn-ghost btn-sm shrink-0">
+            Games
+          </.link>
+          <.link href="#add-games-section" class="btn btn-ghost btn-sm shrink-0">
+            Add games
+          </.link>
+        </div>
+      </nav>
+
       <div class="grid gap-6 lg:grid-cols-[20rem_1fr]">
-        <aside class="space-y-4 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl">
+        <aside
+          id="voting-creation-section"
+          class="scroll-mt-24 space-y-4 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl"
+        >
           <.header>
             Voting Sessions
             <:subtitle>Create game lists, collect channel point votes, and spin a winner.</:subtitle>
@@ -73,7 +100,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
               class={session_button_class(session, @selected_session)}
             >
               <span class="font-semibold">{session.title || "Session #{session.id}"}</span>
-              <span class="badge badge-ghost capitalize">{session.status}</span>
+              <span class="badge badge-ghost">{status_label(session.status)}</span>
               <span class="text-xs text-base-content/60">
                 {length(session.voting_session_games)} games
               </span>
@@ -81,7 +108,10 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
           </div>
         </aside>
 
-        <section class="min-h-[32rem] rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl">
+        <section
+          id="session-admin-section"
+          class="scroll-mt-24 min-h-[32rem] rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl"
+        >
           <div
             :if={!@selected_session}
             id="voting-session-empty"
@@ -113,8 +143,8 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                   {@selected_session.description}
                 </p>
                 <div class="mt-3 flex flex-wrap gap-2">
-                  <span id="selected-session-status" class="badge badge-primary capitalize">
-                    {@selected_session.status}
+                  <span id="selected-session-status" class="badge badge-primary">
+                    {status_label(@selected_session.status)}
                   </span>
                   <span id="selected-session-pool-size" class="badge badge-ghost">
                     {@pool_size} games in this vote
@@ -140,59 +170,264 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
               </div>
 
               <div class="flex flex-wrap gap-2">
-                <.button id="populate-session-pool" phx-click="populate_pool">
-                  Add wheel games
-                </.button>
-                <.button
-                  id="spin-selected-voting-session"
-                  navigate={~p"/wheel?#{[voting_session_id: @selected_session.id]}"}
-                  disabled={@pool_size == 0}
-                >
-                  Spin these games
-                </.button>
                 <.button id="manage-twitch" href={~p"/settings/twitch"}>
                   Manage Twitch
-                </.button>
-                <.button
-                  id="start-twitch-voting"
-                  phx-click="start_twitch_voting"
-                  disabled={!@can_start_twitch_voting?}
-                >
-                  Start Twitch Voting
-                </.button>
-                <.button
-                  id="remove-twitch-rewards"
-                  phx-click="remove_twitch_rewards"
-                  disabled={!@twitch_connected? || !@has_twitch_rewards?}
-                  data-confirm="Remove Twitch channel point rewards for this session? Voting stays open."
-                >
-                  {if @failed_twitch_reward_deletions > 0,
-                    do: "Retry Reward Cleanup",
-                    else: "Remove Twitch Rewards"}
-                </.button>
-                <.button
-                  :for={status <- ["draft", "open", "locked", "closed", "cancelled"]}
-                  id={"set-session-#{status}"}
-                  phx-click="set_status"
-                  phx-value-status={status}
-                  disabled={@selected_session.status == status}
-                >
-                  {status_label(status)}
                 </.button>
               </div>
             </div>
 
-            <p
-              :if={@twitch_voting_hint}
-              id="twitch-voting-hint"
-              class="flex items-start gap-3 rounded-2xl border border-warning/40 bg-warning/15 px-4 py-3 text-sm font-semibold text-warning-content shadow-sm"
+            <section
+              id="voting-session-next-action"
+              class="overflow-hidden rounded-[1.75rem] border border-primary/20 bg-gradient-to-br from-primary/10 via-base-100 to-base-200 p-5 shadow-sm"
             >
-              <.icon name="hero-exclamation-triangle" class="mt-0.5 size-5 shrink-0 text-warning" />
-              <span>{@twitch_voting_hint}</span>
-            </p>
+              <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div class="max-w-3xl">
+                  <p class="text-sm font-semibold uppercase tracking-[0.22em] text-primary">
+                    Current State
+                  </p>
+                  <h2 id="voting-session-state-label" class="mt-2 text-2xl font-black tracking-tight">
+                    {@lifecycle.state_label}
+                  </h2>
+                  <p id="voting-session-state-description" class="mt-2 text-base-content/70">
+                    {@lifecycle.state_description}
+                  </p>
+                  <p id="voting-session-next-action-copy" class="mt-4 text-lg font-bold">
+                    {@lifecycle.next_action_copy}
+                  </p>
+                  <p
+                    :if={@lifecycle.blocking_issue}
+                    id="voting-session-blocking-issue"
+                    class="mt-3 flex items-start gap-3 rounded-2xl border border-warning/40 bg-warning/15 px-4 py-3 text-sm font-semibold text-warning-content"
+                  >
+                    <.icon
+                      name="hero-exclamation-triangle"
+                      class="mt-0.5 size-5 shrink-0 text-warning"
+                    />
+                    <span>{@lifecycle.blocking_issue}</span>
+                  </p>
+                </div>
+
+                <div class="flex shrink-0 flex-col gap-2 sm:min-w-56">
+                  <.button
+                    :if={@lifecycle.primary_action == :populate_pool}
+                    id="populate-session-pool"
+                    phx-click="populate_pool"
+                    variant="primary"
+                  >
+                    Add wheel games
+                  </.button>
+                  <.button
+                    :if={@lifecycle.primary_action == :open_voting}
+                    id="set-session-open"
+                    phx-click="set_status"
+                    phx-value-status="open"
+                    variant="primary"
+                  >
+                    Open voting
+                  </.button>
+                  <.button
+                    :if={@lifecycle.primary_action == :start_twitch_voting}
+                    id="start-twitch-voting"
+                    phx-click="start_twitch_voting"
+                    variant="primary"
+                  >
+                    Start Twitch voting
+                  </.button>
+                  <.button
+                    :if={@lifecycle.primary_action == :manage_twitch}
+                    id="manage-twitch-primary"
+                    href={~p"/settings/twitch"}
+                    variant="primary"
+                  >
+                    Connect Twitch
+                  </.button>
+                  <.button
+                    :if={@lifecycle.primary_action == :ready_to_spin}
+                    id="set-session-locked"
+                    phx-click="set_status"
+                    phx-value-status="locked"
+                    variant="primary"
+                  >
+                    Freeze voting
+                  </.button>
+                  <.button
+                    :if={@lifecycle.primary_action == :spin}
+                    id="spin-selected-voting-session"
+                    navigate={~p"/wheel?#{[voting_session_id: @selected_session.id]}"}
+                    variant="primary"
+                  >
+                    Spin these games
+                  </.button>
+                  <.button
+                    :if={@lifecycle.primary_action == :view_recap}
+                    id="view-session-recap"
+                    navigate={~p"/history"}
+                    variant="primary"
+                  >
+                    View recap
+                  </.button>
+                  <.button
+                    :if={@lifecycle.primary_action == :create_session}
+                    id="create-next-voting-session"
+                    phx-click="create_session"
+                    variant="primary"
+                  >
+                    Create new session
+                  </.button>
+                </div>
+              </div>
+            </section>
+
+            <section
+              :if={@secondary_actions != [] || @advanced_actions != [] || @destructive_actions != []}
+              id="voting-session-secondary-actions"
+              class="rounded-2xl border border-base-300 bg-base-200 p-4"
+            >
+              <div
+                :if={@secondary_actions != []}
+                class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <h2 class="text-lg font-bold">Other available actions</h2>
+                  <p class="text-sm text-base-content/60">
+                    Use these when you need to adjust the vote instead of following the recommended next step.
+                  </p>
+                </div>
+                <div class="grid gap-3 sm:min-w-96">
+                  <div
+                    :if={:populate_pool in @secondary_actions}
+                    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p class="text-sm text-base-content/70">
+                      Add every wheel-eligible game that is not already in this vote.
+                    </p>
+                    <.button id="populate-session-pool-secondary" phx-click="populate_pool">
+                      Add wheel games
+                    </.button>
+                  </div>
+                  <div
+                    :if={:start_twitch_voting in @secondary_actions}
+                    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p class="text-sm text-base-content/70">
+                      Create Twitch channel point rewards so viewers can vote from chat.
+                    </p>
+                    <.button id="start-twitch-voting" phx-click="start_twitch_voting">
+                      Start Twitch voting
+                    </.button>
+                  </div>
+                  <div
+                    :if={:remove_twitch_rewards in @secondary_actions}
+                    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p class="text-sm text-base-content/70">
+                      Remove Twitch rewards for this vote while keeping the session status unchanged.
+                    </p>
+                    <.button
+                      id="remove-twitch-rewards"
+                      phx-click="remove_twitch_rewards"
+                      data-confirm="Remove Twitch channel point rewards for this session? Voting stays open."
+                    >
+                      {if @failed_twitch_reward_deletions > 0,
+                        do: "Retry reward cleanup",
+                        else: "Remove Twitch rewards"}
+                    </.button>
+                  </div>
+                  <div
+                    :if={:spin_manually in @secondary_actions}
+                    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p class="text-sm text-base-content/70">
+                      Freeze voting, snapshot the pool, and spin without starting Twitch rewards.
+                    </p>
+                    <.button
+                      id="spin-selected-voting-session"
+                      navigate={~p"/wheel?#{[voting_session_id: @selected_session.id]}"}
+                    >
+                      Spin now
+                    </.button>
+                  </div>
+                  <div
+                    :if={:ready_to_spin in @secondary_actions}
+                    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p class="text-sm text-base-content/70">
+                      Stop accepting votes and freeze this pool for the wheel.
+                    </p>
+                    <.button id="set-session-locked" phx-click="set_status" phx-value-status="locked">
+                      Freeze voting
+                    </.button>
+                  </div>
+                  <div
+                    :if={:reopen_voting in @secondary_actions}
+                    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p class="text-sm text-base-content/70">Let votes continue before you spin.</p>
+                    <.button id="set-session-open" phx-click="set_status" phx-value-status="open">
+                      Reopen voting
+                    </.button>
+                  </div>
+                  <div
+                    :if={:create_session in @secondary_actions}
+                    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p class="text-sm text-base-content/70">
+                      Start a separate vote without changing this session.
+                    </p>
+                    <.button id="create-next-voting-session-secondary" phx-click="create_session">
+                      Create new session
+                    </.button>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                :if={@advanced_actions != [] || @destructive_actions != []}
+                class={[
+                  "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
+                  @secondary_actions != [] && "mt-4 border-t border-base-300 pt-4"
+                ]}
+              >
+                <div>
+                  <h2 class="text-lg font-bold">Advanced / destructive</h2>
+                  <p class="text-sm text-base-content/60">
+                    Use these only when you intentionally need to undo or abandon this vote.
+                  </p>
+                </div>
+                <div class="grid gap-3 sm:min-w-96">
+                  <div
+                    :if={:back_to_draft in @advanced_actions}
+                    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p class="text-sm text-base-content/70">
+                      Return to setup mode so you can freely revise the vote.
+                    </p>
+                    <.button id="set-session-draft" phx-click="set_status" phx-value-status="draft">
+                      Back to draft
+                    </.button>
+                  </div>
+                  <div
+                    :if={:cancel in @destructive_actions}
+                    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p class="text-sm text-base-content/70">
+                      Abandon this vote without recording a winner.
+                    </p>
+                    <.button
+                      id="set-session-cancelled"
+                      phx-click="set_status"
+                      phx-value-status="cancelled"
+                      data-confirm="Cancel this voting session without recording a winner?"
+                    >
+                      Cancel session
+                    </.button>
+                  </div>
+                </div>
+              </div>
+            </section>
 
             <div class="grid gap-6 xl:grid-cols-[1fr_22rem]">
-              <section class="space-y-3">
+              <section id="voting-games-section" class="scroll-mt-24 space-y-3">
                 <h2 class="text-xl font-bold">Games In This Vote</h2>
                 <div id="voting-session-pool" phx-update="stream" class="grid gap-3 md:grid-cols-2">
                   <p
@@ -279,6 +514,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                           +1 Vote
                         </.button>
                         <.button
+                          :if={@selected_session.status == "draft"}
                           id={"remove-pool-game-#{pool_item.id}"}
                           phx-click="remove_pool_game"
                           phx-value-id={pool_item.id}
@@ -292,7 +528,10 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                 </div>
               </section>
 
-              <section class="space-y-3 rounded-2xl border border-base-300 bg-base-200 p-4">
+              <section
+                id="add-games-section"
+                class="scroll-mt-24 space-y-3 rounded-2xl border border-base-300 bg-base-200 p-4"
+              >
                 <h2 class="text-xl font-bold">Available Games</h2>
                 <p class="text-sm text-base-content/70">
                   Add or remove games here without changing whether they appear on the main wheel.
@@ -358,6 +597,14 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   end
 
   @impl true
+  def handle_params(params, _uri, socket) do
+    {:noreply,
+     socket
+     |> assign(:selected_session_id, selected_session_id_param(params))
+     |> refresh()}
+  end
+
+  @impl true
   def handle_event("create_session", _params, socket) do
     {:ok, session} = Voting.create_voting_session(socket.assigns.current_community, %{})
 
@@ -393,12 +640,12 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   end
 
   def handle_event("select_session", %{"id" => id}, socket) do
-    {:noreply, socket |> assign(:selected_session_id, String.to_integer(id)) |> refresh()}
+    {:noreply, push_patch(socket, to: ~p"/voting?#{[session_id: id]}")}
   end
 
   def handle_event("set_status", %{"status" => status}, socket) do
     result =
-      if status in ["closed", "cancelled"] do
+      if status in ["completed", "closed", "cancelled"] do
         Voting.close_voting_session(socket.assigns.selected_session, status)
       else
         Voting.update_voting_session_status(socket.assigns.selected_session, status)
@@ -544,6 +791,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     |> assign(:failed_twitch_reward_deletions, failed_twitch_reward_deletions(pool_items))
     |> assign(:twitch_connected?, Twitch.credential_configured?())
     |> assign_twitch_voting_state(pool_items)
+    |> assign_lifecycle_actions()
     |> stream(:voting_sessions, sessions, reset: true)
     |> stream(:voting_session_pool, pool_items, reset: true)
     |> stream(:available_games, available_games, reset: true)
@@ -656,6 +904,8 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     |> assign(:can_start_twitch_voting?, is_nil(hint))
   end
 
+  defp twitch_voting_hint(_connected?, nil, _pool_items), do: nil
+
   defp twitch_voting_hint(false, _selected_session, _pool_items),
     do: "Connect Twitch before starting Twitch voting."
 
@@ -676,11 +926,170 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     end
   end
 
-  defp status_label("draft"), do: "Draft"
-  defp status_label("open"), do: "Open"
-  defp status_label("locked"), do: "Lock"
-  defp status_label("closed"), do: "Close"
-  defp status_label("cancelled"), do: "Cancel"
+  defp assign_lifecycle_actions(%{assigns: %{selected_session: nil}} = socket) do
+    socket
+    |> assign(:lifecycle, nil)
+    |> assign(:secondary_actions, [])
+    |> assign(:advanced_actions, [])
+    |> assign(:destructive_actions, [])
+  end
+
+  defp assign_lifecycle_actions(socket) do
+    lifecycle = lifecycle(socket.assigns)
+
+    socket
+    |> assign(:lifecycle, lifecycle)
+    |> assign(:secondary_actions, secondary_actions(socket.assigns, lifecycle.primary_action))
+    |> assign(:advanced_actions, advanced_actions(socket.assigns))
+    |> assign(:destructive_actions, destructive_actions(socket.assigns))
+  end
+
+  defp lifecycle(%{selected_session: %{status: "draft"}, pool_size: 0}) do
+    %{
+      state_label: "Draft",
+      state_description:
+        "The streamer is preparing the vote. The pool can be edited freely and viewers cannot vote yet.",
+      next_action_copy: "Add games to this vote.",
+      blocking_issue: nil,
+      primary_action: :populate_pool
+    }
+  end
+
+  defp lifecycle(%{selected_session: %{status: "draft"}}) do
+    %{
+      state_label: "Draft",
+      state_description:
+        "The streamer is preparing the vote. The pool can be edited freely and viewers cannot vote yet.",
+      next_action_copy: "Open voting when the pool is ready.",
+      blocking_issue: nil,
+      primary_action: :open_voting
+    }
+  end
+
+  defp lifecycle(%{selected_session: %{status: "open"}, twitch_voting_hint: hint} = assigns)
+       when is_binary(hint) do
+    %{
+      state_label: "Open",
+      state_description: "This is the active vote. Viewers can vote or influence it.",
+      next_action_copy: open_blocked_next_action(hint),
+      blocking_issue: hint,
+      primary_action: open_blocked_primary_action(assigns)
+    }
+  end
+
+  defp lifecycle(%{selected_session: %{status: "open"}, has_twitch_rewards?: true}) do
+    %{
+      state_label: "Open",
+      state_description: "This is the active vote. Twitch voting rewards are collecting votes.",
+      next_action_copy: "Mark voting ready to spin when voting is finished.",
+      blocking_issue: nil,
+      primary_action: :ready_to_spin
+    }
+  end
+
+  defp lifecycle(%{selected_session: %{status: "open"}}) do
+    %{
+      state_label: "Open",
+      state_description: "This is the active vote. Viewers can vote or influence it.",
+      next_action_copy: "Start Twitch voting or keep collecting manual votes.",
+      blocking_issue: nil,
+      primary_action: :start_twitch_voting
+    }
+  end
+
+  defp lifecycle(%{selected_session: %{status: "locked"}}) do
+    %{
+      state_label: "Ready to Spin",
+      state_description:
+        "Voting is frozen and the streamer is ready to spin. No new viewer votes should be collected.",
+      next_action_copy: "Spin the wheel.",
+      blocking_issue: nil,
+      primary_action: :spin
+    }
+  end
+
+  defp lifecycle(%{selected_session: %{status: status}}) when status in ["completed", "closed"] do
+    %{
+      state_label: "Completed",
+      state_description: "The wheel has been spun and a result was recorded.",
+      next_action_copy: "View the recap or create another session.",
+      blocking_issue: nil,
+      primary_action: :view_recap
+    }
+  end
+
+  defp lifecycle(%{selected_session: %{status: "cancelled"}}) do
+    %{
+      state_label: "Cancelled",
+      state_description: "This session was abandoned without a winner.",
+      next_action_copy: "Create a new session when ready.",
+      blocking_issue: nil,
+      primary_action: :create_session
+    }
+  end
+
+  defp open_blocked_next_action("Connect Twitch" <> _rest),
+    do: "Connect Twitch to start Twitch voting."
+
+  defp open_blocked_next_action("Add games" <> _rest),
+    do: "Add games before starting Twitch voting."
+
+  defp open_blocked_next_action("Twitch voting rewards are already created" <> _rest),
+    do: "Mark voting ready to spin when voting is finished."
+
+  defp open_blocked_next_action(_hint),
+    do: "Fix the blocking issue before starting Twitch voting."
+
+  defp open_blocked_primary_action(%{has_twitch_rewards?: true}), do: :ready_to_spin
+  defp open_blocked_primary_action(%{pool_size: 0}), do: :populate_pool
+  defp open_blocked_primary_action(%{twitch_connected?: false}), do: :manage_twitch
+  defp open_blocked_primary_action(_assigns), do: nil
+
+  defp secondary_actions(assigns, primary_action) do
+    assigns
+    |> available_secondary_actions()
+    |> Enum.reject(&(&1 == primary_action))
+  end
+
+  defp available_secondary_actions(%{selected_session: %{status: "draft"}}), do: [:populate_pool]
+
+  defp available_secondary_actions(%{selected_session: %{status: "open"}} = assigns) do
+    []
+    |> maybe_add(:populate_pool, true)
+    |> maybe_add(:start_twitch_voting, assigns.can_start_twitch_voting?)
+    |> maybe_add(:remove_twitch_rewards, assigns.twitch_connected? && assigns.has_twitch_rewards?)
+    |> maybe_add(:ready_to_spin, assigns.pool_size > 0)
+    |> maybe_add(:spin_manually, assigns.pool_size > 0)
+  end
+
+  defp available_secondary_actions(%{selected_session: %{status: "locked"}}),
+    do: [:reopen_voting]
+
+  defp available_secondary_actions(%{selected_session: %{status: status}} = assigns)
+       when status in ["completed", "closed", "cancelled"] do
+    []
+    |> maybe_add(:remove_twitch_rewards, assigns.twitch_connected? && assigns.has_twitch_rewards?)
+    |> maybe_add(:create_session, status in ["completed", "closed"])
+  end
+
+  defp advanced_actions(%{selected_session: %{status: status}}) when status != "draft",
+    do: [:back_to_draft]
+
+  defp advanced_actions(_assigns), do: []
+
+  defp destructive_actions(%{selected_session: %{status: status}})
+       when status in ["draft", "open", "locked"],
+       do: [:cancel]
+
+  defp destructive_actions(_assigns), do: []
+
+  defp maybe_add(actions, action, true), do: [action | actions]
+  defp maybe_add(actions, _action, false), do: actions
+
+  defp status_label("locked"), do: "Ready to Spin"
+  defp status_label("completed"), do: "Completed"
+  defp status_label("closed"), do: "Completed"
+  defp status_label(status), do: String.capitalize(status)
 
   defp twitch_error({:missing_config, missing}),
     do: "Missing Twitch config: #{Enum.join(missing, ", ")}"

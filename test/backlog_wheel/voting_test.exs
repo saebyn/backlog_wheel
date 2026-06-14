@@ -55,9 +55,9 @@ defmodule BacklogWheel.VotingTest do
       community = community_fixture()
 
       assert {:ok, %VotingSession{} = voting_session} =
-               Voting.create_voting_session(community, %{status: "open"})
+               Voting.create_voting_session(community, %{status: "completed"})
 
-      assert voting_session.status == "open"
+      assert voting_session.status == "completed"
 
       assert {:error, changeset} = Voting.create_voting_session(community, %{status: "invalid"})
       assert %{status: ["is invalid"]} = errors_on(changeset)
@@ -950,6 +950,9 @@ defmodule BacklogWheel.VotingTest do
       assert payload["votingSessionId"] == voting_session.id
       assert payload["landingDegrees"] > 18.0
       assert payload["landingDegrees"] < 342.0
+
+      voting_session = Voting.get_voting_session!(Process.get(:test_community), voting_session.id)
+      assert voting_session.status == "completed"
     end
 
     test "spin_voting_session_wheel/1 snapshots payload, entries, and geometry" do
