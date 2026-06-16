@@ -29,27 +29,20 @@
 
         <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <.link
-            navigate={~p"/games"}
+            navigate={~p"/login"}
             class="btn btn-primary btn-lg hover-lift"
             id="home-games-link"
           >
-            Manage Games
-          </.link>
-          <.link
-            navigate={~p"/wheel"}
-            class="btn btn-secondary btn-lg hover-lift"
-            id="home-wheel-link"
-          >
-            Spin the Wheel
+            Sign Up / Log In
           </.link>
         </div>
       </div>
 
       <.link
-        navigate={~p"/wheel"}
+        navigate={~p"/login"}
         id="home-wheel-preview-link"
         class="relative mx-auto block aspect-square w-full max-w-72 rounded-full focus:outline-none focus:ring-4 focus:ring-primary/30"
-        aria-label="Open wheel"
+        aria-label="Sign up to see the wheel in action"
       >
         <div class="wheel-ring wheel-idle absolute inset-0 rounded-full shadow-2xl" />
         <div class="absolute inset-8 rounded-full border border-base-content/10 bg-base-100/80 shadow-inner backdrop-blur" />
@@ -152,11 +145,8 @@
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <.link navigate={~p"/settings/twitch"} class="btn btn-primary hover-lift">
-          Connect Twitch
-        </.link>
-        <.link navigate={~p"/voting"} class="btn btn-primary btn-soft hover-lift">
-          Build a Vote
+        <.link navigate={~p"/login"} class="btn btn-primary hover-lift">
+          Sign Up to Get Started
         </.link>
       </div>
     </div>

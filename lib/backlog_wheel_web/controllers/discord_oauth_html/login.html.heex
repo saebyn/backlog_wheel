@@ -6,7 +6,7 @@
     <p class="text-sm font-semibold uppercase tracking-[0.24em] text-primary">Backlog Wheel</p>
     <h1 class="mt-3 text-4xl font-black tracking-tight">Streamer Sign In</h1>
     <p class="mt-3 text-base-content/70">
-      Sign in with a Discord account that has already been added to manage games, voting, Twitch rewards, and settings.
+      Sign in with a Discord account to start managing games, voting, Twitch rewards, settings, and spin wheels!
     </p>
 
     <p
@@ -14,16 +14,17 @@
       id="discord-login-missing-config"
       class="mt-6 rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm"
     >
-      Discord login is not configured yet.
+      Oops! Discord login is not configured yet.
     </p>
 
-    <.button
-      id="discord-login"
-      href={~p"/auth/discord/start"}
-      disabled={!@discord_configured?}
-      class="mt-6"
-    >
-      Sign in with Discord
-    </.button>
+    <p class="mt-6">
+      <.button
+        id="discord-login"
+        href={~p"/auth/discord/start"}
+        disabled={!@discord_configured?}
+      >
+        Sign in with Discord
+      </.button>
+    </p>
   </section>
 </Layouts.app>
