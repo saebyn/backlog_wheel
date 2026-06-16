@@ -8,8 +8,14 @@ defmodule BacklogWheelWeb.DashboardLiveTest do
   alias BacklogWheel.Backlog
 
   @tag :unauthenticated
-  test "renders the dashboard without login and handles empty community state", %{conn: conn} do
+  test "redirects unauthenticated visitors", %{conn: conn} do
     community_fixture()
+
+    assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/dashboard")
+  end
+
+  test "renders the dashboard for the current community", %{conn: conn} do
+    community = Process.get(:test_community)
 
     {:ok, view, _html} = live(conn, ~p"/dashboard")
 
@@ -18,11 +24,12 @@ defmodule BacklogWheelWeb.DashboardLiveTest do
     assert has_element?(view, "#dashboard-no-active-session")
     assert has_element?(view, "#dashboard-empty-wheel-formats")
     assert has_element?(view, "#dashboard-history-link")
+
+    refute is_nil(community)
   end
 
-  @tag :unauthenticated
   test "renders latest recap with session and history links", %{conn: conn} do
-    community = community_fixture()
+    community = Process.get(:test_community)
     game = game_fixture(%{community: community, title: "Recap Winner"})
 
     session =
@@ -57,9 +64,8 @@ defmodule BacklogWheelWeb.DashboardLiveTest do
     assert has_element?(view, "#dashboard-latest-session-link[href='/history/#{spin.id}']")
   end
 
-  @tag :unauthenticated
   test "renders active session and wheel formats", %{conn: conn} do
-    community = community_fixture()
+    community = Process.get(:test_community)
     game = game_fixture(%{community: community, title: "Vote Candidate"})
 
     session =
@@ -95,5 +101,41 @@ defmodule BacklogWheelWeb.DashboardLiveTest do
              view,
              "#dashboard-use-wheel-format-#{format.id}[href='/voting?wheel_format_id=#{format.id}']"
            )
+  end
+
+  test "does not render data from another community", %{conn: conn} do
+    current_community = Process.get(:test_community)
+    other_community = community_fixture(%{slug: "other-dashboard-community"})
+    other_game = game_fixture(%{community: other_community, title: "Other Winner"})
+
+    {:ok, other_spin} =
+      Backlog.create_spin(other_community, %{
+        game_id: other_game.id,
+        source: "manual",
+        spun_at: ~U[2026-06-06 12:00:00Z]
+      })
+
+    current_format =
+      wheel_format_fixture(%{
+        community: current_community,
+        name: "Current Format",
+        default_session_title: "Current Session"
+      })
+
+    other_format =
+      wheel_format_fixture(%{
+        community: other_community,
+        name: "Other Format",
+        default_session_title: "Other Session"
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/dashboard")
+
+    assert has_element?(view, "#dashboard-empty-history")
+    assert has_element?(view, "#dashboard-wheel-format-#{current_format.id}", "Current Format")
+    refute has_element?(view, "#dashboard-latest-spin-#{other_spin.id}")
+    refute has_element?(view, "#dashboard-wheel-format-#{other_format.id}")
+    refute has_element?(view, "#dashboard-page", "Other Winner")
+    refute has_element?(view, "#dashboard-page", "Other Format")
   end
 end

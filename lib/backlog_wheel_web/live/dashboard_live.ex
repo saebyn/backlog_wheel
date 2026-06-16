@@ -1,7 +1,7 @@
 defmodule BacklogWheelWeb.DashboardLive do
   use BacklogWheelWeb, :live_view
 
-  alias BacklogWheel.{Accounts, Backlog, Communities, Voting}
+  alias BacklogWheel.{Backlog, Voting}
 
   @impl true
   def render(assigns) do
@@ -289,22 +289,13 @@ defmodule BacklogWheelWeb.DashboardLive do
   end
 
   @impl true
-  def mount(_params, session, socket) do
-    user = Accounts.get_user(Map.get(session, "user_id"))
-    community = current_dashboard_community(user)
+  def mount(_params, _session, socket) do
+    community = socket.assigns.current_community
 
     {:ok,
      socket
      |> assign(:page_title, "Dashboard")
-     |> assign(:current_user, user)
-     |> assign(:current_community, community)
      |> assign_dashboard(community)}
-  end
-
-  defp current_dashboard_community(nil), do: Communities.default_community()
-
-  defp current_dashboard_community(user) do
-    Communities.current_admin_community_for_user(user) || Communities.default_community()
   end
 
   defp assign_dashboard(socket, nil) do

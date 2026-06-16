@@ -33,8 +33,6 @@ defmodule BacklogWheelWeb.Router do
     get "/auth/discord/start", DiscordOAuthController, :start
     get "/auth/discord/callback", DiscordOAuthController, :callback
     delete "/logout", DiscordOAuthController, :logout
-
-    live "/dashboard", DashboardLive, :show
   end
 
   scope "/", BacklogWheelWeb do
@@ -54,6 +52,7 @@ defmodule BacklogWheelWeb.Router do
     live_session :authenticated,
       on_mount: [{BacklogWheelWeb.UserAuth, :require_authenticated_user}] do
       live "/settings", SettingsLive.General, :edit
+      live "/dashboard", DashboardLive, :show
       live "/settings/twitch", TwitchLive, :index
       live "/wheel", WheelLive, :show
       live "/history", SpinHistoryLive, :index
