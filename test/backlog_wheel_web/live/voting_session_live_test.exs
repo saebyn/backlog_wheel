@@ -84,6 +84,18 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     assert has_element?(view, "#selected-session-pool-size", "1 games in this vote")
   end
 
+  test "preselects a Wheel Format from the URL", %{conn: conn} do
+    format = wheel_format_fixture(%{name: "Dashboard Choice"})
+
+    {:ok, view, _html} = live(conn, ~p"/voting?#{[wheel_format_id: format.id]}")
+
+    assert has_element?(
+             view,
+             "#create-session-from-format-form select option[selected][value='#{format.id}']",
+             "Dashboard Choice"
+           )
+  end
+
   test "populates pool from wheel-eligible games", %{conn: conn} do
     wheel_game = game_fixture(%{title: "Wheel Candidate", include_in_wheel: true})
 

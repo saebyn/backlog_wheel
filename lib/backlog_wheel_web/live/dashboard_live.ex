@@ -235,7 +235,7 @@ defmodule BacklogWheelWeb.DashboardLive do
               navigate={~p"/voting"}
               class="btn btn-accent hover-lift"
             >
-              Use a Format
+              Explore All Formats
             </.link>
           </div>
 
@@ -258,7 +258,7 @@ defmodule BacklogWheelWeb.DashboardLive do
             <article
               :for={format <- @wheel_formats}
               id={"dashboard-wheel-format-#{format.id}"}
-              class="rounded-3xl border border-base-300 bg-base-200 p-5"
+              class="flex h-full flex-col rounded-3xl border border-base-300 bg-base-200 p-5"
             >
               <div class="flex items-start justify-between gap-3">
                 <h3 class="text-xl font-black">{format.name}</h3>
@@ -271,6 +271,15 @@ defmodule BacklogWheelWeb.DashboardLive do
               <p class="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-base-content/50">
                 Starts as: {format.default_session_title}
               </p>
+              <div class="mt-4 flex flex-1 items-end">
+                <.link
+                  id={"dashboard-use-wheel-format-#{format.id}"}
+                  navigate={~p"/voting?#{[wheel_format_id: format.id]}"}
+                  class="btn btn-accent btn-sm hover-lift"
+                >
+                  Start With This <.icon name="hero-arrow-right" class="size-4" />
+                </.link>
+              </div>
             </article>
           </div>
         </section>

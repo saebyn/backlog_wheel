@@ -591,6 +591,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
      socket
      |> assign(:page_title, "Voting Sessions")
      |> assign(:selected_session_id, selected_session_id_param(params))
+     |> assign(:selected_wheel_format_id, selected_wheel_format_id_param(params))
      |> assign(:subscribed_voting_session_id, nil)
      |> assign(:available_games_filter, "")
      |> refresh()}
@@ -601,6 +602,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     {:noreply,
      socket
      |> assign(:selected_session_id, selected_session_id_param(params))
+     |> assign(:selected_wheel_format_id, selected_wheel_format_id_param(params))
      |> refresh()}
   end
 
@@ -770,7 +772,10 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
     socket
     |> assign(:wheel_format_options, wheel_format_options(wheel_formats))
-    |> assign(:wheel_format_form, wheel_format_form(wheel_formats))
+    |> assign(
+      :wheel_format_form,
+      wheel_format_form(wheel_formats, socket.assigns.selected_wheel_format_id)
+    )
     |> assign(:selected_session, selected_session)
     |> assign(:selected_session_id, selected_session && selected_session.id)
     |> assign(:pool_items, pool_items)
@@ -830,6 +835,15 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
   defp selected_session_id_param(_params), do: nil
 
+  defp selected_wheel_format_id_param(%{"wheel_format_id" => wheel_format_id}) do
+    case Integer.parse(wheel_format_id) do
+      {id, ""} -> id
+      _invalid -> nil
+    end
+  end
+
+  defp selected_wheel_format_id_param(_params), do: nil
+
   defp session_button_class(%VotingSession{} = session, selected_session) do
     [
       "flex w-full items-center justify-between gap-2 rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-md",
@@ -856,10 +870,14 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     to_form(%{"query" => filter}, as: :available_games_filter)
   end
 
-  defp wheel_format_form([]), do: to_form(%{"wheel_format_id" => ""}, as: :wheel_format)
+  defp wheel_format_form([], _selected_wheel_format_id),
+    do: to_form(%{"wheel_format_id" => ""}, as: :wheel_format)
 
-  defp wheel_format_form([wheel_format | _wheel_formats]) do
-    to_form(%{"wheel_format_id" => wheel_format.id}, as: :wheel_format)
+  defp wheel_format_form(wheel_formats, selected_wheel_format_id) do
+    selected_format =
+      Enum.find(wheel_formats, &(&1.id == selected_wheel_format_id)) || hd(wheel_formats)
+
+    to_form(%{"wheel_format_id" => selected_format.id}, as: :wheel_format)
   end
 
   defp wheel_format_options(wheel_formats) do
