@@ -89,6 +89,8 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/voting?#{[wheel_format_id: format.id]}")
 
+    assert has_element?(view, "#create-session-from-format-panel.wheel-format-attention")
+
     assert has_element?(
              view,
              "#create-session-from-format-form select option[selected][value='#{format.id}']",

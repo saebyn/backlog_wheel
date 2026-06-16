@@ -61,7 +61,13 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
             id="create-session-from-format-form"
             phx-submit="create_session_from_format"
           >
-            <div class="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+            <div
+              id="create-session-from-format-panel"
+              class={[
+                "space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-4",
+                @selected_wheel_format_id && "wheel-format-attention"
+              ]}
+            >
               <div>
                 <p class="text-sm font-bold uppercase tracking-[0.18em] text-primary">Wheel Format</p>
                 <p class="mt-1 text-sm text-base-content/70">

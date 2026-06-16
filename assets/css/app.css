@@ -248,6 +248,10 @@
   animation: glow-drift 9s ease-in-out infinite alternate;
 }
 
+.wheel-format-attention {
+  animation: wheel-format-attention 1.4s ease-out 2;
+}
+
 @keyframes wheel-idle {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -269,4 +273,10 @@
 @keyframes glow-drift {
   from { transform: translate3d(-0.5rem, 0, 0) scale(1); opacity: 0.66; }
   to { transform: translate3d(0.75rem, -0.5rem, 0) scale(1.04); opacity: 0.94; }
+}
+
+@keyframes wheel-format-attention {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-accent) 46%, transparent); }
+  45% { box-shadow: 0 0 0 0.45rem color-mix(in oklch, var(--color-accent) 18%, transparent); }
+  100% { box-shadow: 0 0 0 0.85rem color-mix(in oklch, var(--color-accent) 0%, transparent); }
 }
