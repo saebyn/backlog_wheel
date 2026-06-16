@@ -128,7 +128,7 @@ defmodule BacklogWheelWeb.DashboardLive do
                   <.link
                     :if={@latest_spin.voting_session_id}
                     id="dashboard-latest-session-link"
-                    navigate={~p"/voting?#{[session_id: @latest_spin.voting_session_id]}"}
+                    navigate={~p"/history/#{@latest_spin}"}
                     class="btn btn-ghost btn-sm hover-lift"
                   >
                     Open Session Recap

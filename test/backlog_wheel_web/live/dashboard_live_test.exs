@@ -54,7 +54,7 @@ defmodule BacklogWheelWeb.DashboardLiveTest do
     assert has_element?(view, "#dashboard-latest-spin-#{spin.id}", "Recap Winner")
     assert has_element?(view, "#dashboard-latest-spin-odds", "Winner votes: 7 of 7")
     assert has_element?(view, "#dashboard-latest-history-link")
-    assert has_element?(view, "#dashboard-latest-session-link")
+    assert has_element?(view, "#dashboard-latest-session-link[href='/history/#{spin.id}']")
   end
 
   @tag :unauthenticated
