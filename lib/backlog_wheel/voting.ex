@@ -62,8 +62,10 @@ defmodule BacklogWheel.Voting do
   @spin_full_turns 12
   @landing_edge_inset_ratio 0.25
   @landing_edge_inset_degrees 18.0
+  @voting_session_pool_min_size 2
   @twitch_reward_title_max_length 45
-  @twitch_reward_pool_max_size 50
+  @voting_session_pool_max_size 50
+  @twitch_reward_pool_max_size @voting_session_pool_max_size
   @spin_easing_profile %{
     "type" => "cubic-bezier",
     "x1" => 0.08,
@@ -256,10 +258,31 @@ defmodule BacklogWheel.Voting do
   """
   def update_voting_session_status(%VotingSession{} = voting_session, status)
       when is_binary(status) do
-    voting_session
-    |> VotingSession.changeset(%{status: status})
-    |> Repo.update()
-    |> broadcast_voting_session_change()
+    with :ok <- validate_status_transition(voting_session, status) do
+      voting_session
+      |> VotingSession.changeset(%{status: status})
+      |> Repo.update()
+      |> broadcast_voting_session_change()
+    end
+  end
+
+  @doc """
+  Checks whether a voting session has a practical game pool size for opening.
+  """
+  def validate_voting_session_pool_size(%VotingSession{} = voting_session) do
+    voting_session = reload_voting_session!(voting_session)
+    pool_size = length(voting_session.voting_session_games)
+
+    cond do
+      pool_size < @voting_session_pool_min_size ->
+        {:error, {:voting_session_pool_too_small, pool_size, @voting_session_pool_min_size}}
+
+      pool_size > @voting_session_pool_max_size ->
+        {:error, {:voting_session_pool_too_large, pool_size, @voting_session_pool_max_size}}
+
+      true ->
+        :ok
+    end
   end
 
   @doc """
@@ -303,8 +326,8 @@ defmodule BacklogWheel.Voting do
     pool_items = voting_session.voting_session_games
 
     cond do
-      pool_items == [] ->
-        {:error, :empty_pool}
+      pool_size_error = pool_size_error(pool_items) ->
+        {:error, pool_size_error}
 
       length(pool_items) > @twitch_reward_pool_max_size ->
         {:error,
@@ -541,6 +564,31 @@ defmodule BacklogWheel.Voting do
         |> ChannelPointVote.changeset(attrs)
         |> Repo.insert()
         |> broadcast_voting_session_change(voting_session_game.voting_session_id)
+    end
+  end
+
+  defp validate_status_transition(%VotingSession{} = voting_session, "open") do
+    validate_voting_session_pool_size(voting_session)
+  end
+
+  defp validate_status_transition(%VotingSession{} = voting_session, "locked") do
+    validate_voting_session_pool_size(voting_session)
+  end
+
+  defp validate_status_transition(_voting_session, _status), do: :ok
+
+  defp pool_size_error(pool_items) do
+    pool_size = length(pool_items)
+
+    cond do
+      pool_size == 0 ->
+        :empty_pool
+
+      pool_size < @voting_session_pool_min_size ->
+        {:voting_session_pool_too_small, pool_size, @voting_session_pool_min_size}
+
+      true ->
+        nil
     end
   end
 

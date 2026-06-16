@@ -434,7 +434,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
             <div class="grid gap-6 xl:grid-cols-[1fr_22rem]">
               <section id="voting-games-section" class="scroll-mt-24 space-y-3">
-                <h2 class="text-xl font-bold">Games In This Vote</h2>
+                <h2 class="text-xl font-bold">Votes</h2>
                 <div id="voting-session-pool" phx-update="stream" class="grid gap-3 md:grid-cols-2">
                   <p
                     id="empty-session-pool"
@@ -673,6 +673,18 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
          |> assign(:selected_session_id, session.id)
          |> put_flash(:error, "Session marked #{status}, but #{twitch_error(reason)}")
          |> refresh()}
+
+      {:error, {:voting_session_pool_too_small, _count, _min_count} = reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, voting_session_pool_error(reason))
+         |> refresh()}
+
+      {:error, {:voting_session_pool_too_large, _count, _max_count} = reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, voting_session_pool_error(reason))
+         |> refresh()}
     end
   end
 
@@ -786,6 +798,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     |> assign(:selected_session_id, selected_session && selected_session.id)
     |> assign(:pool_items, pool_items)
     |> assign(:pool_size, length(pool_items))
+    |> assign(:voting_session_pool_hint, voting_session_pool_hint(selected_session))
     |> assign(
       :available_games_filter_form,
       available_games_filter_form(socket.assigns.available_games_filter)
@@ -928,6 +941,15 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     |> assign(:can_start_twitch_voting?, is_nil(hint))
   end
 
+  defp voting_session_pool_hint(nil), do: nil
+
+  defp voting_session_pool_hint(%VotingSession{} = selected_session) do
+    case Voting.validate_voting_session_pool_size(selected_session) do
+      :ok -> nil
+      {:error, reason} -> voting_session_pool_error(reason)
+    end
+  end
+
   defp twitch_voting_hint(_connected?, nil, _pool_items), do: nil
 
   defp twitch_voting_hint(false, _selected_session, _pool_items),
@@ -979,6 +1001,18 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     }
   end
 
+  defp lifecycle(%{selected_session: %{status: "draft"}, voting_session_pool_hint: hint})
+       when is_binary(hint) do
+    %{
+      state_label: "Draft",
+      state_description:
+        "The streamer is preparing the vote. The pool can be edited freely and viewers cannot vote yet.",
+      next_action_copy: "Fix the game pool before opening voting.",
+      blocking_issue: hint,
+      primary_action: nil
+    }
+  end
+
   defp lifecycle(%{selected_session: %{status: "draft"}}) do
     %{
       state_label: "Draft",
@@ -987,6 +1021,17 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
       next_action_copy: "Open voting when the pool is ready.",
       blocking_issue: nil,
       primary_action: :open_voting
+    }
+  end
+
+  defp lifecycle(%{selected_session: %{status: "open"}, voting_session_pool_hint: hint} = assigns)
+       when is_binary(hint) do
+    %{
+      state_label: "Open",
+      state_description: "This is the active vote. Viewers can vote or influence it.",
+      next_action_copy: "Fix the game pool before continuing this vote.",
+      blocking_issue: hint,
+      primary_action: open_blocked_primary_action(assigns)
     }
   end
 
@@ -1065,7 +1110,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     do: "Fix the blocking issue before starting Twitch voting."
 
   defp open_blocked_primary_action(%{has_twitch_rewards?: true}), do: :ready_to_spin
-  defp open_blocked_primary_action(%{pool_size: 0}), do: :populate_pool
+  defp open_blocked_primary_action(%{pool_size: pool_size}) when pool_size < 2, do: :populate_pool
   defp open_blocked_primary_action(%{twitch_connected?: false}), do: :manage_twitch
   defp open_blocked_primary_action(_assigns), do: nil
 
@@ -1082,8 +1127,8 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     |> maybe_add(:populate_pool, true)
     |> maybe_add(:start_twitch_voting, assigns.can_start_twitch_voting?)
     |> maybe_add(:remove_twitch_rewards, assigns.twitch_connected? && assigns.has_twitch_rewards?)
-    |> maybe_add(:ready_to_spin, assigns.pool_size > 0)
-    |> maybe_add(:spin_manually, assigns.pool_size > 0)
+    |> maybe_add(:ready_to_spin, is_nil(assigns.voting_session_pool_hint))
+    |> maybe_add(:spin_manually, is_nil(assigns.voting_session_pool_hint))
   end
 
   defp available_secondary_actions(%{selected_session: %{status: "locked"}}),
@@ -1127,6 +1172,12 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   defp twitch_error(:empty_pool), do: "Add games to this vote before starting Twitch voting"
   defp twitch_error(:no_twitch_rewards), do: "No Twitch rewards to remove"
 
+  defp twitch_error({:voting_session_pool_too_small, _count, _min_count} = reason),
+    do: voting_session_pool_error(reason)
+
+  defp twitch_error({:voting_session_pool_too_large, _count, _max_count} = reason),
+    do: voting_session_pool_error(reason)
+
   defp twitch_error({:twitch_reward_pool_too_large, count, max_count}),
     do:
       "Twitch can create at most #{max_count} reward titles for one vote; this vote has #{count} games."
@@ -1153,6 +1204,14 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   defp twitch_error({:error, reason}), do: twitch_error(reason)
 
   defp twitch_error(_reason), do: "Could not complete Twitch action"
+
+  defp voting_session_pool_error({:voting_session_pool_too_small, count, min_count}) do
+    "Add at least #{min_count} games before opening voting; this vote has #{count}."
+  end
+
+  defp voting_session_pool_error({:voting_session_pool_too_large, count, max_count}) do
+    "Voting sessions can include at most #{max_count} games; this vote has #{count}."
+  end
 
   defp twitch_http_error_message(%{"message" => message}) when is_binary(message), do: message
   defp twitch_http_error_message(%{message: message}) when is_binary(message), do: message

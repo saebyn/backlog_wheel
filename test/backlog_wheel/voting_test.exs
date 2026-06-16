@@ -75,6 +75,48 @@ defmodule BacklogWheel.VotingTest do
       assert voting_session.title == "Community Vote"
       assert voting_session.description == "Pick the next game."
     end
+
+    test "update_voting_session_status/2 requires at least two games to open voting" do
+      voting_session = voting_session_fixture()
+      voting_session_game_fixture(voting_session, game_fixture())
+
+      assert Voting.update_voting_session_status(voting_session, "open") ==
+               {:error, {:voting_session_pool_too_small, 1, 2}}
+    end
+
+    test "update_voting_session_status/2 rejects impractically large pools" do
+      voting_session = voting_session_fixture()
+
+      for index <- 1..51 do
+        game =
+          game_fixture(%{
+            title: "Too Many Session Game #{index}",
+            external_id: "too-many-session-game-#{index}"
+          })
+
+        voting_session_game_fixture(voting_session, game)
+      end
+
+      assert Voting.update_voting_session_status(voting_session, "open") ==
+               {:error, {:voting_session_pool_too_large, 51, 50}}
+    end
+
+    test "update_voting_session_status/2 opens sessions with practical pool sizes" do
+      voting_session = voting_session_fixture()
+
+      voting_session_game_fixture(
+        voting_session,
+        game_fixture(%{title: "First Valid Pool", external_id: "first-valid-pool"})
+      )
+
+      voting_session_game_fixture(
+        voting_session,
+        game_fixture(%{title: "Second Valid Pool", external_id: "second-valid-pool"})
+      )
+
+      assert {:ok, voting_session} = Voting.update_voting_session_status(voting_session, "open")
+      assert voting_session.status == "open"
+    end
   end
 
   describe "wheel_formats" do
@@ -485,6 +527,12 @@ defmodule BacklogWheel.VotingTest do
     test "validate_twitch_reward_creation/1 rejects long existing reward titles" do
       voting_session = voting_session_fixture()
       pool_item = voting_session_game_fixture(voting_session, game_fixture())
+
+      voting_session_game_fixture(
+        voting_session,
+        game_fixture(%{title: "Valid Reward Title", external_id: "valid-reward-title"})
+      )
+
       long_title = String.duplicate("A", 46)
 
       pool_item
@@ -532,6 +580,11 @@ defmodule BacklogWheel.VotingTest do
       game = game_fixture(%{title: "No Typing Required"})
       pool_item = voting_session_game_fixture(voting_session, game)
 
+      voting_session_game_fixture(
+        voting_session,
+        game_fixture(%{title: "No Typing Required 2", external_id: "no-typing-required-2"})
+      )
+
       {:ok, _credential} =
         Twitch.save_credential(%{
           access_token: "access-token",
@@ -551,6 +604,11 @@ defmodule BacklogWheel.VotingTest do
       game = game_fixture(%{title: "Temporary Reward"})
       pool_item = voting_session_game_fixture(voting_session, game)
 
+      voting_session_game_fixture(
+        voting_session,
+        game_fixture(%{title: "Temporary Reward 2", external_id: "temporary-reward-2"})
+      )
+
       {:ok, _credential} =
         Twitch.save_credential(%{
           access_token: "access-token",
@@ -561,7 +619,9 @@ defmodule BacklogWheel.VotingTest do
       {:ok, session_with_rewards} =
         Voting.start_twitch_voting(voting_session, client: BacklogWheel.FakeTwitchClient)
 
-      [pool_item_with_reward] = session_with_rewards.voting_session_games
+      pool_item_with_reward =
+        Enum.find(session_with_rewards.voting_session_games, &(&1.id == pool_item.id))
+
       reward_id = pool_item_with_reward.twitch_reward_id
 
       assert {:ok, updated_session} =
@@ -570,7 +630,9 @@ defmodule BacklogWheel.VotingTest do
       assert updated_session.status == "open"
       assert BacklogWheel.FakeTwitchClient.deleted_reward?(reward_id)
 
-      assert [updated_pool_item] = updated_session.voting_session_games
+      updated_pool_item =
+        Enum.find(updated_session.voting_session_games, &(&1.id == pool_item.id))
+
       assert updated_pool_item.id == pool_item.id
       assert updated_pool_item.twitch_reward_id == reward_id
       assert updated_pool_item.twitch_reward_title == "Vote ##{pool_item.id}: Temporary Reward"
@@ -584,7 +646,12 @@ defmodule BacklogWheel.VotingTest do
     test "close_voting_session/3 closes voting and deletes rewards" do
       voting_session = voting_session_fixture(%{status: "open"})
       game = game_fixture(%{title: "Closing Reward"})
-      voting_session_game_fixture(voting_session, game)
+      pool_item = voting_session_game_fixture(voting_session, game)
+
+      voting_session_game_fixture(
+        voting_session,
+        game_fixture(%{title: "Closing Reward 2", external_id: "closing-reward-2"})
+      )
 
       {:ok, _credential} =
         Twitch.save_credential(%{
@@ -596,7 +663,9 @@ defmodule BacklogWheel.VotingTest do
       {:ok, session_with_rewards} =
         Voting.start_twitch_voting(voting_session, client: BacklogWheel.FakeTwitchClient)
 
-      [pool_item_with_reward] = session_with_rewards.voting_session_games
+      pool_item_with_reward =
+        Enum.find(session_with_rewards.voting_session_games, &(&1.id == pool_item.id))
+
       reward_id = pool_item_with_reward.twitch_reward_id
 
       assert {:ok, closed_session} =
@@ -606,14 +675,19 @@ defmodule BacklogWheel.VotingTest do
 
       assert closed_session.status == "closed"
       assert BacklogWheel.FakeTwitchClient.deleted_reward?(reward_id)
-      assert [updated_pool_item] = closed_session.voting_session_games
+      updated_pool_item = Enum.find(closed_session.voting_session_games, &(&1.id == pool_item.id))
       assert updated_pool_item.twitch_reward_deletion_status == "deleted"
     end
 
     test "close_voting_session/3 records failed deletions and keeps rewards retryable" do
       voting_session = voting_session_fixture(%{status: "open"})
       game = game_fixture(%{title: "Retry Reward"})
-      voting_session_game_fixture(voting_session, game)
+      pool_item = voting_session_game_fixture(voting_session, game)
+
+      voting_session_game_fixture(
+        voting_session,
+        game_fixture(%{title: "Retry Reward 2", external_id: "retry-reward-2"})
+      )
 
       {:ok, _credential} =
         Twitch.save_credential(%{
@@ -625,7 +699,9 @@ defmodule BacklogWheel.VotingTest do
       {:ok, session_with_rewards} =
         Voting.start_twitch_voting(voting_session, client: BacklogWheel.FakeTwitchClient)
 
-      [pool_item_with_reward] = session_with_rewards.voting_session_games
+      pool_item_with_reward =
+        Enum.find(session_with_rewards.voting_session_games, &(&1.id == pool_item.id))
+
       reward_id = pool_item_with_reward.twitch_reward_id
       BacklogWheel.FakeTwitchClient.fail_deletion(reward_id)
 
@@ -636,7 +712,7 @@ defmodule BacklogWheel.VotingTest do
                )
 
       assert closed_session.status == "closed"
-      assert [failed_pool_item] = closed_session.voting_session_games
+      failed_pool_item = Enum.find(closed_session.voting_session_games, &(&1.id == pool_item.id))
       assert failed_pool_item.twitch_reward_id == reward_id
       assert failed_pool_item.twitch_reward_deletion_status == "failed"
       assert failed_pool_item.twitch_reward_deletion_error == ":delete_failed"
@@ -647,7 +723,10 @@ defmodule BacklogWheel.VotingTest do
                Voting.remove_twitch_rewards(closed_session, client: BacklogWheel.FakeTwitchClient)
 
       assert BacklogWheel.FakeTwitchClient.deleted_reward?(reward_id)
-      assert [retried_pool_item] = retried_session.voting_session_games
+
+      retried_pool_item =
+        Enum.find(retried_session.voting_session_games, &(&1.id == pool_item.id))
+
       assert retried_pool_item.twitch_reward_deletion_status == "deleted"
       assert retried_pool_item.twitch_reward_deletion_error == nil
     end

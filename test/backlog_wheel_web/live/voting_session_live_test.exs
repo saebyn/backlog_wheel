@@ -183,6 +183,11 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     voting_session = voting_session_fixture()
     voting_session_game_fixture(voting_session, game_fixture(%{title: "Lifecycle Game"}))
 
+    voting_session_game_fixture(
+      voting_session,
+      game_fixture(%{title: "Lifecycle Game 2", external_id: "lifecycle-game-2"})
+    )
+
     {:ok, view, _html} = live(conn, ~p"/voting")
 
     assert view |> element("#set-session-open") |> render_click()
@@ -207,6 +212,11 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     voting_session = voting_session_fixture()
     voting_session_game_fixture(voting_session, game_fixture(%{title: "Ready Draft"}))
 
+    voting_session_game_fixture(
+      voting_session,
+      game_fixture(%{title: "Ready Draft 2", external_id: "ready-draft-2"})
+    )
+
     {:ok, view, _html} = live(conn, ~p"/voting")
 
     assert has_element?(view, "#voting-session-state-label", "Draft")
@@ -218,6 +228,45 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
            )
 
     assert has_element?(view, "#set-session-open", "Open voting")
+  end
+
+  test "blocks opening voting when the pool has only one game", %{conn: conn} do
+    voting_session = voting_session_fixture()
+    voting_session_game_fixture(voting_session, game_fixture(%{title: "Lonely Pool Game"}))
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    refute has_element?(view, "#set-session-open")
+
+    assert has_element?(
+             view,
+             "#voting-session-blocking-issue",
+             "Add at least 2 games before opening voting"
+           )
+  end
+
+  test "blocks opening voting when the pool is too large", %{conn: conn} do
+    voting_session = voting_session_fixture()
+
+    for index <- 1..51 do
+      game =
+        game_fixture(%{
+          title: "Too Many Live Game #{index}",
+          external_id: "too-many-live-game-#{index}"
+        })
+
+      voting_session_game_fixture(voting_session, game)
+    end
+
+    {:ok, view, _html} = live(conn, ~p"/voting")
+
+    refute has_element?(view, "#set-session-open")
+
+    assert has_element?(
+             view,
+             "#voting-session-blocking-issue",
+             "Voting sessions can include at most 50 games"
+           )
   end
 
   test "shows ready-to-spin next action", %{conn: conn} do
@@ -335,6 +384,11 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     voting_session = voting_session_fixture(%{status: "open"})
     voting_session_game_fixture(voting_session, game_fixture(%{title: "Twitch Ready"}))
 
+    voting_session_game_fixture(
+      voting_session,
+      game_fixture(%{title: "Twitch Ready 2", external_id: "twitch-ready-2"})
+    )
+
     {:ok, _credential} =
       Twitch.save_credential(%{
         access_token: "access-token",
@@ -377,13 +431,19 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     assert has_element?(
              view,
              "#voting-session-blocking-issue",
-             "Twitch can create at most 50 reward titles for one vote"
+             "Voting sessions can include at most 50 games"
            )
   end
 
   test "keeps start Twitch voting enabled for open sessions without rewards", %{conn: conn} do
     voting_session = voting_session_fixture()
     voting_session_game_fixture(voting_session, game_fixture(%{title: "Open But No Reward"}))
+
+    voting_session_game_fixture(
+      voting_session,
+      game_fixture(%{title: "Open But No Reward 2", external_id: "open-but-no-reward-2"})
+    )
+
     {:ok, _session} = Voting.update_voting_session_status(voting_session, "open")
 
     {:ok, _credential} =
@@ -407,6 +467,12 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     game = game_fixture(%{title: "Rewarded Game"})
     pool_item = voting_session_game_fixture(voting_session, game)
 
+    second_pool_item =
+      voting_session_game_fixture(
+        voting_session,
+        game_fixture(%{title: "Rewarded Game 2", external_id: "rewarded-game-2"})
+      )
+
     {:ok, _credential} =
       Twitch.save_credential(%{
         access_token: "access-token",
@@ -418,6 +484,15 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     |> BacklogWheel.Voting.VotingSessionGame.twitch_reward_changeset(%{
       twitch_reward_id: "reward-#{pool_item.id}",
       twitch_reward_title: "Vote ##{pool_item.id}: Rewarded Game",
+      twitch_reward_cost: 100,
+      twitch_reward_status: "enabled"
+    })
+    |> BacklogWheel.Repo.update!()
+
+    second_pool_item
+    |> BacklogWheel.Voting.VotingSessionGame.twitch_reward_changeset(%{
+      twitch_reward_id: "reward-#{second_pool_item.id}",
+      twitch_reward_title: "Vote ##{second_pool_item.id}: Rewarded Game 2",
       twitch_reward_cost: 100,
       twitch_reward_status: "enabled"
     })
