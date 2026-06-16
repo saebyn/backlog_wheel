@@ -144,6 +144,22 @@ defmodule BacklogWheel.Communities do
   def current_admin_community_for_user(nil), do: nil
 
   @doc """
+  Returns a changeset for editing general community settings.
+  """
+  def change_community_general_settings(%Community{} = community, attrs \\ %{}) do
+    Community.general_settings_changeset(community, attrs)
+  end
+
+  @doc """
+  Updates general community settings.
+  """
+  def update_community_general_settings(%Community{} = community, attrs) do
+    community
+    |> Community.general_settings_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
   Returns a changeset for editing community theme settings.
   """
   def change_community_theme(%Community{} = community, attrs \\ %{}) do

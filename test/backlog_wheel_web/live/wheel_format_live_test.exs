@@ -16,6 +16,7 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
     {:ok, view, _html} = live(conn, ~p"/settings/formats")
 
     assert has_element?(view, "#wheel-format-management")
+    assert has_element?(view, "#settings-nav-general", "General")
     assert has_element?(view, "#settings-nav-theme", "Theme")
     assert has_element?(view, "#settings-nav-formats", "Wheel Formats")
     assert has_element?(view, "#settings-nav-twitch", "Twitch")

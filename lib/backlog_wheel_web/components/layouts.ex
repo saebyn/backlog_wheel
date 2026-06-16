@@ -81,7 +81,7 @@ defmodule BacklogWheelWeb.Layouts do
             <li>
               <.link
                 id="main-nav-settings"
-                navigate={~p"/settings/theme"}
+                navigate={~p"/settings"}
                 class="btn btn-ghost hover-lift"
               >
                 Settings
@@ -129,7 +129,7 @@ defmodule BacklogWheelWeb.Layouts do
 
   attr :active, :atom,
     required: true,
-    values: [:theme, :formats, :twitch],
+    values: [:general, :theme, :formats, :twitch],
     doc: "the active settings section"
 
   def settings_nav(assigns) do
@@ -141,6 +141,13 @@ defmodule BacklogWheelWeb.Layouts do
       <p class="px-3 py-2 text-xs font-black uppercase tracking-[0.22em] text-base-content/50">
         Settings
       </p>
+      <.link
+        id="settings-nav-general"
+        navigate={~p"/settings"}
+        class={settings_nav_class(@active == :general)}
+      >
+        <.icon name="hero-cog-6-tooth" class="size-4" /> General
+      </.link>
       <.link
         id="settings-nav-theme"
         navigate={~p"/settings/theme"}

@@ -85,7 +85,7 @@ defmodule BacklogWheelWeb.DashboardLiveTest do
     assert has_element?(view, "#dashboard-active-session-#{session.id}", "Tonight's Vote")
     assert has_element?(view, "#dashboard-active-session-status", "Open")
     assert has_element?(view, "#dashboard-active-session-action", "Voting is open")
-    assert has_element?(view, "#main-nav-settings[href='/settings/theme']", "Settings")
+    assert has_element?(view, "#main-nav-settings[href='/settings']", "Settings")
     assert has_element?(view, "#dashboard-wheel-formats-voting-link", "Manage Formats")
     assert has_element?(view, "#dashboard-wheel-formats-voting-link[href='/settings/formats']")
     assert has_element?(view, "#dashboard-wheel-format-#{format.id}", "Quick Vote")

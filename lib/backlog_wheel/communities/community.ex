@@ -34,6 +34,18 @@ defmodule BacklogWheel.Communities.Community do
     community
     |> cast(attrs, [:name, :slug])
     |> validate_required([:name, :slug])
+    |> validate_slug()
+    |> unique_constraint(:slug)
+  end
+
+  @doc false
+  def general_settings_changeset(community, attrs) do
+    community
+    |> cast(attrs, [:name, :slug])
+    |> normalize_blanks([:name, :slug])
+    |> update_change(:slug, &slugify/1)
+    |> validate_required([:name, :slug])
+    |> validate_slug()
     |> unique_constraint(:slug)
   end
 
@@ -111,4 +123,21 @@ defmodule BacklogWheel.Communities.Community do
       value -> value
     end
   end
+
+  defp validate_slug(changeset) do
+    changeset
+    |> validate_length(:slug, min: 2, max: 80)
+    |> validate_format(:slug, ~r/^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      message: "must use lowercase letters, numbers, and hyphens"
+    )
+  end
+
+  defp slugify(value) when is_binary(value) do
+    value
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/, "-")
+    |> String.trim("-")
+  end
+
+  defp slugify(value), do: value
 end

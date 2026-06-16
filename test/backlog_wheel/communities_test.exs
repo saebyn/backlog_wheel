@@ -19,6 +19,46 @@ defmodule BacklogWheel.CommunitiesTest do
     end
   end
 
+  describe "community general settings" do
+    test "updates name and normalized slug" do
+      community = community_fixture()
+
+      assert {:ok, %Community{} = community} =
+               Communities.update_community_general_settings(community, %{
+                 "name" => "New Community Name",
+                 "slug" => "New Community Name!"
+               })
+
+      assert community.name == "New Community Name"
+      assert community.slug == "new-community-name"
+    end
+
+    test "requires a valid slug" do
+      community = community_fixture()
+
+      changeset =
+        Communities.change_community_general_settings(community, %{
+          "name" => "New Community Name",
+          "slug" => "!"
+        })
+
+      assert %{slug: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "enforces unique slugs" do
+      community_fixture(%{slug: "taken-slug"})
+      community = community_fixture()
+
+      assert {:error, changeset} =
+               Communities.update_community_general_settings(community, %{
+                 "name" => "Duplicate Slug",
+                 "slug" => "taken-slug"
+               })
+
+      assert %{slug: ["has already been taken"]} = errors_on(changeset)
+    end
+  end
+
   describe "default theme" do
     test "returns CSS custom properties without a persisted community" do
       style = Communities.default_theme_style()

@@ -53,6 +53,7 @@ defmodule BacklogWheelWeb.Router do
 
     live_session :authenticated,
       on_mount: [{BacklogWheelWeb.UserAuth, :require_authenticated_user}] do
+      live "/settings", SettingsLive.General, :edit
       live "/settings/twitch", TwitchLive, :index
       live "/wheel", WheelLive, :show
       live "/history", SpinHistoryLive, :index
