@@ -71,7 +71,9 @@ defmodule BacklogWheelWeb.SpinRecapLive do
           </div>
           <div class="rounded-2xl border border-base-300 bg-base-100 p-4 shadow-sm">
             <p class="text-xs font-bold uppercase tracking-[0.2em] text-base-content/50">Spin Time</p>
-            <p class="mt-2 text-lg font-bold">{format_utc_datetime(@spin.spun_at)}</p>
+            <p class="mt-2 text-lg font-bold" title={format_utc_datetime(@spin.spun_at)}>
+              {format_local_datetime(@spin.spun_at)}
+            </p>
           </div>
         </section>
 

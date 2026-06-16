@@ -5,6 +5,7 @@ defmodule BacklogWheelWeb.SpinRecapLiveTest do
   import BacklogWheel.BacklogFixtures
 
   alias BacklogWheel.Backlog
+  alias BacklogWheelWeb.DateTimeHelpers
 
   test "renders spin recap from snapshot", %{conn: conn} do
     community = Process.get(:test_community)
@@ -45,6 +46,12 @@ defmodule BacklogWheelWeb.SpinRecapLiveTest do
     assert has_element?(view, "#spin-recap-winner-#{spin.id}", "Recap Winner")
     assert has_element?(view, "#spin-recap-summary", "50.0%")
     assert has_element?(view, "#spin-recap-summary", "4 / 8")
+
+    assert has_element?(
+             view,
+             "#spin-recap-summary",
+             DateTimeHelpers.format_local_datetime(spin.spun_at)
+           )
 
     assert has_element?(
              view,
