@@ -63,22 +63,36 @@ defmodule BacklogWheelWeb.Layouts do
         </div>
         <div class="flex-none">
           <ul class="flex flex-column items-center gap-2 px-1">
-            <li>
-              <.link navigate={~p"/dashboard"} class="btn btn-ghost hover-lift">Dashboard</.link>
+            <li :if={@current_user}>
+              <.link
+                id="main-nav-dashboard"
+                navigate={~p"/dashboard"}
+                class="btn btn-ghost hover-lift"
+              >
+                Dashboard
+              </.link>
             </li>
-            <li>
-              <.link navigate={~p"/wheel"} class="btn btn-ghost hover-lift">Wheel</.link>
+            <li :if={@current_user}>
+              <.link id="main-nav-wheel" navigate={~p"/wheel"} class="btn btn-ghost hover-lift">
+                Wheel
+              </.link>
             </li>
-            <li>
-              <.link navigate={~p"/games"} class="btn btn-ghost hover-lift">Games</.link>
+            <li :if={@current_user}>
+              <.link id="main-nav-games" navigate={~p"/games"} class="btn btn-ghost hover-lift">
+                Games
+              </.link>
             </li>
-            <li>
-              <.link navigate={~p"/voting"} class="btn btn-ghost hover-lift">Voting</.link>
+            <li :if={@current_user}>
+              <.link id="main-nav-voting" navigate={~p"/voting"} class="btn btn-ghost hover-lift">
+                Voting
+              </.link>
             </li>
-            <li>
-              <.link navigate={~p"/history"} class="btn btn-ghost hover-lift">History</.link>
+            <li :if={@current_user}>
+              <.link id="main-nav-history" navigate={~p"/history"} class="btn btn-ghost hover-lift">
+                History
+              </.link>
             </li>
-            <li>
+            <li :if={@current_user}>
               <.link
                 id="main-nav-settings"
                 navigate={~p"/settings"}
@@ -95,8 +109,14 @@ defmodule BacklogWheelWeb.Layouts do
             <li>
               <.theme_toggle />
             </li>
-            <li>
-              <.link navigate={~p"/games/new"} class="btn btn-primary hover-lift">Add Game</.link>
+            <li :if={@current_user}>
+              <.link
+                id="main-nav-add-game"
+                navigate={~p"/games/new"}
+                class="btn btn-primary hover-lift"
+              >
+                Add Game
+              </.link>
             </li>
             <li :if={@current_user}>
               <.link href={~p"/logout"} method="delete" class="btn btn-ghost hover-lift">
