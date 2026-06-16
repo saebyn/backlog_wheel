@@ -19,6 +19,7 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
     assert has_element?(view, "#settings-nav-theme", "Theme")
     assert has_element?(view, "#settings-nav-formats", "Wheel Formats")
     assert has_element?(view, "#settings-nav-twitch", "Twitch")
+    assert has_element?(view, "#create-wheel-format", "Create Wheel Format")
     assert has_element?(view, "#wheel-format-#{format.id}", "Community Format")
     assert has_element?(view, "#edit-wheel-format-#{format.id}.btn", "Edit")
     assert has_element?(view, "#toggle-wheel-format-#{format.id}.btn", "Disable")
@@ -62,7 +63,77 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/settings/formats")
 
+    view
+    |> form("#wheel-format-form",
+      wheel_format: %{
+        name: "Unsubmitted Create Format",
+        description: "Draft create copy.",
+        default_session_title: "Draft Create Vote",
+        default_session_description: "Draft create session copy.",
+        is_enabled: "true",
+        include_in_wheel: "true",
+        unplayed_only: "false",
+        base_weight: "1"
+      }
+    )
+    |> render_change()
+
+    assert has_element?(
+             view,
+             "#edit-wheel-format-#{format.id}[data-confirm='Discard unsaved changes and edit this Wheel Format?']"
+           )
+
+    view |> element("#create-wheel-format") |> render_click()
+
+    assert has_element?(view, "#wheel_format_name[value='Unsubmitted Create Format']")
+
     view |> element("#edit-wheel-format-#{format.id}") |> render_click()
+
+    assert has_element?(view, "#wheel-format-editor.scroll-mt-24")
+    assert has_element?(view, "#wheel-format-form-title", "Edit Format")
+    assert has_element?(view, "#new-wheel-format.btn-warning", "Cancel Edit")
+
+    view |> element("#create-wheel-format") |> render_click()
+
+    assert has_element?(view, "#wheel-format-form-title", "Create Format")
+    refute has_element?(view, "#new-wheel-format")
+
+    view |> element("#edit-wheel-format-#{format.id}") |> render_click()
+
+    view
+    |> form("#wheel-format-form",
+      wheel_format: %{
+        name: "Changed Format",
+        description: "Changed copy.",
+        default_session_title: "Changed Vote",
+        default_session_description: "Changed session copy.",
+        is_enabled: "true",
+        include_in_wheel: "true",
+        unplayed_only: "false",
+        base_weight: "2"
+      }
+    )
+    |> render_change()
+
+    assert has_element?(
+             view,
+             "#create-wheel-format[data-confirm='Discard unsaved changes and create a new Wheel Format?']"
+           )
+
+    default_format =
+      Process.get(:test_community)
+      |> Voting.list_all_wheel_formats()
+      |> Enum.find(& &1.is_default)
+
+    assert has_element?(
+             view,
+             "#edit-wheel-format-#{format.id}[data-confirm='Discard unsaved changes and edit this Wheel Format?']"
+           )
+
+    assert has_element?(
+             view,
+             "#edit-wheel-format-#{default_format.id}[data-confirm='Discard unsaved changes and edit this Wheel Format?']"
+           )
 
     view
     |> form("#wheel-format-form",

@@ -21,6 +21,14 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
               </p>
             </div>
             <div class="mt-6 flex flex-wrap gap-2">
+              <.button
+                id="create-wheel-format"
+                phx-click="new"
+                data-confirm={new_format_confirm(@editing_format, @editing_dirty?)}
+                class="btn btn-accent hover-lift"
+              >
+                Create Wheel Format
+              </.button>
               <.link
                 id="wheel-formats-back-to-voting"
                 navigate={~p"/voting"}
@@ -80,6 +88,7 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
                       id={"edit-wheel-format-#{format.id}"}
                       phx-click="edit"
                       phx-value-id={format.id}
+                      data-confirm={edit_format_confirm(@form_dirty?)}
                       class="btn btn-primary btn-soft btn-sm hover-lift"
                     >
                       Edit
@@ -115,7 +124,10 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
               </article>
             </section>
 
-            <aside class="rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl xl:sticky xl:top-6 xl:self-start">
+            <aside
+              id="wheel-format-editor"
+              class="scroll-mt-24 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl xl:sticky xl:top-6 xl:self-start"
+            >
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <p class="text-xs font-black uppercase tracking-[0.2em] text-accent">
@@ -129,9 +141,10 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
                   :if={@editing_format}
                   id="new-wheel-format"
                   phx-click="new"
-                  class="btn btn-ghost btn-sm hover-lift"
+                  data-confirm={new_format_confirm(@editing_format, @editing_dirty?)}
+                  class="btn btn-warning btn-soft btn-sm hover-lift"
                 >
-                  New
+                  Cancel Edit
                 </.button>
               </div>
 
@@ -195,19 +208,29 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
      socket
      |> assign(:page_title, "Wheel Formats")
      |> assign(:editing_format, nil)
+     |> assign(:editing_dirty?, false)
+     |> assign(:form_dirty?, false)
      |> assign_formats()
      |> assign_form(%WheelFormat{community_id: community.id, is_enabled: true})}
   end
 
   @impl true
   def handle_event("new", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:editing_format, nil)
-     |> assign_form(%WheelFormat{
-       community_id: socket.assigns.current_community.id,
-       is_enabled: true
-     })}
+    socket =
+      if socket.assigns.editing_format do
+        socket
+        |> assign(:editing_format, nil)
+        |> assign(:editing_dirty?, false)
+        |> assign(:form_dirty?, false)
+        |> assign_form(%WheelFormat{
+          community_id: socket.assigns.current_community.id,
+          is_enabled: true
+        })
+      else
+        socket
+      end
+
+    {:noreply, push_event(socket, "wheel-format-editing", %{id: "wheel-format-editor"})}
   end
 
   def handle_event("edit", %{"id" => id}, socket) do
@@ -216,11 +239,18 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
     {:noreply,
      socket
      |> assign(:editing_format, format)
-     |> assign_form(format)}
+     |> assign(:editing_dirty?, false)
+     |> assign(:form_dirty?, false)
+     |> assign_form(format)
+     |> push_event("wheel-format-editing", %{id: "wheel-format-editor"})}
   end
 
   def handle_event("validate", %{"wheel_format" => params}, socket) do
-    {:noreply, assign(socket, :form, to_form(params, as: :wheel_format))}
+    {:noreply,
+     socket
+     |> assign(:editing_dirty?, !!socket.assigns.editing_format)
+     |> assign(:form_dirty?, true)
+     |> assign(:form, to_form(params, as: :wheel_format))}
   end
 
   def handle_event("save", %{"wheel_format" => params}, socket) do
@@ -239,6 +269,8 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
          socket
          |> put_flash(:info, "Wheel Format saved")
          |> assign(:editing_format, nil)
+         |> assign(:editing_dirty?, false)
+         |> assign(:form_dirty?, false)
          |> assign_formats()
          |> assign_form(%WheelFormat{
            community_id: socket.assigns.current_community.id,
@@ -273,6 +305,8 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
          socket
          |> put_flash(:info, "Wheel Format removed")
          |> assign(:editing_format, nil)
+         |> assign(:editing_dirty?, false)
+         |> assign(:form_dirty?, false)
          |> assign_formats()
          |> assign_form(%WheelFormat{
            community_id: socket.assigns.current_community.id,
@@ -297,6 +331,14 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
 
     assign(socket, :form, to_form(form_attrs, as: :wheel_format))
   end
+
+  defp new_format_confirm(%WheelFormat{}, true),
+    do: "Discard unsaved changes and create a new Wheel Format?"
+
+  defp new_format_confirm(_editing_format, _editing_dirty?), do: nil
+
+  defp edit_format_confirm(true), do: "Discard unsaved changes and edit this Wheel Format?"
+  defp edit_format_confirm(false), do: nil
 
   defp form_attrs(%Ecto.Changeset{} = changeset) do
     changes = changeset.changes

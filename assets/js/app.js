@@ -39,6 +39,15 @@ topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
+window.addEventListener("phx:wheel-format-editing", ({detail}) => {
+  const editor = document.getElementById(detail.id)
+  if(!editor) return
+
+  editor.scrollIntoView({behavior: "smooth", block: "start"})
+  editor.classList.remove("wheel-format-attention")
+  requestAnimationFrame(() => editor.classList.add("wheel-format-attention"))
+})
+
 // connect if there are any LiveViews on the page
 liveSocket.connect()
 
