@@ -79,7 +79,13 @@ defmodule BacklogWheelWeb.Layouts do
               <.link navigate={~p"/history"} class="btn btn-ghost hover-lift">History</.link>
             </li>
             <li>
-              <.link navigate={~p"/settings/theme"} class="btn btn-ghost hover-lift">Settings</.link>
+              <.link
+                id="main-nav-settings"
+                navigate={~p"/settings/theme"}
+                class="btn btn-ghost hover-lift"
+              >
+                Settings
+              </.link>
             </li>
             <li :if={@current_user}>
               <span id="current-user-role" class="badge badge-ghost capitalize">
@@ -120,6 +126,53 @@ defmodule BacklogWheelWeb.Layouts do
   end
 
   defp theme_style(community), do: Communities.theme_style(community)
+
+  attr :active, :atom,
+    required: true,
+    values: [:theme, :formats, :twitch],
+    doc: "the active settings section"
+
+  def settings_nav(assigns) do
+    ~H"""
+    <aside
+      id="settings-nav"
+      class="h-fit rounded-2xl border border-base-300 bg-base-100/85 p-3 shadow-sm backdrop-blur"
+    >
+      <p class="px-3 py-2 text-xs font-black uppercase tracking-[0.22em] text-base-content/50">
+        Settings
+      </p>
+      <.link
+        id="settings-nav-theme"
+        navigate={~p"/settings/theme"}
+        class={settings_nav_class(@active == :theme)}
+      >
+        <.icon name="hero-swatch" class="size-4" /> Theme
+      </.link>
+      <.link
+        id="settings-nav-formats"
+        navigate={~p"/settings/formats"}
+        class={settings_nav_class(@active == :formats)}
+      >
+        <.icon name="hero-adjustments-horizontal" class="size-4" /> Wheel Formats
+      </.link>
+      <.link
+        id="settings-nav-twitch"
+        navigate={~p"/settings/twitch"}
+        class={settings_nav_class(@active == :twitch)}
+      >
+        <.icon name="hero-signal" class="size-4" /> Twitch
+      </.link>
+    </aside>
+    """
+  end
+
+  defp settings_nav_class(true) do
+    "mt-1 flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm font-bold text-primary"
+  end
+
+  defp settings_nav_class(false) do
+    "mt-1 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-base-content/70 transition hover:bg-base-200 hover:text-base-content"
+  end
 
   @doc """
   Shows the flash group with standard titles and content.

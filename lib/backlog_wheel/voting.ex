@@ -116,6 +116,16 @@ defmodule BacklogWheel.Voting do
   end
 
   @doc """
+  Returns all Wheel Formats for a community, including disabled formats.
+  """
+  def list_all_wheel_formats(%Community{} = community) do
+    WheelFormat
+    |> where([format], format.community_id == ^community.id)
+    |> order_by([format], asc: format.is_default, asc: format.name)
+    |> Repo.all()
+  end
+
+  @doc """
   Returns the newest draft/open/locked voting session for a community.
   """
   def active_voting_session(%Community{} = community) do
@@ -145,6 +155,42 @@ defmodule BacklogWheel.Voting do
     %WheelFormat{community_id: community.id}
     |> WheelFormat.changeset(attrs)
     |> Repo.insert()
+  end
+
+  @doc """
+  Returns a Wheel Format changeset.
+  """
+  def change_wheel_format(%WheelFormat{} = wheel_format, attrs \\ %{}) do
+    WheelFormat.changeset(wheel_format, attrs)
+  end
+
+  @doc """
+  Updates a community Wheel Format.
+  """
+  def update_wheel_format(%Community{} = community, %WheelFormat{} = wheel_format, attrs) do
+    if wheel_format.community_id == community.id do
+      wheel_format
+      |> WheelFormat.changeset(attrs)
+      |> Repo.update()
+    else
+      {:error, :wheel_format_not_in_community}
+    end
+  end
+
+  @doc """
+  Deletes a custom Wheel Format while protecting seeded defaults.
+  """
+  def delete_wheel_format(%Community{} = community, %WheelFormat{} = wheel_format) do
+    cond do
+      wheel_format.community_id != community.id ->
+        {:error, :wheel_format_not_in_community}
+
+      wheel_format.is_default ->
+        {:error, :default_wheel_format_protected}
+
+      true ->
+        Repo.delete(wheel_format)
+    end
   end
 
   @doc """

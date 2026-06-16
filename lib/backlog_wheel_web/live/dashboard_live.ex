@@ -232,10 +232,10 @@ defmodule BacklogWheelWeb.DashboardLive do
             </div>
             <.link
               id="dashboard-wheel-formats-voting-link"
-              navigate={~p"/voting"}
+              navigate={~p"/settings/formats"}
               class="btn btn-accent hover-lift"
             >
-              Explore All Formats
+              Manage Formats
             </.link>
           </div>
 

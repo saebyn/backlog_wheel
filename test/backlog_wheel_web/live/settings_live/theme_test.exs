@@ -11,6 +11,8 @@ defmodule BacklogWheelWeb.SettingsLive.ThemeTest do
     assert has_element?(view, "#theme-form")
     assert has_element?(view, "#light-theme-preview")
     assert has_element?(view, "#dark-theme-preview")
+    assert has_element?(view, "#settings-nav-theme", "Theme")
+    assert has_element?(view, "#settings-nav-formats", "Wheel Formats")
     assert has_element?(view, "#settings-nav-twitch", "Twitch")
 
     assert has_element?(

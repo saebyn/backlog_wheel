@@ -8,24 +8,7 @@ defmodule BacklogWheelWeb.TwitchLive do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_community={@current_community}>
       <div class="grid gap-6 lg:grid-cols-[14rem_1fr]">
-        <aside class="h-fit rounded-2xl border border-base-300 bg-base-100/85 p-3 shadow-sm backdrop-blur">
-          <p class="px-3 py-2 text-xs font-black uppercase tracking-[0.22em] text-base-content/50">
-            Settings
-          </p>
-          <.link
-            id="settings-nav-theme"
-            navigate={~p"/settings/theme"}
-            class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-base-content/70 transition hover:bg-base-200 hover:text-base-content"
-          >
-            <.icon name="hero-swatch" class="size-4" /> Theme
-          </.link>
-          <.link
-            navigate={~p"/settings/twitch"}
-            class="mt-1 flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-sm font-bold text-primary"
-          >
-            <.icon name="hero-signal" class="size-4" /> Twitch
-          </.link>
-        </aside>
+        <Layouts.settings_nav active={:twitch} />
 
         <section class="rounded-[2rem] border border-base-300 bg-base-100 p-6 shadow-xl">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

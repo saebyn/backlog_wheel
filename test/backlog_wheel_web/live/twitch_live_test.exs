@@ -33,6 +33,8 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
     assert has_element?(view, "#twitch-settings-config-status", "Configured")
     assert has_element?(view, "#twitch-settings-reward-cost", "123")
     assert has_element?(view, "#settings-nav-theme", "Theme")
+    assert has_element?(view, "#settings-nav-formats", "Wheel Formats")
+    assert has_element?(view, "#settings-nav-twitch", "Twitch")
     assert has_element?(view, "#connect-twitch", "Connect Twitch")
     assert has_element?(view, "#disconnect-twitch[disabled]")
     assert has_element?(view, "#twitch-settings-eventsub-status", "Missing secret")

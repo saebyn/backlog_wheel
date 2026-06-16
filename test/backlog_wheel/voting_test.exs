@@ -113,6 +113,51 @@ defmodule BacklogWheel.VotingTest do
       assert Enum.map(formats_again, & &1.id) == Enum.map(formats, & &1.id)
     end
 
+    test "list_all_wheel_formats/1 includes disabled formats" do
+      community = community_fixture()
+      enabled = wheel_format_fixture(%{community: community, name: "Enabled Format"})
+
+      disabled =
+        wheel_format_fixture(%{community: community, name: "Disabled Format", is_enabled: false})
+
+      assert Enum.map(Voting.list_wheel_formats(community), & &1.id) == [enabled.id]
+
+      assert Enum.map(Voting.list_all_wheel_formats(community), & &1.id) |> Enum.sort() == [
+               enabled.id,
+               disabled.id
+             ]
+    end
+
+    test "update_wheel_format/3 updates custom format fields" do
+      community = community_fixture()
+      format = wheel_format_fixture(%{community: community})
+
+      assert {:ok, updated_format} =
+               Voting.update_wheel_format(community, format, %{
+                 name: "Updated Format",
+                 is_enabled: false,
+                 candidate_rules: %{"include_in_wheel" => true, "played_on_stream" => false},
+                 weighting_rules: %{"base_weight" => 4}
+               })
+
+      assert updated_format.name == "Updated Format"
+      refute updated_format.is_enabled
+      assert updated_format.candidate_rules["played_on_stream"] == false
+      assert updated_format.weighting_rules["base_weight"] == 4
+    end
+
+    test "delete_wheel_format/2 removes custom formats and protects defaults" do
+      community = community_fixture()
+      format = wheel_format_fixture(%{community: community})
+      {:ok, [default_format | _formats]} = Voting.ensure_default_wheel_formats(community)
+
+      assert {:error, :default_wheel_format_protected} =
+               Voting.delete_wheel_format(community, default_format)
+
+      assert {:ok, _format} = Voting.delete_wheel_format(community, format)
+      refute Enum.any?(Voting.list_all_wheel_formats(community), &(&1.id == format.id))
+    end
+
     test "create_voting_session_from_wheel_format/2 creates and populates a session" do
       community = community_fixture()
 
