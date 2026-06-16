@@ -40,7 +40,7 @@ defmodule BacklogWheelWeb.SpinHistoryLive do
           </div>
 
           <div class="min-w-0 flex-1">
-            <.link navigate={~p"/games/#{spin.game}"} class="text-lg font-bold hover:underline">
+            <.link navigate={~p"/history/#{spin}"} class="text-lg font-bold hover:underline">
               {spin.game.title}
             </.link>
             <p class="mt-1 text-sm text-base-content/60">
@@ -69,6 +69,14 @@ defmodule BacklogWheelWeb.SpinHistoryLive do
               </p>
             </div>
           </div>
+
+          <.link
+            id={"view-spin-recap-#{spin.id}"}
+            navigate={~p"/history/#{spin}"}
+            class="btn btn-primary btn-sm"
+          >
+            View Recap
+          </.link>
 
           <.link
             id={"delete-spin-#{spin.id}"}

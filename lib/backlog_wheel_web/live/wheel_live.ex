@@ -258,6 +258,14 @@ defmodule BacklogWheelWeb.WheelLive do
             <p class="mt-4 text-lg text-base-content/70">
               The wheel has spoken. Spin recorded in history.
             </p>
+            <.link
+              :if={@selected_spin_id}
+              id="winner-modal-recap-link"
+              navigate={~p"/history/#{@selected_spin_id}"}
+              class="btn btn-primary mt-6"
+            >
+              View Spin Recap
+            </.link>
           </div>
         </div>
       </section>
@@ -273,6 +281,7 @@ defmodule BacklogWheelWeb.WheelLive do
      |> assign(:selected_session_id, selected_session_id_from_params(params))
      |> assign(:subscribed_voting_session_id, nil)
      |> assign(:selected_game, nil)
+     |> assign(:selected_spin_id, nil)
      |> assign(:pending_game, nil)
      |> assign(:pending_spin_id, nil)
      |> assign(:spinning?, false)
@@ -300,6 +309,7 @@ defmodule BacklogWheelWeb.WheelLive do
       {:noreply,
        socket
        |> assign(:selected_game, game)
+       |> assign(:selected_spin_id, spin_id)
        |> assign(:pending_game, nil)
        |> assign(:pending_spin_id, nil)
        |> assign(:spinning?, false)

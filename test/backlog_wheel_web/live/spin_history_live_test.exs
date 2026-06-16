@@ -32,6 +32,7 @@ defmodule BacklogWheelWeb.SpinHistoryLiveTest do
     {:ok, _view, html} = live(conn, ~p"/history")
 
     assert html =~ "History Game"
+    assert html =~ "View Recap"
     assert html =~ "https://example.com/history.jpg"
     assert html =~ "2026-06-06 12:00 UTC"
     assert html =~ "wheel"
@@ -82,6 +83,7 @@ defmodule BacklogWheelWeb.SpinHistoryLiveTest do
            )
 
     assert has_element?(view, "#spin-snapshot-summary-#{spin.id}", "2 entries snapshotted")
+    assert has_element?(view, "#view-spin-recap-#{spin.id}")
   end
 
   test "deletes spin history entries", %{conn: conn} do

@@ -91,6 +91,7 @@ defmodule BacklogWheelWeb.WheelLiveTest do
 
     assert has_element?(view, "#wheel-result", game.title)
     assert has_element?(view, "#wheel-winner-modal", game.title)
+    assert has_element?(view, "#winner-modal-recap-link")
     assert has_element?(view, "#spin-history", game.title)
 
     assert view |> element("#dismiss-winner-modal") |> render_click()

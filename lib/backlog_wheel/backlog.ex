@@ -204,7 +204,9 @@ defmodule BacklogWheel.Backlog do
   def get_spin!(id), do: Repo.get!(Spin, id)
 
   def get_spin!(%Community{} = community, id) do
-    Repo.get_by!(Spin, id: id, community_id: community.id)
+    Spin
+    |> Repo.get_by!(id: id, community_id: community.id)
+    |> Repo.preload([:game, :voting_session])
   end
 
   @doc """
