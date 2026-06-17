@@ -1,4 +1,8 @@
 defmodule BacklogWheel.Discord.Client do
+  @moduledoc """
+  Discord OAuth API client.
+  """
+
   alias BacklogWheel.Discord.Config
 
   @authorize_url "https://discord.com/oauth2/authorize"

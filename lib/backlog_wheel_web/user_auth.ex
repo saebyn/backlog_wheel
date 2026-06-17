@@ -1,4 +1,6 @@
 defmodule BacklogWheelWeb.UserAuth do
+  @moduledoc false
+
   import Phoenix.Controller
   import Plug.Conn
   use BacklogWheelWeb, :verified_routes

@@ -44,20 +44,23 @@ defmodule BacklogWheel.Twitch.Client do
   end
 
   def exchange_code(%Config{} = config, code, redirect_uri) do
-    with {:ok, %{status: status, body: body}} when status in 200..299 <-
-           Req.post(@token_url,
-             form: [
-               client_id: config.client_id,
-               client_secret: config.client_secret,
-               code: code,
-               grant_type: "authorization_code",
-               redirect_uri: redirect_uri
-             ]
-           ) do
-      {:ok, normalize_token_response(body)}
-    else
-      {:ok, %{status: status, body: body}} -> {:error, {:twitch_http_error, status, body}}
-      {:error, reason} -> {:error, reason}
+    case Req.post(@token_url,
+           form: [
+             client_id: config.client_id,
+             client_secret: config.client_secret,
+             code: code,
+             grant_type: "authorization_code",
+             redirect_uri: redirect_uri
+           ]
+         ) do
+      {:ok, %{status: status, body: body}} when status in 200..299 ->
+        {:ok, normalize_token_response(body)}
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, {:twitch_http_error, status, body}}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -117,27 +120,30 @@ defmodule BacklogWheel.Twitch.Client do
         callback_url,
         secret
       ) do
-    with {:ok, %{status: status, body: body}} when status in 200..299 <-
-           Req.post(@eventsub_subscriptions_url,
-             headers: [
-               {"client-id", config.client_id},
-               {"authorization", "Bearer #{credential.access_token}"}
-             ],
-             json: %{
-               type: "channel.channel_points_custom_reward_redemption.add",
-               version: "1",
-               condition: %{broadcaster_user_id: config.broadcaster_id},
-               transport: %{
-                 method: "webhook",
-                 callback: callback_url,
-                 secret: secret
-               }
+    case Req.post(@eventsub_subscriptions_url,
+           headers: [
+             {"client-id", config.client_id},
+             {"authorization", "Bearer #{credential.access_token}"}
+           ],
+           json: %{
+             type: "channel.channel_points_custom_reward_redemption.add",
+             version: "1",
+             condition: %{broadcaster_user_id: config.broadcaster_id},
+             transport: %{
+               method: "webhook",
+               callback: callback_url,
+               secret: secret
              }
-           ) do
-      normalize_eventsub_subscription_response(body)
-    else
-      {:ok, %{status: status, body: body}} -> {:error, {:twitch_http_error, status, body}}
-      {:error, reason} -> {:error, reason}
+           }
+         ) do
+      {:ok, %{status: status, body: body}} when status in 200..299 ->
+        normalize_eventsub_subscription_response(body)
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, {:twitch_http_error, status, body}}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

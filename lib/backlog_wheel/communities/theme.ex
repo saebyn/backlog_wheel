@@ -163,15 +163,18 @@ defmodule BacklogWheel.Communities.Theme do
       delta = max - min
       s = if l > 0.5, do: delta / (2 - max - min), else: delta / (max + min)
 
-      h =
-        cond do
-          max == r -> (g - b) / delta + if(g < b, do: 6, else: 0)
-          max == g -> (b - r) / delta + 2
-          true -> (r - g) / delta + 4
-        end / 6
+      h = hue(r, g, b, max, delta)
 
       {h, s, l}
     end
+  end
+
+  defp hue(r, g, b, max, delta) do
+    cond do
+      max == r -> (g - b) / delta + if(g < b, do: 6, else: 0)
+      max == g -> (b - r) / delta + 2
+      true -> (r - g) / delta + 4
+    end / 6
   end
 
   defp hsl_to_rgb({_h, 0, l}) do

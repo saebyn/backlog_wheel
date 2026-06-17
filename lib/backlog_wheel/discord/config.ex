@@ -1,4 +1,8 @@
 defmodule BacklogWheel.Discord.Config do
+  @moduledoc """
+  Discord OAuth configuration loaded from application environment.
+  """
+
   @enforce_keys [:client_id, :client_secret]
   defstruct [:client_id, :client_secret]
 

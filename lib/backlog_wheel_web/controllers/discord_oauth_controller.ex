@@ -9,14 +9,15 @@ defmodule BacklogWheelWeb.DiscordOAuthController do
   end
 
   def start(conn, _params) do
-    with {:ok, config} <- Discord.config() do
-      state = Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
-      redirect_uri = Discord.redirect_uri(conn)
+    case Discord.config() do
+      {:ok, config} ->
+        state = Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+        redirect_uri = Discord.redirect_uri(conn)
 
-      conn
-      |> put_session(:discord_oauth_state, state)
-      |> redirect(external: Discord.client().authorize_url(config, redirect_uri, state))
-    else
+        conn
+        |> put_session(:discord_oauth_state, state)
+        |> redirect(external: Discord.client().authorize_url(config, redirect_uri, state))
+
       {:error, {:missing_config, missing}} ->
         conn
         |> put_flash(:error, "Missing Discord config: #{Enum.join(missing, ", ")}")

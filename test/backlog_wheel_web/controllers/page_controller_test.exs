@@ -8,7 +8,7 @@ defmodule BacklogWheelWeb.PageControllerTest do
     response = html_response(conn, 200)
 
     assert response =~ "Backlog Wheel"
-    assert response =~ "Manage Games"
+    assert response =~ "Sign Up / Log In"
     assert response =~ "Built for indecisive stream nights"
   end
 

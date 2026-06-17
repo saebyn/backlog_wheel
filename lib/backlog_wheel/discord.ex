@@ -1,4 +1,8 @@
 defmodule BacklogWheel.Discord do
+  @moduledoc """
+  Discord OAuth integration helpers.
+  """
+
   alias BacklogWheel.Discord.Config
 
   @spec config() :: {:ok, Config.t()} | {:error, {:missing_config, [atom()]}}

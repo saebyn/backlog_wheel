@@ -455,13 +455,7 @@ defmodule BacklogWheel.Voting do
           {:ignored, :unknown_twitch_reward}
 
         pool_item ->
-          with {:ok, viewer} <- get_or_create_twitch_viewer(pool_item, attrs, twitch_user_id) do
-            record_vote(pool_item, viewer, %{
-              strength: 1,
-              source: "twitch_channel_points",
-              external_event_id: redemption_id
-            })
-          end
+          record_twitch_redemption(pool_item, attrs, twitch_user_id, redemption_id)
       end
     end
   end
@@ -650,6 +644,16 @@ defmodule BacklogWheel.Voting do
     end
   end
 
+  defp record_twitch_redemption(pool_item, attrs, twitch_user_id, redemption_id) do
+    with {:ok, viewer} <- get_or_create_twitch_viewer(pool_item, attrs, twitch_user_id) do
+      record_vote(pool_item, viewer, %{
+        strength: 1,
+        source: "twitch_channel_points",
+        external_event_id: redemption_id
+      })
+    end
+  end
+
   defp get_twitch_viewer_identity(community_id, twitch_user_id) do
     Repo.get_by(ViewerIdentity,
       community_id: community_id,
@@ -706,19 +710,32 @@ defmodule BacklogWheel.Voting do
   defp create_twitch_rewards(%VotingSession{} = voting_session, config, credential, client) do
     voting_session = reload_voting_session!(voting_session)
 
-    with :ok <- validate_twitch_reward_creation(voting_session) do
-      voting_session.voting_session_games
-      |> Enum.reduce_while({:ok, []}, fn pool_item, {:ok, created_pool_items} ->
-        case maybe_create_twitch_reward(pool_item, config, credential, client) do
-          {:ok, updated_pool_item} -> {:cont, {:ok, [updated_pool_item | created_pool_items]}}
-          {:error, reason} -> {:halt, {:error, reason}}
-        end
-      end)
-      |> then(fn
-        {:ok, created_pool_items} -> {:ok, Enum.reverse(created_pool_items)}
-        {:error, reason} -> {:error, reason}
-      end)
+    case validate_twitch_reward_creation(voting_session) do
+      :ok ->
+        create_twitch_rewards_for_pool_items(
+          voting_session.voting_session_games,
+          config,
+          credential,
+          client
+        )
+
+      {:error, reason} ->
+        {:error, reason}
     end
+  end
+
+  defp create_twitch_rewards_for_pool_items(pool_items, config, credential, client) do
+    pool_items
+    |> Enum.reduce_while({:ok, []}, fn pool_item, {:ok, created_pool_items} ->
+      case maybe_create_twitch_reward(pool_item, config, credential, client) do
+        {:ok, updated_pool_item} -> {:cont, {:ok, [updated_pool_item | created_pool_items]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> then(fn
+      {:ok, created_pool_items} -> {:ok, Enum.reverse(created_pool_items)}
+      {:error, reason} -> {:error, reason}
+    end)
   end
 
   defp delete_twitch_rewards(pool_items, config, credential, client) do
@@ -742,12 +759,13 @@ defmodule BacklogWheel.Voting do
   defp delete_twitch_reward(%VotingSessionGame{} = pool_item, config, credential, client) do
     pool_item = mark_twitch_reward_deleting!(pool_item)
 
-    with :ok <- client.delete_custom_reward(config, credential, pool_item.twitch_reward_id) do
-      pool_item
-      |> VotingSessionGame.clear_twitch_reward_changeset()
-      |> Repo.update()
-      |> broadcast_voting_session_change(pool_item.voting_session_id)
-    else
+    case client.delete_custom_reward(config, credential, pool_item.twitch_reward_id) do
+      :ok ->
+        pool_item
+        |> VotingSessionGame.clear_twitch_reward_changeset()
+        |> Repo.update()
+        |> broadcast_voting_session_change(pool_item.voting_session_id)
+
       {:error, reason} ->
         pool_item
         |> VotingSessionGame.twitch_reward_deletion_failed_changeset(reason)
@@ -895,21 +913,21 @@ defmodule BacklogWheel.Voting do
   defp select_weighted_entry(entries) do
     total_weight = Enum.reduce(entries, 0, &(&1.weight + &2))
 
-    if total_weight <= 0 do
-      nil
-    else
-      target = :rand.uniform(total_weight)
-
-      Enum.reduce_while(entries, 0, fn entry, accumulated_weight ->
-        accumulated_weight = accumulated_weight + entry.weight
-
-        if target <= accumulated_weight do
-          {:halt, entry}
-        else
-          {:cont, accumulated_weight}
-        end
-      end)
+    if total_weight > 0 do
+      select_weighted_entry(entries, :rand.uniform(total_weight))
     end
+  end
+
+  defp select_weighted_entry(entries, target) do
+    Enum.reduce_while(entries, 0, fn entry, accumulated_weight ->
+      accumulated_weight = accumulated_weight + entry.weight
+
+      if target <= accumulated_weight do
+        {:halt, entry}
+      else
+        {:cont, accumulated_weight}
+      end
+    end)
   end
 
   defp reload_voting_session!(%VotingSession{id: id, community_id: community_id}) do

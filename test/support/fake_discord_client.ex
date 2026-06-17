@@ -1,4 +1,6 @@
 defmodule BacklogWheel.FakeDiscordClient do
+  @moduledoc false
+
   def authorize_url(_config, redirect_uri, state) do
     "https://discord.com/oauth2/authorize?redirect_uri=#{URI.encode_www_form(redirect_uri)}&state=#{state}"
   end

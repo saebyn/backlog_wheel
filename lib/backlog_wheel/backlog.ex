@@ -342,20 +342,7 @@ defmodule BacklogWheel.Backlog do
 
     case get_game_by_platform_external_id(community, "steam", external_id) do
       %Game{} = game ->
-        update_attrs =
-          game_attrs
-          |> Map.take([:last_played_at, :image_url])
-          |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-          |> Map.new()
-
-        if update_attrs == %{} do
-          {:ok, :skipped}
-        else
-          case update_game(game, update_attrs) do
-            {:ok, _game} -> {:ok, :updated}
-            {:error, changeset} -> {:error, %{appid: external_id, errors: changeset.errors}}
-          end
-        end
+        update_steam_game(game, game_attrs, external_id)
 
       nil ->
         case create_game(community, %{
@@ -374,6 +361,23 @@ defmodule BacklogWheel.Backlog do
 
   defp import_steam_game(_community, game_attrs),
     do: {:error, %{game: game_attrs, errors: :invalid_steam_game}}
+
+  defp update_steam_game(%Game{} = game, game_attrs, external_id) do
+    update_attrs =
+      game_attrs
+      |> Map.take([:last_played_at, :image_url])
+      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+      |> Map.new()
+
+    if update_attrs == %{} do
+      {:ok, :skipped}
+    else
+      case update_game(game, update_attrs) do
+        {:ok, _game} -> {:ok, :updated}
+        {:error, changeset} -> {:error, %{appid: external_id, errors: changeset.errors}}
+      end
+    end
+  end
 
   @doc """
   Updates a game.

@@ -4,14 +4,15 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
   alias BacklogWheel.Twitch
 
   def start(conn, _params) do
-    with {:ok, config} <- Twitch.config() do
-      state = Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
-      redirect_uri = Twitch.redirect_uri(conn)
+    case Twitch.config() do
+      {:ok, config} ->
+        state = Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+        redirect_uri = Twitch.redirect_uri(conn)
 
-      conn
-      |> put_session(:twitch_oauth_state, state)
-      |> redirect(external: Twitch.client().authorize_url(config, redirect_uri, state))
-    else
+        conn
+        |> put_session(:twitch_oauth_state, state)
+        |> redirect(external: Twitch.client().authorize_url(config, redirect_uri, state))
+
       {:error, {:missing_config, missing}} ->
         conn
         |> put_flash(:error, "Missing Twitch config: #{Enum.join(missing, ", ")}")

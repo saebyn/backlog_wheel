@@ -1,4 +1,6 @@
 defmodule BacklogWheel.FakeTwitchClient do
+  @moduledoc false
+
   @behaviour BacklogWheel.Twitch.Client
 
   @agent __MODULE__.Agent
