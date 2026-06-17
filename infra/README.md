@@ -70,6 +70,7 @@ The container also sets these non-secret runtime values:
 - `PHX_HOST=wheel.streamosaic.app`
 - `PHX_SERVER=true`
 - `PORT=4000`
+- `SIGNUP_ALLOWED_DISCORD_IDS=117000360039546887`
 - `TWITCH_EVENTSUB_CALLBACK_URL=https://wheel.streamosaic.app/twitch/eventsub`
 
 SQLite migrations run automatically when the Phoenix release starts. EFS is retained if the stack is destroyed so the prototype database is not accidentally deleted.
