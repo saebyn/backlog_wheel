@@ -3,6 +3,7 @@ defmodule BacklogWheel.TwitchTest do
 
   alias BacklogWheel.Twitch
   alias BacklogWheel.Twitch.Config
+  import BacklogWheel.BacklogFixtures
 
   setup do
     original_config = Application.get_env(:backlog_wheel, :twitch)
@@ -23,30 +24,55 @@ defmodule BacklogWheel.TwitchTest do
     end)
   end
 
-  test "configured?/0 is false when local Twitch config is incomplete" do
+  test "config/1 is false when community Twitch config is incomplete" do
     Application.put_env(:backlog_wheel, :twitch, client_id: "client-id")
+    community = community_fixture()
 
-    refute Twitch.configured?()
-    assert Twitch.config() == {:error, {:missing_config, [:client_secret, :broadcaster_id]}}
+    refute Twitch.configured?(community)
+
+    assert Twitch.config(community) ==
+             {:error, {:missing_config, [:client_secret, :broadcaster_id]}}
   end
 
-  test "config/0 returns local Twitch config when all values are present" do
+  test "config/1 returns app client and community channel config" do
     Application.put_env(:backlog_wheel, :twitch,
       client_id: "client-id",
-      client_secret: "client-secret",
-      broadcaster_id: "broadcaster-id"
+      client_secret: "client-secret"
     )
 
-    assert Twitch.configured?()
+    community =
+      community_fixture(%{
+        twitch_broadcaster_id: "broadcaster-id",
+        twitch_reward_cost: 321,
+        twitch_eventsub_secret: "eventsub-secret"
+      })
 
-    assert Twitch.config() ==
+    assert Twitch.configured?(community)
+
+    assert Twitch.config(community) ==
              {:ok,
               %Config{
                 client_id: "client-id",
                 client_secret: "client-secret",
                 broadcaster_id: "broadcaster-id",
-                reward_cost: 100
+                reward_cost: 321,
+                eventsub_secret: "eventsub-secret"
               }}
+  end
+
+  test "eventsub_config/1 resolves config by event broadcaster ID" do
+    Application.put_env(:backlog_wheel, :twitch,
+      client_id: "client-id",
+      client_secret: "client-secret"
+    )
+
+    community_fixture(%{
+      twitch_broadcaster_id: "1234",
+      twitch_eventsub_secret: "eventsub-secret"
+    })
+
+    assert {:ok, %Config{broadcaster_id: "1234", eventsub_secret: "eventsub-secret"}} =
+             Twitch.eventsub_config(%{"event" => %{"broadcaster_user_id" => "1234"}})
   end
 
   test "save_credential/1 persists the latest Twitch OAuth token" do

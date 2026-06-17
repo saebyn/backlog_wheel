@@ -1,6 +1,7 @@
 defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
   use BacklogWheelWeb.ConnCase, async: false
 
+  alias BacklogWheel.Communities
   alias BacklogWheel.Twitch
 
   setup do
@@ -9,9 +10,15 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
 
     Application.put_env(:backlog_wheel, :twitch,
       client_id: "client-id",
-      client_secret: "client-secret",
-      broadcaster_id: "broadcaster-id"
+      client_secret: "client-secret"
     )
+
+    {:ok, community} =
+      Communities.update_community_twitch_settings(Process.get(:test_community), %{
+        twitch_broadcaster_id: "broadcaster-id"
+      })
+
+    Process.put(:test_community, community)
 
     Application.put_env(:backlog_wheel, :twitch_client, BacklogWheel.FakeTwitchClient)
 
@@ -48,10 +55,16 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
     Application.put_env(:backlog_wheel, :twitch,
       client_id: "client-id",
       client_secret: "client-secret",
-      broadcaster_id: "broadcaster-id",
-      eventsub_secret: "eventsub-secret",
       eventsub_callback_url: "https://example.com/twitch/eventsub"
     )
+
+    {:ok, community} =
+      Communities.update_community_twitch_settings(Process.get(:test_community), %{
+        twitch_broadcaster_id: "broadcaster-id",
+        twitch_eventsub_secret: "eventsub-secret"
+      })
+
+    Process.put(:test_community, community)
 
     conn =
       conn

@@ -46,10 +46,31 @@ defmodule BacklogWheel.BacklogFixtures do
         slug: "community-#{System.unique_integer([:positive])}"
       })
 
+    community_attrs = Map.take(attrs, [:name, :slug, "name", "slug"])
+
+    twitch_attrs =
+      Map.take(attrs, [
+        :twitch_broadcaster_id,
+        :twitch_eventsub_secret,
+        :twitch_reward_cost,
+        "twitch_broadcaster_id",
+        "twitch_eventsub_secret",
+        "twitch_reward_cost"
+      ])
+
     community =
       %BacklogWheel.Communities.Community{}
-      |> BacklogWheel.Communities.Community.changeset(attrs)
+      |> BacklogWheel.Communities.Community.changeset(community_attrs)
       |> BacklogWheel.Repo.insert!()
+
+    community =
+      if map_size(twitch_attrs) > 0 do
+        community
+        |> BacklogWheel.Communities.Community.twitch_settings_changeset(twitch_attrs)
+        |> BacklogWheel.Repo.update!()
+      else
+        community
+      end
 
     Process.put(:test_community, community)
     community

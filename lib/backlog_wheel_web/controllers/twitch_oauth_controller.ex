@@ -4,7 +4,7 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
   alias BacklogWheel.Twitch
 
   def start(conn, _params) do
-    case Twitch.config() do
+    case Twitch.config(conn.assigns.current_community) do
       {:ok, config} ->
         state = Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
         redirect_uri = Twitch.redirect_uri(conn)
@@ -22,11 +22,11 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
 
   def callback(conn, %{"code" => code, "state" => state}) do
     with :ok <- verify_state(conn, state),
-         {:ok, config} <- Twitch.config(),
+         {:ok, config} <- Twitch.config(conn.assigns.current_community),
          {:ok, token_attrs} <-
            Twitch.client().exchange_code(config, code, Twitch.redirect_uri(conn)),
          {:ok, _credential} <- Twitch.save_credential(token_attrs) do
-      maybe_create_eventsub_subscription(conn, config)
+      maybe_create_eventsub_subscription(conn, conn.assigns.current_community, config)
 
       conn
       |> delete_session(:twitch_oauth_state)
@@ -64,9 +64,9 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
     end
   end
 
-  defp maybe_create_eventsub_subscription(conn, config) do
+  defp maybe_create_eventsub_subscription(conn, community, config) do
     with {:ok, _secret} <- Twitch.eventsub_secret(config),
-         {:ok, _subscription} <- Twitch.ensure_redemption_eventsub_subscription(conn) do
+         {:ok, _subscription} <- Twitch.ensure_redemption_eventsub_subscription(conn, community) do
       :ok
     else
       {:error, {:missing_config, [:eventsub_secret]}} -> :ok

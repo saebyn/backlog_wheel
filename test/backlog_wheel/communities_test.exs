@@ -206,6 +206,46 @@ defmodule BacklogWheel.CommunitiesTest do
     end
   end
 
+  describe "community Twitch settings" do
+    test "updates Twitch settings" do
+      community = community_fixture()
+
+      assert {:ok, %Community{} = community} =
+               Communities.update_community_twitch_settings(community, %{
+                 "twitch_broadcaster_id" => "28728577",
+                 "twitch_eventsub_secret" => "eventsub-secret",
+                 "twitch_reward_cost" => "250"
+               })
+
+      assert community.twitch_broadcaster_id == "28728577"
+      assert community.twitch_eventsub_secret == "eventsub-secret"
+      assert community.twitch_reward_cost == 250
+      assert Communities.get_community_by_twitch_broadcaster_id("28728577").id == community.id
+    end
+
+    test "normalizes blank Twitch optional fields to nil" do
+      community = community_fixture()
+
+      assert {:ok, community} =
+               Communities.update_community_twitch_settings(community, %{
+                 "twitch_broadcaster_id" => "  ",
+                 "twitch_eventsub_secret" => ""
+               })
+
+      assert community.twitch_broadcaster_id == nil
+      assert community.twitch_eventsub_secret == nil
+    end
+
+    test "requires positive reward cost" do
+      community = community_fixture()
+
+      changeset =
+        Communities.change_community_twitch_settings(community, %{"twitch_reward_cost" => "0"})
+
+      assert %{twitch_reward_cost: ["must be greater than 0"]} = errors_on(changeset)
+    end
+  end
+
   describe "memberships" do
     test "resolves the first owner/admin community for a user" do
       user = user_fixture()

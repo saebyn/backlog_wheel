@@ -310,7 +310,9 @@ defmodule BacklogWheel.Voting do
   def start_twitch_voting(%VotingSession{} = voting_session, opts \\ []) do
     client = Keyword.get(opts, :client, Twitch.client())
 
-    with {:ok, config} <- Twitch.config(),
+    voting_session = reload_voting_session!(voting_session)
+
+    with {:ok, config} <- Twitch.config(voting_session.community),
          {:ok, credential} <- fetch_twitch_credential(config, client),
          {:ok, _pool_items} <- create_twitch_rewards(voting_session, config, credential, client),
          {:ok, session} <- update_voting_session_status(voting_session, "open") do
@@ -359,7 +361,7 @@ defmodule BacklogWheel.Voting do
         {:error, :no_twitch_rewards}
 
       pool_items ->
-        with {:ok, config} <- Twitch.config(),
+        with {:ok, config} <- Twitch.config(voting_session.community),
              {:ok, credential} <- fetch_twitch_credential(config, client),
              {:ok, _pool_items} <- delete_twitch_rewards(pool_items, config, credential, client) do
           {:ok, reload_voting_session!(voting_session)}

@@ -4,16 +4,23 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
   import Phoenix.LiveViewTest
 
   alias BacklogWheel.Twitch
+  alias BacklogWheel.Communities
 
   setup do
     original_config = Application.get_env(:backlog_wheel, :twitch)
 
     Application.put_env(:backlog_wheel, :twitch,
       client_id: "client-id",
-      client_secret: "client-secret",
-      broadcaster_id: "broadcaster-id",
-      reward_cost: 123
+      client_secret: "client-secret"
     )
+
+    {:ok, community} =
+      Communities.update_community_twitch_settings(Process.get(:test_community), %{
+        twitch_broadcaster_id: "broadcaster-id",
+        twitch_reward_cost: 123
+      })
+
+    Process.put(:test_community, community)
 
     on_exit(fn ->
       if is_nil(original_config) do
@@ -39,22 +46,66 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
     assert has_element?(view, "#connect-twitch", "Connect Twitch")
     assert has_element?(view, "#disconnect-twitch[disabled]")
     assert has_element?(view, "#twitch-settings-eventsub-status", "Missing secret")
+    assert has_element?(view, "#twitch-settings-eventsub-secret-status", "Missing")
     assert has_element?(view, "#twitch-settings-eventsub-warning")
+    assert has_element?(view, "#twitch-settings-form")
+    assert has_element?(view, "#rotate-eventsub-secret", "Generate EventSub secret")
   end
 
   test "shows EventSub configured when signing secret exists", %{conn: conn} do
-    Application.put_env(:backlog_wheel, :twitch,
-      client_id: "client-id",
-      client_secret: "client-secret",
-      broadcaster_id: "broadcaster-id",
-      reward_cost: 123,
-      eventsub_secret: "eventsub-secret"
-    )
+    {:ok, community} =
+      Communities.update_community_twitch_settings(Process.get(:test_community), %{
+        twitch_broadcaster_id: "broadcaster-id",
+        twitch_reward_cost: 123,
+        twitch_eventsub_secret: "eventsub-secret"
+      })
+
+    Process.put(:test_community, community)
 
     {:ok, view, _html} = live(conn, ~p"/settings/twitch")
 
     assert has_element?(view, "#twitch-settings-eventsub-status", "Configured")
+    assert has_element?(view, "#twitch-settings-eventsub-secret-status", "Configured")
+    assert has_element?(view, "#rotate-eventsub-secret", "Rotate EventSub secret")
     refute has_element?(view, "#twitch-settings-eventsub-warning")
+  end
+
+  test "saves editable community Twitch settings without exposing EventSub secret", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/settings/twitch")
+
+    view
+    |> form("#twitch-settings-form",
+      community: %{
+        twitch_broadcaster_id: "28728577",
+        twitch_reward_cost: "250"
+      }
+    )
+    |> render_submit()
+
+    assert has_element?(view, "#flash-info", "Twitch settings updated successfully")
+
+    community = Communities.get_community!(Process.get(:test_community).id)
+    assert community.twitch_broadcaster_id == "28728577"
+    assert community.twitch_reward_cost == 250
+    assert community.twitch_eventsub_secret == nil
+  end
+
+  test "generates and rotates EventSub secret server-side", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/settings/twitch")
+
+    assert view |> element("#rotate-eventsub-secret") |> render_click()
+    assert has_element?(view, "#flash-info", "EventSub secret rotated")
+    assert has_element?(view, "#twitch-settings-eventsub-secret-status", "Configured")
+
+    community = Communities.get_community!(Process.get(:test_community).id)
+    first_secret = community.twitch_eventsub_secret
+    assert is_binary(first_secret)
+    refute first_secret == ""
+
+    assert view |> element("#rotate-eventsub-secret") |> render_click()
+
+    community = Communities.get_community!(Process.get(:test_community).id)
+    assert community.twitch_eventsub_secret != first_secret
   end
 
   test "shows reconnect and disconnect when Twitch is connected", %{conn: conn} do

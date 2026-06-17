@@ -1,9 +1,8 @@
 defmodule BacklogWheel.Twitch.Config do
   @moduledoc """
-  Local Twitch integration configuration.
+  Twitch integration configuration.
 
-  This struct only describes configuration required by future Twitch API work.
-  It does not perform OAuth, EventSub setup, or Twitch API calls.
+  App-level OAuth client values are merged with community-level channel settings.
   """
 
   @enforce_keys [:client_id, :client_secret, :broadcaster_id, :reward_cost]

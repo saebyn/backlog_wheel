@@ -192,6 +192,32 @@ defmodule BacklogWheel.Communities do
   end
 
   @doc """
+  Returns a changeset for editing community Twitch settings.
+  """
+  def change_community_twitch_settings(%Community{} = community, attrs \\ %{}) do
+    Community.twitch_settings_changeset(community, attrs)
+  end
+
+  @doc """
+  Updates community Twitch settings.
+  """
+  def update_community_twitch_settings(%Community{} = community, attrs) do
+    community
+    |> Community.twitch_settings_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Returns the community configured for a Twitch broadcaster ID.
+  """
+  def get_community_by_twitch_broadcaster_id(nil), do: nil
+  def get_community_by_twitch_broadcaster_id(""), do: nil
+
+  def get_community_by_twitch_broadcaster_id(broadcaster_id) when is_binary(broadcaster_id) do
+    Repo.get_by(Community, twitch_broadcaster_id: broadcaster_id)
+  end
+
+  @doc """
   Returns whether a community has enough Steam credential data to import games.
   """
   def steam_configured?(%Community{} = community) do

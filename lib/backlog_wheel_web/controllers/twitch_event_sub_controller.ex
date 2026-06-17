@@ -9,13 +9,17 @@ defmodule BacklogWheelWeb.TwitchEventSubController do
   @redemption_add_type "channel.channel_points_custom_reward_redemption.add"
 
   def webhook(conn, params) do
-    with {:ok, config} <- Twitch.config(),
+    with {:ok, config} <- Twitch.eventsub_config(params),
          {:ok, secret} <- Twitch.eventsub_secret(config),
          :ok <- verify_signature(conn, secret) do
       handle_eventsub_message(conn, params)
     else
       {:error, {:missing_config, missing}} ->
         Logger.warning("Twitch EventSub webhook missing config: #{inspect(missing)}")
+        send_resp(conn, :service_unavailable, "")
+
+      {:error, {:unknown_broadcaster, broadcaster_id}} ->
+        Logger.warning("Twitch EventSub webhook unknown broadcaster: #{inspect(broadcaster_id)}")
         send_resp(conn, :service_unavailable, "")
 
       {:error, :invalid_signature} ->

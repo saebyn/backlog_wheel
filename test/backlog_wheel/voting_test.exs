@@ -430,10 +430,16 @@ defmodule BacklogWheel.VotingTest do
 
       Application.put_env(:backlog_wheel, :twitch,
         client_id: "client-id",
-        client_secret: "client-secret",
-        broadcaster_id: "broadcaster-id",
-        reward_cost: 321
+        client_secret: "client-secret"
       )
+
+      community =
+        community_fixture(%{
+          twitch_broadcaster_id: "broadcaster-id",
+          twitch_reward_cost: 321
+        })
+
+      Process.put(:test_community, community)
 
       on_exit(fn ->
         if is_nil(original_config) do

@@ -5,20 +5,28 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
   import BacklogWheel.VotingFixtures
 
   alias BacklogWheel.Repo
+  alias BacklogWheel.Communities
   alias BacklogWheel.Voting.ChannelPointVote
   alias BacklogWheel.Voting.VotingSessionGame
 
   @eventsub_secret "eventsub-secret"
+  @broadcaster_id "broadcaster-id"
 
   setup do
     original_config = Application.get_env(:backlog_wheel, :twitch)
 
     Application.put_env(:backlog_wheel, :twitch,
       client_id: "client-id",
-      client_secret: "client-secret",
-      broadcaster_id: "broadcaster-id",
-      eventsub_secret: @eventsub_secret
+      client_secret: "client-secret"
     )
+
+    {:ok, community} =
+      Communities.update_community_twitch_settings(Process.get(:test_community), %{
+        twitch_broadcaster_id: @broadcaster_id,
+        twitch_eventsub_secret: @eventsub_secret
+      })
+
+    Process.put(:test_community, community)
 
     on_exit(fn -> restore_env(:twitch, original_config) end)
 
@@ -26,7 +34,11 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
   end
 
   test "responds to Twitch EventSub challenge", %{conn: conn} do
-    body = Jason.encode!(%{"challenge" => "challenge-token"})
+    body =
+      Jason.encode!(%{
+        "challenge" => "challenge-token",
+        "subscription" => %{"condition" => %{"broadcaster_user_id" => @broadcaster_id}}
+      })
 
     conn =
       conn
@@ -95,6 +107,7 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
     Jason.encode!(%{
       "subscription" => %{"type" => "channel.channel_points_custom_reward_redemption.add"},
       "event" => %{
+        "broadcaster_user_id" => @broadcaster_id,
         "id" => redemption_id,
         "user_id" => "twitch-user-1",
         "user_name" => "WebhookViewer",

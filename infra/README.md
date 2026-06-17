@@ -71,10 +71,7 @@ The first deploy creates `backlog-wheel/prototype/runtime` with a generated `SEC
   "DISCORD_CLIENT_ID": "",
   "DISCORD_CLIENT_SECRET": "",
   "TWITCH_CLIENT_ID": "",
-  "TWITCH_CLIENT_SECRET": "",
-  "TWITCH_BROADCASTER_ID": "",
-  "TWITCH_REWARD_COST": "100",
-  "TWITCH_EVENTSUB_SECRET": ""
+  "TWITCH_CLIENT_SECRET": ""
 }
 ```
 

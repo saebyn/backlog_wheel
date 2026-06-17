@@ -8,13 +8,41 @@ defmodule BacklogWheel.Twitch do
 
   alias BacklogWheel.Twitch.Config
   alias BacklogWheel.Twitch.Credential
+  alias BacklogWheel.Communities
+  alias BacklogWheel.Communities.Community
   alias BacklogWheel.Repo
 
-  @spec configured?() :: boolean()
-  def configured?, do: Config.configured?()
+  def configured?(%Community{} = community), do: match?({:ok, %Config{}}, config(community))
 
-  @spec config() :: {:ok, Config.t()} | {:error, {:missing_config, [atom()]}}
-  def config, do: Config.new()
+  @spec config(Community.t()) :: {:ok, Config.t()} | {:error, {:missing_config, [atom()]}}
+  def config(%Community{} = community) do
+    Application.get_env(:backlog_wheel, :twitch, [])
+    |> Map.new(fn {key, value} -> {key, value} end)
+    |> Map.merge(%{
+      broadcaster_id: community.twitch_broadcaster_id,
+      reward_cost: community.twitch_reward_cost,
+      eventsub_secret: community.twitch_eventsub_secret
+    })
+    |> Config.new()
+  end
+
+  @spec eventsub_config(map()) ::
+          {:ok, Config.t()}
+          | {:error, {:missing_config | :unknown_broadcaster, [atom()] | String.t()}}
+  def eventsub_config(params) do
+    broadcaster_id = eventsub_broadcaster_id(params)
+
+    with {:ok, broadcaster_id} <- require_broadcaster_id(broadcaster_id),
+         %Community{} = community <-
+           Communities.get_community_by_twitch_broadcaster_id(broadcaster_id),
+         {:ok, config} <- config(community),
+         {:ok, _secret} <- eventsub_secret(config) do
+      {:ok, config}
+    else
+      nil -> {:error, {:unknown_broadcaster, broadcaster_id || ""}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
   @spec client() :: module()
   def client, do: Application.get_env(:backlog_wheel, :twitch_client, BacklogWheel.Twitch.Client)
@@ -45,9 +73,8 @@ defmodule BacklogWheel.Twitch do
 
   def eventsub_secret(%Config{}), do: {:error, {:missing_config, [:eventsub_secret]}}
 
-  @spec ensure_redemption_eventsub_subscription(Plug.Conn.t()) :: {:ok, map()} | {:error, term()}
-  def ensure_redemption_eventsub_subscription(conn) do
-    with {:ok, config} <- config(),
+  def ensure_redemption_eventsub_subscription(conn, %Community{} = community) do
+    with {:ok, config} <- config(community),
          {:ok, secret} <- eventsub_secret(config),
          credential when not is_nil(credential) <- get_credential() do
       client().create_redemption_eventsub_subscription(
@@ -110,4 +137,21 @@ defmodule BacklogWheel.Twitch do
       attrs
     end
   end
+
+  defp eventsub_broadcaster_id(%{"event" => %{"broadcaster_user_id" => broadcaster_id}}),
+    do: broadcaster_id
+
+  defp eventsub_broadcaster_id(%{
+         "subscription" => %{"condition" => %{"broadcaster_user_id" => broadcaster_id}}
+       }),
+       do: broadcaster_id
+
+  defp eventsub_broadcaster_id(_params), do: nil
+
+  defp require_broadcaster_id(broadcaster_id)
+       when is_binary(broadcaster_id) and broadcaster_id != "" do
+    {:ok, broadcaster_id}
+  end
+
+  defp require_broadcaster_id(_broadcaster_id), do: {:error, {:missing_config, [:broadcaster_id]}}
 end

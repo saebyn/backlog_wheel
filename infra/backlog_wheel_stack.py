@@ -77,9 +77,6 @@ class BacklogWheelStatefulStack(Stack):
                         "DISCORD_CLIENT_SECRET": "",
                         "TWITCH_CLIENT_ID": "",
                         "TWITCH_CLIENT_SECRET": "",
-                        "TWITCH_BROADCASTER_ID": "",
-                        "TWITCH_REWARD_COST": "100",
-                        "TWITCH_EVENTSUB_SECRET": "",
                     }
                 ),
                 generate_string_key="SECRET_KEY_BASE",
@@ -168,9 +165,6 @@ class BacklogWheelServiceStack(Stack):
                     "DISCORD_CLIENT_SECRET",
                     "TWITCH_CLIENT_ID",
                     "TWITCH_CLIENT_SECRET",
-                    "TWITCH_BROADCASTER_ID",
-                    "TWITCH_REWARD_COST",
-                    "TWITCH_EVENTSUB_SECRET",
                 ]
             }
             | {

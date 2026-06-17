@@ -1,6 +1,7 @@
 defmodule BacklogWheelWeb.TwitchLive do
   use BacklogWheelWeb, :live_view
 
+  alias BacklogWheel.Communities
   alias BacklogWheel.Twitch
 
   @impl true
@@ -82,10 +83,54 @@ defmodule BacklogWheelWeb.TwitchLive do
             id="twitch-settings-eventsub-warning"
             class="mt-4 rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm"
           >
-            Twitch EventSub is not configured. Channel point rewards can be created, but
-            redemptions will not be delivered as votes until TWITCH_EVENTSUB_SECRET is set and
-            Twitch is reconnected.
+            Twitch EventSub is not configured. Channel point rewards can be created, but redemptions
+            will not be delivered as votes until an EventSub secret is saved and Twitch is reconnected.
           </p>
+
+          <.form
+            for={@form}
+            id="twitch-settings-form"
+            class="mt-6 grid gap-4 rounded-3xl border border-base-300 bg-base-200/60 p-5"
+            phx-change="validate"
+            phx-submit="save"
+          >
+            <div class="grid gap-4 md:grid-cols-2">
+              <.input
+                field={@form[:twitch_broadcaster_id]}
+                type="text"
+                label="Twitch broadcaster ID"
+                placeholder="28728577"
+              />
+              <.input
+                field={@form[:twitch_reward_cost]}
+                type="number"
+                label="Reward cost"
+                min="1"
+              />
+            </div>
+
+            <div class="rounded-2xl border border-base-300 bg-base-100 p-4">
+              <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+                EventSub secret
+              </p>
+              <p id="twitch-settings-eventsub-secret-status" class="mt-1 font-bold">
+                {if @eventsub_configured?, do: "Configured", else: "Missing"}
+              </p>
+              <p class="mt-2 text-sm text-base-content/70">
+                The secret is generated and stored by Backlog Wheel. Rotate it if it may have been
+                exposed, then reconnect Twitch to refresh the webhook subscription.
+              </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <.button id="save-twitch-settings">Save Twitch settings</.button>
+              <.button id="rotate-eventsub-secret" type="button" phx-click="rotate_secret">
+                {if @eventsub_configured?,
+                  do: "Rotate EventSub secret",
+                  else: "Generate EventSub secret"}
+              </.button>
+            </div>
+          </.form>
 
           <div class="mt-6 flex flex-wrap gap-2">
             <.button
@@ -126,10 +171,59 @@ defmodule BacklogWheelWeb.TwitchLive do
      |> refresh()}
   end
 
+  @impl true
+  def handle_event("validate", %{"community" => params}, socket) do
+    form =
+      socket.assigns.current_community
+      |> Communities.change_community_twitch_settings(params)
+      |> Map.put(:action, :validate)
+      |> to_form()
+
+    {:noreply, assign(socket, :form, form)}
+  end
+
+  @impl true
+  def handle_event("save", %{"community" => params}, socket) do
+    case Communities.update_community_twitch_settings(socket.assigns.current_community, params) do
+      {:ok, community} ->
+        {:noreply,
+         socket
+         |> assign(:current_community, community)
+         |> put_flash(:info, "Twitch settings updated successfully")
+         |> refresh()}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :form, to_form(%{changeset | action: :insert}))}
+    end
+  end
+
+  @impl true
+  def handle_event("rotate_secret", _params, socket) do
+    params = %{
+      "twitch_broadcaster_id" => socket.assigns.current_community.twitch_broadcaster_id,
+      "twitch_reward_cost" => socket.assigns.current_community.twitch_reward_cost,
+      "twitch_eventsub_secret" => Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+    }
+
+    case Communities.update_community_twitch_settings(socket.assigns.current_community, params) do
+      {:ok, community} ->
+        {:noreply,
+         socket
+         |> assign(:current_community, community)
+         |> put_flash(:info, "EventSub secret rotated. Reconnect Twitch to update the webhook.")
+         |> refresh()}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :form, to_form(%{changeset | action: :insert}))}
+    end
+  end
+
   defp refresh(socket) do
-    config = Twitch.config()
+    community = socket.assigns.current_community
+    config = Twitch.config(community)
 
     socket
+    |> assign(:form, to_form(Communities.change_community_twitch_settings(community)))
     |> assign(:twitch_connected?, Twitch.credential_configured?())
     |> assign(:twitch_configured?, match?({:ok, _config}, config))
     |> assign(:missing_config, missing_config(config))
