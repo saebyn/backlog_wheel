@@ -157,7 +157,7 @@ class BacklogWheelServiceStack(Stack):
                 "PHX_HOST": domain_name,
                 "PHX_SERVER": "true",
                 "PORT": "4000",
-                "SIGNUP_ALLOWED_DISCORD_IDS": "117000360039546887",
+                "SIGNUP_ALLOWED_DISCORD_IDS": "335983615613730819,117000360039546887",
                 "TWITCH_EVENTSUB_CALLBACK_URL": f"https://{domain_name}/twitch/eventsub",
             },
             secrets={

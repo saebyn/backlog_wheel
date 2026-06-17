@@ -87,7 +87,7 @@ The container also sets these non-secret runtime values:
 - `PHX_HOST=wheel.streamosaic.app`
 - `PHX_SERVER=true`
 - `PORT=4000`
-- `SIGNUP_ALLOWED_DISCORD_IDS=117000360039546887`
+- `SIGNUP_ALLOWED_DISCORD_IDS=335983615613730819,117000360039546887`
 - `TWITCH_EVENTSUB_CALLBACK_URL=https://wheel.streamosaic.app/twitch/eventsub`
 
 The database username and password are injected from the generated RDS credentials secret. Database migrations run automatically when the Phoenix release starts. The Aurora cluster is configured with deletion protection and a `RETAIN` removal policy so application data is not accidentally deleted with the stack.
