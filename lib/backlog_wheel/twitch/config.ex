@@ -25,9 +25,13 @@ defmodule BacklogWheel.Twitch.Config do
         }
 
   @required_keys [:client_id, :client_secret, :broadcaster_id]
+  @oauth_required_keys [:client_id, :client_secret]
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, {:missing_config, [atom()]}}
-  def new(config \\ Application.get_env(:backlog_wheel, :twitch, [])) do
+  def new(
+        config \\ Application.get_env(:backlog_wheel, :twitch, []),
+        required_keys \\ @required_keys
+      ) do
     twitch_config = %__MODULE__{
       client_id: value(config, :client_id),
       client_secret: value(config, :client_secret),
@@ -37,10 +41,15 @@ defmodule BacklogWheel.Twitch.Config do
       eventsub_callback_url: value(config, :eventsub_callback_url)
     }
 
-    case missing_keys(twitch_config) do
+    case missing_keys(twitch_config, required_keys) do
       [] -> {:ok, twitch_config}
       missing -> {:error, {:missing_config, missing}}
     end
+  end
+
+  @spec oauth(keyword() | map()) :: {:ok, t()} | {:error, {:missing_config, [atom()]}}
+  def oauth(config \\ Application.get_env(:backlog_wheel, :twitch, [])) do
+    new(config, @oauth_required_keys)
   end
 
   @spec configured?(keyword() | map()) :: boolean()
@@ -48,8 +57,8 @@ defmodule BacklogWheel.Twitch.Config do
     match?({:ok, %__MODULE__{}}, new(config))
   end
 
-  defp missing_keys(config) do
-    Enum.filter(@required_keys, fn key -> blank?(Map.fetch!(config, key)) end)
+  defp missing_keys(config, required_keys) do
+    Enum.filter(required_keys, fn key -> blank?(Map.fetch!(config, key)) end)
   end
 
   defp value(config, key) when is_list(config), do: Keyword.get(config, key)

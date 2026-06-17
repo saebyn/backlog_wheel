@@ -16,7 +16,6 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
 
     {:ok, community} =
       Communities.update_community_twitch_settings(Process.get(:test_community), %{
-        twitch_broadcaster_id: "broadcaster-id",
         twitch_reward_cost: 123
       })
 
@@ -39,6 +38,7 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
     assert has_element?(view, "#twitch-settings-connection-status", "Not connected")
     assert has_element?(view, "#twitch-settings-config-status", "Configured")
     assert has_element?(view, "#twitch-settings-reward-cost", "123")
+    assert has_element?(view, "#twitch-settings-broadcaster-id", "Connect Twitch")
     assert has_element?(view, "#settings-nav-general", "General")
     assert has_element?(view, "#settings-nav-theme", "Theme")
     assert has_element?(view, "#settings-nav-formats", "Wheel Formats")
@@ -55,7 +55,6 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
   test "shows EventSub configured when signing secret exists", %{conn: conn} do
     {:ok, community} =
       Communities.update_community_twitch_settings(Process.get(:test_community), %{
-        twitch_broadcaster_id: "broadcaster-id",
         twitch_reward_cost: 123,
         twitch_eventsub_secret: "eventsub-secret"
       })
@@ -76,7 +75,6 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
     view
     |> form("#twitch-settings-form",
       community: %{
-        twitch_broadcaster_id: "28728577",
         twitch_reward_cost: "250"
       }
     )
@@ -85,7 +83,7 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
     assert has_element?(view, "#flash-info", "Twitch settings updated successfully")
 
     community = Communities.get_community!(Process.get(:test_community).id)
-    assert community.twitch_broadcaster_id == "28728577"
+    assert community.twitch_broadcaster_id == nil
     assert community.twitch_reward_cost == 250
     assert community.twitch_eventsub_secret == nil
   end

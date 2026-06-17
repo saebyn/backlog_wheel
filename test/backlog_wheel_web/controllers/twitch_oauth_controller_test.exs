@@ -13,13 +13,6 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
       client_secret: "client-secret"
     )
 
-    {:ok, community} =
-      Communities.update_community_twitch_settings(Process.get(:test_community), %{
-        twitch_broadcaster_id: "broadcaster-id"
-      })
-
-    Process.put(:test_community, community)
-
     Application.put_env(:backlog_wheel, :twitch_client, BacklogWheel.FakeTwitchClient)
 
     on_exit(fn ->
@@ -47,6 +40,9 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
     assert redirected_to(conn) == ~p"/voting"
     assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Twitch connected"
     assert Twitch.get_credential().access_token == "access-token"
+
+    community = Communities.get_community!(Process.get(:test_community).id)
+    assert community.twitch_broadcaster_id == "28728577"
   end
 
   test "callback creates EventSub subscription when configured", %{conn: conn} do
@@ -60,7 +56,6 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
 
     {:ok, community} =
       Communities.update_community_twitch_settings(Process.get(:test_community), %{
-        twitch_broadcaster_id: "broadcaster-id",
         twitch_eventsub_secret: "eventsub-secret"
       })
 
@@ -73,6 +68,9 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
 
     assert redirected_to(conn) == ~p"/voting"
     assert Twitch.get_credential().access_token == "access-token"
+
+    community = Communities.get_community!(Process.get(:test_community).id)
+    assert community.twitch_broadcaster_id == "28728577"
 
     assert BacklogWheel.FakeTwitchClient.eventsub_callback_url() ==
              "https://example.com/twitch/eventsub"

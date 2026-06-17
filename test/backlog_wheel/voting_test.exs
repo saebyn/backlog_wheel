@@ -435,7 +435,7 @@ defmodule BacklogWheel.VotingTest do
 
       community =
         community_fixture(%{
-          twitch_broadcaster_id: "broadcaster-id",
+          twitch_broadcaster_id: "28728577",
           twitch_reward_cost: 321
         })
 

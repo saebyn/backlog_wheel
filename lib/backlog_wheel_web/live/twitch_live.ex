@@ -54,10 +54,13 @@ defmodule BacklogWheelWeb.TwitchLive do
             </div>
             <div class="min-w-0 rounded-2xl bg-base-200 p-4">
               <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-                Scope
+                Channel
               </p>
-              <p class="mt-1 break-words font-bold leading-snug [overflow-wrap:anywhere]">
-                channel:manage:redemptions
+              <p
+                id="twitch-settings-broadcaster-id"
+                class="mt-1 break-words font-bold leading-snug [overflow-wrap:anywhere]"
+              >
+                {@current_community.twitch_broadcaster_id || "Connect Twitch"}
               </p>
             </div>
             <div class="rounded-2xl bg-base-200 p-4">
@@ -95,12 +98,14 @@ defmodule BacklogWheelWeb.TwitchLive do
             phx-submit="save"
           >
             <div class="grid gap-4 md:grid-cols-2">
-              <.input
-                field={@form[:twitch_broadcaster_id]}
-                type="text"
-                label="Twitch broadcaster ID"
-                placeholder="28728577"
-              />
+              <div class="rounded-2xl border border-base-300 bg-base-100 p-4">
+                <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+                  Twitch broadcaster ID
+                </p>
+                <p id="twitch-settings-broadcaster-help" class="mt-1 text-sm text-base-content/70">
+                  This is detected automatically when you connect Twitch.
+                </p>
+              </div>
               <.input
                 field={@form[:twitch_reward_cost]}
                 type="number"
@@ -200,7 +205,6 @@ defmodule BacklogWheelWeb.TwitchLive do
   @impl true
   def handle_event("rotate_secret", _params, socket) do
     params = %{
-      "twitch_broadcaster_id" => socket.assigns.current_community.twitch_broadcaster_id,
       "twitch_reward_cost" => socket.assigns.current_community.twitch_reward_cost,
       "twitch_eventsub_secret" => Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
     }
@@ -220,25 +224,23 @@ defmodule BacklogWheelWeb.TwitchLive do
 
   defp refresh(socket) do
     community = socket.assigns.current_community
-    config = Twitch.config(community)
+    oauth_config = Twitch.oauth_config()
+    channel_config = Twitch.config(community)
 
     socket
     |> assign(:form, to_form(Communities.change_community_twitch_settings(community)))
     |> assign(:twitch_connected?, Twitch.credential_configured?())
-    |> assign(:twitch_configured?, match?({:ok, _config}, config))
-    |> assign(:missing_config, missing_config(config))
-    |> assign(:reward_cost, reward_cost(config))
-    |> assign(:eventsub_configured?, eventsub_configured?(config))
+    |> assign(:twitch_configured?, match?({:ok, _config}, oauth_config))
+    |> assign(:missing_config, missing_config(oauth_config))
+    |> assign(:reward_cost, reward_cost(channel_config, community))
+    |> assign(:eventsub_configured?, eventsub_configured?(community))
   end
 
   defp missing_config({:error, {:missing_config, missing}}), do: missing
   defp missing_config(_config), do: []
 
-  defp reward_cost({:ok, config}), do: config.reward_cost
-  defp reward_cost(_config), do: nil
+  defp reward_cost({:ok, config}, _community), do: config.reward_cost
+  defp reward_cost(_config, community), do: community.twitch_reward_cost
 
-  defp eventsub_configured?({:ok, config}),
-    do: match?({:ok, _secret}, Twitch.eventsub_secret(config))
-
-  defp eventsub_configured?(_config), do: false
+  defp eventsub_configured?(community), do: community.twitch_eventsub_secret not in [nil, ""]
 end

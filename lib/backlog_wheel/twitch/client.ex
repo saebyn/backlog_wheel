@@ -9,6 +9,7 @@ defmodule BacklogWheel.Twitch.Client do
   alias BacklogWheel.Twitch.Credential
 
   @callback exchange_code(Config.t(), String.t(), String.t()) :: {:ok, map()} | {:error, term()}
+  @callback fetch_current_user(Config.t(), Credential.t()) :: {:ok, map()} | {:error, term()}
   @callback refresh_access_token(Config.t(), Credential.t()) :: {:ok, map()} | {:error, term()}
   @callback create_custom_reward(Config.t(), Credential.t(), map()) ::
               {:ok, map()} | {:error, term()}
@@ -21,6 +22,7 @@ defmodule BacklogWheel.Twitch.Client do
             ) :: {:ok, map()} | {:error, term()}
 
   @token_url "https://id.twitch.tv/oauth2/token"
+  @users_url "https://api.twitch.tv/helix/users"
   @custom_rewards_url "https://api.twitch.tv/helix/channel_points/custom_rewards"
   @eventsub_subscriptions_url "https://api.twitch.tv/helix/eventsub/subscriptions"
   @scopes ["channel:manage:redemptions"]
@@ -79,6 +81,24 @@ defmodule BacklogWheel.Twitch.Client do
     else
       {:error, reason} -> {:error, reason}
       {:ok, %{status: status, body: body}} -> {:error, {:twitch_http_error, status, body}}
+    end
+  end
+
+  def fetch_current_user(%Config{} = config, %Credential{} = credential) do
+    case Req.get(@users_url,
+           headers: [
+             {"client-id", config.client_id},
+             {"authorization", "Bearer #{credential.access_token}"}
+           ]
+         ) do
+      {:ok, %{status: status, body: body}} when status in 200..299 ->
+        normalize_user_response(body)
+
+      {:ok, %{status: status, body: body}} ->
+        {:error, {:twitch_http_error, status, body}}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -197,6 +217,17 @@ defmodule BacklogWheel.Twitch.Client do
   end
 
   defp normalize_reward_response(_body), do: {:error, :invalid_twitch_reward_response}
+
+  defp normalize_user_response(%{"data" => [%{"id" => id} = user | _]}) do
+    {:ok,
+     %{
+       id: id,
+       login: user["login"],
+       display_name: user["display_name"]
+     }}
+  end
+
+  defp normalize_user_response(_body), do: {:error, :invalid_twitch_user_response}
 
   defp normalize_eventsub_subscription_response(%{"data" => [subscription | _]}) do
     {:ok,

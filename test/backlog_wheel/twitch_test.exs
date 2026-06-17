@@ -42,7 +42,7 @@ defmodule BacklogWheel.TwitchTest do
 
     community =
       community_fixture(%{
-        twitch_broadcaster_id: "broadcaster-id",
+        twitch_broadcaster_id: "28728577",
         twitch_reward_cost: 321,
         twitch_eventsub_secret: "eventsub-secret"
       })
@@ -54,7 +54,7 @@ defmodule BacklogWheel.TwitchTest do
               %Config{
                 client_id: "client-id",
                 client_secret: "client-secret",
-                broadcaster_id: "broadcaster-id",
+                broadcaster_id: "28728577",
                 reward_cost: 321,
                 eventsub_secret: "eventsub-secret"
               }}

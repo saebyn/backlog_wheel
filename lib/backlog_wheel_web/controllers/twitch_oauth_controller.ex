@@ -1,10 +1,11 @@
 defmodule BacklogWheelWeb.TwitchOAuthController do
   use BacklogWheelWeb, :controller
 
+  alias BacklogWheel.Communities
   alias BacklogWheel.Twitch
 
   def start(conn, _params) do
-    case Twitch.config(conn.assigns.current_community) do
+    case Twitch.oauth_config() do
       {:ok, config} ->
         state = Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
         redirect_uri = Twitch.redirect_uri(conn)
@@ -22,11 +23,14 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
 
   def callback(conn, %{"code" => code, "state" => state}) do
     with :ok <- verify_state(conn, state),
-         {:ok, config} <- Twitch.config(conn.assigns.current_community),
+         {:ok, oauth_config} <- Twitch.oauth_config(),
          {:ok, token_attrs} <-
-           Twitch.client().exchange_code(config, code, Twitch.redirect_uri(conn)),
-         {:ok, _credential} <- Twitch.save_credential(token_attrs) do
-      maybe_create_eventsub_subscription(conn, conn.assigns.current_community, config)
+           Twitch.client().exchange_code(oauth_config, code, Twitch.redirect_uri(conn)),
+         {:ok, credential} <- Twitch.save_credential(token_attrs),
+         {:ok, twitch_user} <- Twitch.client().fetch_current_user(oauth_config, credential),
+         {:ok, community} <- save_broadcaster_id(conn.assigns.current_community, twitch_user),
+         {:ok, config} <- Twitch.config(community) do
+      maybe_create_eventsub_subscription(conn, community, config)
 
       conn
       |> delete_session(:twitch_oauth_state)
@@ -62,6 +66,12 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
     else
       {:error, :invalid_state}
     end
+  end
+
+  defp save_broadcaster_id(community, %{id: broadcaster_id}) do
+    Communities.update_community_twitch_settings(community, %{
+      twitch_broadcaster_id: broadcaster_id
+    })
   end
 
   defp maybe_create_eventsub_subscription(conn, community, config) do

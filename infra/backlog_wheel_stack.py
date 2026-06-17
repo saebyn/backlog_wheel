@@ -66,25 +66,11 @@ class BacklogWheelStatefulStack(Stack):
         )
         self.database_security_group = self.database.connections.security_groups[0]
 
-        self.runtime_secret = secretsmanager.Secret(
+        self.runtime_secret = secretsmanager.Secret.from_secret_name_v2(
             self,
             "RuntimeSecret",
-            secret_name="backlog-wheel/prototype/runtime",
-            generate_secret_string=secretsmanager.SecretStringGenerator(
-                secret_string_template=json.dumps(
-                    {
-                        "DISCORD_CLIENT_ID": "",
-                        "DISCORD_CLIENT_SECRET": "",
-                        "TWITCH_CLIENT_ID": "",
-                        "TWITCH_CLIENT_SECRET": "",
-                    }
-                ),
-                generate_string_key="SECRET_KEY_BASE",
-                exclude_punctuation=True,
-                password_length=64,
-            ),
+            "backlog-wheel/prototype/runtime",
         )
-        self.runtime_secret.apply_removal_policy(RemovalPolicy.RETAIN)
 
         cdk.CfnOutput(self, "RuntimeSecretName", value=self.runtime_secret.secret_name)
         cdk.CfnOutput(

@@ -10,7 +10,7 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
   alias BacklogWheel.Voting.VotingSessionGame
 
   @eventsub_secret "eventsub-secret"
-  @broadcaster_id "broadcaster-id"
+  @broadcaster_id "28728577"
 
   setup do
     original_config = Application.get_env(:backlog_wheel, :twitch)

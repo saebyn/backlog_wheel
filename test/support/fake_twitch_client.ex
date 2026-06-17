@@ -31,6 +31,10 @@ defmodule BacklogWheel.FakeTwitchClient do
 
   def exchange_code(_config, _code, _redirect_uri), do: {:error, :invalid_code}
 
+  def fetch_current_user(_config, _credential) do
+    {:ok, %{id: "28728577", login: "teststreamer", display_name: "TestStreamer"}}
+  end
+
   def refresh_access_token(_config, credential) do
     Agent.update(@agent, &Map.update(&1, :refresh_count, 1, fn count -> count + 1 end))
 

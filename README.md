@@ -35,6 +35,15 @@ host: localhost
 database: backlog_wheel_dev
 ```
 
+You can start a matching local Postgres with Docker Compose:
+
+```sh
+docker compose up -d postgres
+```
+
+This publishes Postgres on `localhost:5432`, so commands run outside Docker such as
+`mix test`, `mix ecto.migrate`, and `mix precommit` use the same database defaults.
+
 ## Setup
 
 Install dependencies, create the PostgreSQL database, run migrations, and build assets:
@@ -68,6 +77,14 @@ Start the Phoenix server:
 ```sh
 mix phx.server
 ```
+
+Or run the Phoenix server and Postgres with Docker Compose:
+
+```sh
+docker compose up web
+```
+
+The `web` service reads `export ...` lines from `.envrc`, ignores `use nix`, runs pending migrations, and serves <http://localhost:4000>. Named Docker volumes are used for `/app/deps` and `/app/_build` so container dependencies do not overwrite your host checkout.
 
 Or run it inside IEx:
 
@@ -134,13 +151,13 @@ When registering a local development app at <https://dev.twitch.tv/console/apps/
 http://localhost:4000/twitch/oauth/callback
 ```
 
-Twitch allows HTTP redirect URLs for `localhost`. After setting the env vars, visit the Twitch page, save the community broadcaster ID, reward cost, and EventSub secret, then click `Connect Twitch` to authorize the app.
+Twitch allows HTTP redirect URLs for `localhost`. After setting the env vars, visit the Twitch page, set the reward cost, generate an EventSub secret, then click `Connect Twitch` to authorize the app. The connected Twitch user's broadcaster ID is detected and saved automatically.
 
 Behavior today:
 
 - `TWITCH_CLIENT_ID` identifies the Twitch application/client.
 - `TWITCH_CLIENT_SECRET` is used by the local OAuth callback to exchange authorization codes.
-- Twitch broadcaster ID, reward cost, and EventSub secret are saved per community in Settings > Twitch.
+- Twitch broadcaster ID, reward cost, and EventSub secret are saved per community in Settings > Twitch. Broadcaster ID is detected when Twitch is connected.
 - If required config is missing, `BacklogWheel.Twitch.config/1` returns `{:error, {:missing_config, keys}}` and `BacklogWheel.Twitch.configured?/1` returns `false`.
 - Starting Twitch voting creates one positive channel point vote reward per game in the voting session.
 - EventSub signature verification uses the secret saved for the event's broadcaster community.

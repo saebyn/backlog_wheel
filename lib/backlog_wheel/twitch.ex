@@ -26,6 +26,12 @@ defmodule BacklogWheel.Twitch do
     |> Config.new()
   end
 
+  @spec oauth_config() :: {:ok, Config.t()} | {:error, {:missing_config, [atom()]}}
+  def oauth_config do
+    Application.get_env(:backlog_wheel, :twitch, [])
+    |> Config.oauth()
+  end
+
   @spec eventsub_config(map()) ::
           {:ok, Config.t()}
           | {:error, {:missing_config | :unknown_broadcaster, [atom()] | String.t()}}

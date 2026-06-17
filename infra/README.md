@@ -4,7 +4,7 @@ The repository includes a production Docker image and AWS CDK Python app for a s
 
 The CDK app creates two stacks:
 
-- `BacklogWheelStatefulStack` owns stateful resources: Aurora PostgreSQL, database credentials, and runtime integration secrets.
+- `BacklogWheelStatefulStack` owns stateful resources: Aurora PostgreSQL and database credentials. It imports the runtime integration secret by name but does not own or mutate its value.
 - `BacklogWheelServiceStack` owns replaceable service resources: ECS cluster, task definition, Fargate service, service security group, load balancer, certificate, and Route 53 record.
 
 Together they create:
@@ -14,7 +14,7 @@ Together they create:
 - It uses the account's default VPC rather than creating a project-specific VPC.
 - An internet-facing Application Load Balancer with HTTP to HTTPS redirect.
 - An ACM certificate and Route 53 `A` record for `wheel.streamosaic.app`.
-- A Secrets Manager secret named `backlog-wheel/prototype/runtime` for Phoenix and integration secrets.
+- A manually managed Secrets Manager secret named `backlog-wheel/prototype/runtime` for Phoenix and integration secrets.
 - A generated RDS credentials secret for the application database user.
 
 Docker image assets are still published through the CDK bootstrap ECR repository during `cdk deploy`. A dedicated application ECR repository would require a separate build/push/tag deployment flow.
@@ -49,6 +49,16 @@ Override them for one-off deploys with CDK context values:
 cdk deploy --context account=123456789012 --context region=us-east-1
 ```
 
+Create the runtime secret before the first deploy. CDK imports this secret by name and must not manage its value, so deployments cannot overwrite manually edited OAuth credentials or `SECRET_KEY_BASE`:
+
+```sh
+aws secretsmanager create-secret \
+  --name backlog-wheel/prototype/runtime \
+  --secret-string '{"SECRET_KEY_BASE":"replace-with-mix-phx-gen-secret","DISCORD_CLIENT_ID":"","DISCORD_CLIENT_SECRET":"","TWITCH_CLIENT_ID":"","TWITCH_CLIENT_SECRET":""}'
+```
+
+If the secret already exists, update it only through Secrets Manager or the AWS CLI, not by changing CDK-generated defaults.
+
 ## Deploy
 
 Deploy both stacks from the repository root:
@@ -63,7 +73,7 @@ To deploy only the service after stateful resources exist:
 AWS_PROFILE=your-profile cdk deploy BacklogWheelServiceStack
 ```
 
-The first deploy creates `backlog-wheel/prototype/runtime` with a generated `SECRET_KEY_BASE` and blank optional integration values. Update that secret in AWS Secrets Manager when Discord or Twitch integration should be enabled. Keep the JSON keys in place:
+The runtime secret must contain these JSON keys. Update this secret in AWS Secrets Manager when Discord or Twitch integration should be enabled:
 
 ```json
 {
