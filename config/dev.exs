@@ -1,11 +1,24 @@
 import Config
 
 # Configure your database
-config :backlog_wheel, BacklogWheel.Repo,
-  database: Path.expand("../backlog_wheel_dev.db", __DIR__),
+repo_config = [
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "backlog_wheel_dev",
   pool_size: 5,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true
+]
+
+repo_config =
+  if database_url = System.get_env("DATABASE_URL") do
+    Keyword.put(repo_config, :url, database_url)
+  else
+    repo_config
+  end
+
+config :backlog_wheel, BacklogWheel.Repo, repo_config
 
 # For development, we disable any cache and enable
 # debugging and code reloading.

@@ -6,7 +6,10 @@ import Config
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
 config :backlog_wheel, BacklogWheel.Repo,
-  database: Path.expand("../backlog_wheel_test.db", __DIR__),
+  username: System.get_env("POSTGRES_USER", "postgres"),
+  password: System.get_env("POSTGRES_PASSWORD", "postgres"),
+  hostname: System.get_env("POSTGRES_HOST", "localhost"),
+  database: "backlog_wheel_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool_size: 5,
   pool: Ecto.Adapters.SQL.Sandbox
 

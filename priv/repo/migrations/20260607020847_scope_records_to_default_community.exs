@@ -12,7 +12,7 @@ defmodule BacklogWheel.Repo.Migrations.ScopeRecordsToDefaultCommunity do
 
     execute """
             INSERT INTO communities (name, slug, inserted_at, updated_at)
-            SELECT 'Legacy Migrated Community', 'legacy-migrated', datetime('now'), datetime('now')
+            SELECT 'Legacy Migrated Community', 'legacy-migrated', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             WHERE NOT EXISTS (SELECT 1 FROM communities WHERE slug = 'legacy-migrated')
               AND (
                 EXISTS (SELECT 1 FROM games WHERE community_id IS NULL)

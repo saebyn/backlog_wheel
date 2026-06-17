@@ -26,9 +26,18 @@ If the shell is already allowed, entering the project directory should load the 
 
 If you aren't on NixOS, you may wish to follow the instructions at https://phoenix.hexdocs.pm/installation.html to get your environment set up.
 
+The app expects PostgreSQL for development and tests. The default local database credentials are:
+
+```text
+user: postgres
+password: postgres
+host: localhost
+database: backlog_wheel_dev
+```
+
 ## Setup
 
-Install dependencies, create the SQLite database, run migrations, and build assets:
+Install dependencies, create the PostgreSQL database, run migrations, and build assets:
 
 ```sh
 mix setup

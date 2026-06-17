@@ -25,6 +25,10 @@ defmodule BacklogWheelWeb.Router do
   end
 
   scope "/", BacklogWheelWeb do
+    get "/health", PageController, :health
+  end
+
+  scope "/", BacklogWheelWeb do
     pipe_through :browser
 
     get "/", PageController, :home

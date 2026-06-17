@@ -6,7 +6,7 @@ defmodule BacklogWheel.Repo.Migrations.RenameDefaultCommunityToLegacyMigrated do
             UPDATE communities
             SET name = 'Legacy Migrated Community',
                 slug = 'legacy-migrated',
-                updated_at = datetime('now')
+                updated_at = CURRENT_TIMESTAMP
             WHERE slug = 'default'
               AND NOT EXISTS (SELECT 1 FROM communities WHERE slug = 'legacy-migrated')
             """,
@@ -14,7 +14,7 @@ defmodule BacklogWheel.Repo.Migrations.RenameDefaultCommunityToLegacyMigrated do
             UPDATE communities
             SET name = 'Default Community',
                 slug = 'default',
-                updated_at = datetime('now')
+                updated_at = CURRENT_TIMESTAMP
             WHERE slug = 'legacy-migrated'
             """
   end

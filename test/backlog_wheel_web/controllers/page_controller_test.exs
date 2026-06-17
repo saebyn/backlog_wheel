@@ -12,6 +12,12 @@ defmodule BacklogWheelWeb.PageControllerTest do
     assert response =~ "Built for indecisive stream nights"
   end
 
+  test "GET /health", %{conn: conn} do
+    conn = get(conn, ~p"/health")
+
+    assert text_response(conn, 200) == "ok"
+  end
+
   test "hides authenticated nav items when logged out", %{conn: conn} do
     conn = get(conn, ~p"/")
     response = html_response(conn, 200)

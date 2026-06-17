@@ -8,11 +8,10 @@ from aws_cdk import (
     aws_certificatemanager as acm,
     aws_ec2 as ec2,
     aws_ecs as ecs,
-    aws_efs as efs,
     aws_elasticloadbalancingv2 as elbv2,
     aws_ecr_assets as ecr_assets,
-    aws_iam as iam,
     aws_logs as logs,
+    aws_rds as rds,
     aws_route53 as route53,
     aws_route53_targets as targets,
     aws_secretsmanager as secretsmanager,
@@ -20,38 +19,54 @@ from aws_cdk import (
 from constructs import Construct
 
 
-class BacklogWheelStack(Stack):
+class BacklogWheelStatefulStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        domain_name = self.node.try_get_context("domainName") or "wheel.streamosaic.app"
-        hosted_zone_domain = self.node.try_get_context("hostedZoneDomain") or "streamosaic.app"
-        record_name = domain_name.removesuffix(f".{hosted_zone_domain}")
-
-        vpc = ec2.Vpc.from_lookup(
+        self.vpc = ec2.Vpc.from_lookup(
             self,
             "Vpc",
             is_default=True,
         )
 
-        cluster = ecs.Cluster(self, "Cluster", vpc=vpc)
-
-        file_system = efs.FileSystem(
+        self.database_credentials = secretsmanager.Secret(
             self,
-            "DataFileSystem",
-            vpc=vpc,
-            encrypted=True,
+            "DatabaseCredentials",
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                secret_string_template=json.dumps({"username": "backlog_wheel"}),
+                generate_string_key="password",
+                exclude_punctuation=True,
+                password_length=30,
+            ),
+        )
+        self.database_credentials.apply_removal_policy(RemovalPolicy.RETAIN)
+
+        self.database = rds.DatabaseCluster(
+            self,
+            "Database",
+            engine=rds.DatabaseClusterEngine.aurora_postgres(
+                version=rds.AuroraPostgresEngineVersion.VER_16_4
+            ),
+            writer=rds.ClusterInstance.serverless_v2(
+                "writer",
+                publicly_accessible=False,
+            ),
+            serverless_v2_min_capacity=0.5,
+            serverless_v2_max_capacity=2,
+            credentials=rds.Credentials.from_secret(
+                self.database_credentials,
+                username="backlog_wheel",
+            ),
+            default_database_name="backlog_wheel",
+            vpc=self.vpc,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
+            backup=rds.BackupProps(retention=Duration.days(7)),
+            deletion_protection=True,
             removal_policy=RemovalPolicy.RETAIN,
         )
+        self.database_security_group = self.database.connections.security_groups[0]
 
-        access_point = file_system.add_access_point(
-            "AppDataAccessPoint",
-            path="/backlog-wheel",
-            create_acl=efs.Acl(owner_gid="1000", owner_uid="1000", permissions="750"),
-            posix_user=efs.PosixUser(gid="1000", uid="1000"),
-        )
-
-        runtime_secret = secretsmanager.Secret(
+        self.runtime_secret = secretsmanager.Secret(
             self,
             "RuntimeSecret",
             secret_name="backlog-wheel/prototype/runtime",
@@ -72,6 +87,46 @@ class BacklogWheelStack(Stack):
                 password_length=64,
             ),
         )
+        self.runtime_secret.apply_removal_policy(RemovalPolicy.RETAIN)
+
+        cdk.CfnOutput(self, "RuntimeSecretName", value=self.runtime_secret.secret_name)
+        cdk.CfnOutput(
+            self, "DatabaseSecretName", value=self.database_credentials.secret_name
+        )
+
+
+class BacklogWheelServiceStack(Stack):
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        *,
+        stateful_stack: BacklogWheelStatefulStack,
+        **kwargs,
+    ) -> None:
+        super().__init__(scope, construct_id, **kwargs)
+
+        domain_name = self.node.try_get_context("domainName") or "wheel.streamosaic.app"
+        hosted_zone_domain = self.node.try_get_context("hostedZoneDomain") or "streamosaic.app"
+        record_name = domain_name.removesuffix(f".{hosted_zone_domain}")
+
+        cluster = ecs.Cluster(self, "Cluster", vpc=stateful_stack.vpc)
+
+        service_security_group = ec2.SecurityGroup(
+            self,
+            "ServiceSecurityGroup",
+            vpc=stateful_stack.vpc,
+        )
+
+        ec2.CfnSecurityGroupIngress(
+            self,
+            "DatabaseIngressFromService",
+            group_id=stateful_stack.database_security_group.security_group_id,
+            ip_protocol="tcp",
+            from_port=5432,
+            to_port=5432,
+            source_security_group_id=service_security_group.security_group_id,
+        )
 
         image = ecr_assets.DockerImageAsset(
             self,
@@ -87,18 +142,6 @@ class BacklogWheelStack(Stack):
             memory_limit_mib=1024,
         )
 
-        task_definition.add_volume(
-            name="data",
-            efs_volume_configuration=ecs.EfsVolumeConfiguration(
-                file_system_id=file_system.file_system_id,
-                transit_encryption="ENABLED",
-                authorization_config=ecs.AuthorizationConfig(
-                    access_point_id=access_point.access_point_id,
-                    iam="ENABLED",
-                ),
-            ),
-        )
-
         container = task_definition.add_container(
             "App",
             image=ecs.ContainerImage.from_docker_image_asset(image),
@@ -107,7 +150,10 @@ class BacklogWheelStack(Stack):
                 log_retention=logs.RetentionDays.ONE_MONTH,
             ),
             environment={
-                "DATABASE_PATH": "/data/backlog_wheel.db",
+                "DATABASE_HOST": stateful_stack.database.cluster_endpoint.hostname,
+                "DATABASE_NAME": "backlog_wheel",
+                "DATABASE_PORT": "5432",
+                "DATABASE_SSL": "true",
                 "PHX_HOST": domain_name,
                 "PHX_SERVER": "true",
                 "PORT": "4000",
@@ -115,7 +161,7 @@ class BacklogWheelStack(Stack):
                 "TWITCH_EVENTSUB_CALLBACK_URL": f"https://{domain_name}/twitch/eventsub",
             },
             secrets={
-                key: ecs.Secret.from_secrets_manager(runtime_secret, key)
+                key: ecs.Secret.from_secrets_manager(stateful_stack.runtime_secret, key)
                 for key in [
                     "SECRET_KEY_BASE",
                     "DISCORD_CLIENT_ID",
@@ -126,30 +172,19 @@ class BacklogWheelStack(Stack):
                     "TWITCH_REWARD_COST",
                     "TWITCH_EVENTSUB_SECRET",
                 ]
+            }
+            | {
+                "DATABASE_USERNAME": ecs.Secret.from_secrets_manager(
+                    stateful_stack.database_credentials,
+                    "username",
+                ),
+                "DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(
+                    stateful_stack.database_credentials,
+                    "password",
+                ),
             },
         )
         container.add_port_mappings(ecs.PortMapping(container_port=4000))
-        container.add_mount_points(
-            ecs.MountPoint(
-                container_path="/data",
-                source_volume="data",
-                read_only=False,
-            )
-        )
-
-        task_definition.add_to_task_role_policy(
-            iam.PolicyStatement(
-                actions=[
-                    "elasticfilesystem:ClientMount",
-                    "elasticfilesystem:ClientRootAccess",
-                    "elasticfilesystem:ClientWrite",
-                ],
-                resources=[file_system.file_system_arn],
-            )
-        )
-
-        service_security_group = ec2.SecurityGroup(self, "ServiceSecurityGroup", vpc=vpc)
-        file_system.connections.allow_default_port_from(service_security_group)
 
         service = ecs.FargateService(
             self,
@@ -178,7 +213,7 @@ class BacklogWheelStack(Stack):
         load_balancer = elbv2.ApplicationLoadBalancer(
             self,
             "LoadBalancer",
-            vpc=vpc,
+            vpc=stateful_stack.vpc,
             internet_facing=True,
         )
 
@@ -200,8 +235,8 @@ class BacklogWheelStack(Stack):
             protocol=elbv2.ApplicationProtocol.HTTP,
             targets=[service],
             health_check=elbv2.HealthCheck(
-                path="/",
-                healthy_http_codes="200,302",
+                path="/health",
+                healthy_http_codes="200",
                 interval=Duration.seconds(30),
             ),
         )
@@ -215,4 +250,3 @@ class BacklogWheelStack(Stack):
         )
 
         cdk.CfnOutput(self, "Url", value=f"https://{domain_name}")
-        cdk.CfnOutput(self, "RuntimeSecretName", value=runtime_secret.secret_name)

@@ -41,16 +41,56 @@ if signup_allowed_discord_ids = System.get_env("SIGNUP_ALLOWED_DISCORD_IDS") do
   config :backlog_wheel, signup_allowed_discord_ids: signup_allowed_discord_ids
 end
 
+build_database_url = fn ->
+  with username when is_binary(username) <- System.get_env("DATABASE_USERNAME"),
+       password when is_binary(password) <- System.get_env("DATABASE_PASSWORD"),
+       host when is_binary(host) <- System.get_env("DATABASE_HOST") do
+    port = System.get_env("DATABASE_PORT", "5432")
+    database = System.get_env("DATABASE_NAME", "backlog_wheel")
+
+    "ecto://#{URI.encode_www_form(username)}:#{URI.encode_www_form(password)}@#{host}:#{port}/#{database}"
+  else
+    _missing -> nil
+  end
+end
+
 if config_env() == :prod do
-  database_path =
-    System.get_env("DATABASE_PATH") ||
+  database_url =
+    System.get_env("DATABASE_URL") ||
+      build_database_url.() ||
       raise """
-      environment variable DATABASE_PATH is missing.
-      For example: /etc/backlog_wheel/backlog_wheel.db
+      environment variable DATABASE_URL is missing.
+      For example: ecto://USER:PASS@HOST/DATABASE
       """
 
+  database_ssl? = System.get_env("DATABASE_SSL", "true") == "true"
+  database_host = System.get_env("DATABASE_HOST") || URI.parse(database_url).host
+  database_ssl_ca_cert_path = System.get_env("DATABASE_SSL_CA_CERT_PATH")
+
+  database_ssl_opts =
+    cond do
+      database_ssl? and is_binary(database_host) and is_binary(database_ssl_ca_cert_path) ->
+        [
+          verify: :verify_peer,
+          cacertfile: String.to_charlist(database_ssl_ca_cert_path),
+          server_name_indication: String.to_charlist(database_host)
+        ]
+
+      database_ssl? and is_binary(database_host) ->
+        [
+          verify: :verify_peer,
+          cacerts: :public_key.cacerts_get(),
+          server_name_indication: String.to_charlist(database_host)
+        ]
+
+      true ->
+        []
+    end
+
   config :backlog_wheel, BacklogWheel.Repo,
-    database: database_path,
+    url: database_url,
+    ssl: database_ssl?,
+    ssl_opts: database_ssl_opts,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "5")
 
   # The secret key base is used to sign/encrypt cookies and other secrets.

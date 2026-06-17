@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 ARG ELIXIR_VERSION=1.18
-ARG DEBIAN_VERSION=bookworm
+ARG DEBIAN_VERSION=trixie
 
 FROM elixir:${ELIXIR_VERSION}-slim AS build
 
@@ -30,14 +30,21 @@ RUN mix release
 FROM debian:${DEBIAN_VERSION}-slim AS app
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 ca-certificates \
+  && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+RUN curl --fail --show-error --location \
+  --output /app/rds-global-bundle.pem \
+  https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+
 ENV MIX_ENV=prod \
   PHX_SERVER=true \
   PORT=4000 \
+  DATABASE_SSL_CA_CERT_PATH=/app/rds-global-bundle.pem \
+  LANG=C.UTF-8 \
+  LC_ALL=C.UTF-8 \
   HOME=/app
 
 RUN useradd --create-home --home-dir /app --shell /usr/sbin/nologin app \
