@@ -35,15 +35,7 @@ defmodule BacklogWheelWeb.TwitchLive do
             </span>
           </div>
 
-          <div class="mt-6 grid gap-3 sm:grid-cols-4">
-            <div class="rounded-2xl bg-base-200 p-4">
-              <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-                App config
-              </p>
-              <p id="twitch-settings-config-status" class="mt-1 font-bold">
-                {if @twitch_configured?, do: "Configured", else: "Missing values"}
-              </p>
-            </div>
+          <div class="mt-6 grid gap-3 sm:grid-cols-3">
             <div class="rounded-2xl bg-base-200 p-4">
               <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
                 Reward cost

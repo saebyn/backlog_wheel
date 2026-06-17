@@ -36,7 +36,7 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
     {:ok, view, _html} = live(conn, ~p"/settings/twitch")
 
     assert has_element?(view, "#twitch-settings-connection-status", "Not connected")
-    assert has_element?(view, "#twitch-settings-config-status", "Configured")
+    refute has_element?(view, "#twitch-settings-config-status")
     assert has_element?(view, "#twitch-settings-reward-cost", "123")
     assert has_element?(view, "#twitch-settings-broadcaster-id", "Connect Twitch")
     assert has_element?(view, "#settings-nav-general", "General")
