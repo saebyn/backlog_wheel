@@ -26,8 +26,36 @@ defmodule BacklogWheelWeb.GameLive.SteamImport do
           <h2 class="text-lg font-semibold">Configuration</h2>
           <p class="mt-2 text-sm text-base-content/70">
             Save Steam credentials for {@community.name}. They are stored with this community and
-            reused across app instances.
+            used only when importing this Steam library.
           </p>
+
+          <div class="mt-4 rounded-xl border border-base-300 bg-base-200/50 p-4 text-sm text-base-content/75">
+            <h3 class="font-semibold text-base-content">Where to find these values</h3>
+            <ul class="mt-2 list-disc space-y-2 pl-5">
+              <li>
+                Get a Steam Web API key from <.link
+                  href="https://steamcommunity.com/dev/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="link"
+                >
+                  steamcommunity.com/dev/apikey
+                </.link>. Steam asks for a domain name; for local or personal use, enter the domain where this app runs.
+              </li>
+              <li>
+                Find your SteamID64 from your Steam profile URL. If your profile uses a custom name, open
+                <.link
+                  href="https://steamid.io/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="link"
+                >
+                  steamid.io
+                </.link>
+                and paste the profile URL to convert it.
+              </li>
+            </ul>
+          </div>
 
           <div class="mt-4">
             <span

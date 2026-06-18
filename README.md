@@ -96,7 +96,9 @@ Visit <http://localhost:4000> in your browser. The games CRUD page is available 
 
 ## Steam Import
 
-Steam library import uses the official Steam Web API. Visit <http://localhost:4000/games/import/steam>, save the community's Steam API key and Steam ID64, then click `Import Steam Library`.
+Steam library import uses the official Steam Web API. Visit <http://localhost:4000/games/import/steam>, save the community's Steam API key and SteamID64, then click `Import Steam Library`.
+
+You can create or view a Steam Web API key at <https://steamcommunity.com/dev/apikey>. Steam asks for a domain name; for local or personal use, enter the domain where this app runs. Your SteamID64 is available from your Steam profile URL, or by pasting a custom profile URL into <https://steamid.io/>.
 
 Import behavior:
 
