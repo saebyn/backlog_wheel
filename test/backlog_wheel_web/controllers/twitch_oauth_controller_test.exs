@@ -44,6 +44,8 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
 
     community = Communities.get_community!(Process.get(:test_community).id)
     assert community.twitch_broadcaster_id == "28728577"
+    assert community.twitch_broadcaster_login == "teststreamer"
+    assert community.twitch_broadcaster_display_name == "TestStreamer"
     assert is_binary(community.twitch_eventsub_secret)
     refute community.twitch_eventsub_secret == ""
   end
@@ -72,6 +74,8 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
 
     community = Communities.get_community!(Process.get(:test_community).id)
     assert community.twitch_broadcaster_id == "28728577"
+    assert community.twitch_broadcaster_login == "teststreamer"
+    assert community.twitch_broadcaster_display_name == "TestStreamer"
     assert community.twitch_eventsub_secret != "eventsub-secret"
 
     assert BacklogWheel.FakeTwitchClient.eventsub_callback_url() ==

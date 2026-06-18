@@ -35,10 +35,26 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
   test "shows Twitch connection status and connect action", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/settings/twitch")
 
+    assert has_element?(view, "h1", "Twitch integration")
+    assert has_element?(view, "#twitch-connected-account")
     assert has_element?(view, "#twitch-settings-connection-status", "Not connected")
+    assert has_element?(view, "#twitch-settings-account-status", "Not connected")
     refute has_element?(view, "#twitch-settings-config-status")
-    assert has_element?(view, "#twitch-settings-reward-cost", "123")
-    assert has_element?(view, "#twitch-settings-broadcaster-id", "Connect Twitch")
+    refute has_element?(view, "#twitch-settings-reward-cost")
+
+    assert has_element?(
+             view,
+             "#twitch-settings-channel-name",
+             "Connect Twitch to choose a channel"
+           )
+
+    assert has_element?(
+             view,
+             "#twitch-settings-broadcaster-id",
+             "Available after connecting Twitch"
+           )
+
+    assert has_element?(view, "#twitch-settings-capability")
     assert has_element?(view, "#settings-nav-general", "General")
     assert has_element?(view, "#settings-nav-theme", "Theme")
     assert has_element?(view, "#settings-nav-formats", "Wheel Formats")
@@ -46,6 +62,9 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
     assert has_element?(view, "#connect-twitch", "Connect Twitch")
     assert has_element?(view, "#disconnect-twitch[disabled]")
     assert has_element?(view, "#twitch-settings-form")
+    assert has_element?(view, "#twitch-settings-reward-cost-help")
+    assert has_element?(view, "#save-twitch-settings", "Save changes")
+    refute has_element?(view, "#back-to-voting")
     refute has_element?(view, "#twitch-settings-eventsub-status")
     refute has_element?(view, "#twitch-settings-eventsub-secret-status")
     refute has_element?(view, "#twitch-settings-eventsub-warning")
@@ -67,6 +86,8 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
 
     community = Communities.get_community!(Process.get(:test_community).id)
     assert community.twitch_broadcaster_id == nil
+    assert community.twitch_broadcaster_login == nil
+    assert community.twitch_broadcaster_display_name == nil
     assert community.twitch_reward_cost == 250
     assert community.twitch_eventsub_secret == nil
   end
@@ -79,10 +100,24 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
         scopes: "channel:manage:redemptions"
       })
 
+    {:ok, community} =
+      Communities.update_community_twitch_settings(Process.get(:test_community), %{
+        twitch_broadcaster_id: "28728577",
+        twitch_broadcaster_login: "teststreamer",
+        twitch_broadcaster_display_name: "TestStreamer"
+      })
+
+    Process.put(:test_community, community)
+
     {:ok, view, _html} = live(conn, ~p"/settings/twitch")
 
     assert has_element?(view, "#twitch-settings-connection-status", "Connected")
-    assert has_element?(view, "#connect-twitch", "Reconnect Twitch")
+    assert has_element?(view, "#twitch-settings-account-status", "Connected")
+    assert has_element?(view, "#twitch-settings-channel-name", "TestStreamer")
+    assert has_element?(view, "#twitch-settings-broadcaster-id", "28728577")
+    assert has_element?(view, "#connect-twitch.btn-secondary", "Reconnect Twitch")
+    assert has_element?(view, "#disconnect-twitch.btn-error", "Disconnect Twitch")
+    assert has_element?(view, "#disconnect-twitch[data-confirm]")
     refute has_element?(view, "#disconnect-twitch[disabled]")
   end
 

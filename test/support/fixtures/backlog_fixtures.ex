@@ -51,9 +51,13 @@ defmodule BacklogWheel.BacklogFixtures do
     twitch_attrs =
       Map.take(attrs, [
         :twitch_broadcaster_id,
+        :twitch_broadcaster_login,
+        :twitch_broadcaster_display_name,
         :twitch_eventsub_secret,
         :twitch_reward_cost,
         "twitch_broadcaster_id",
+        "twitch_broadcaster_login",
+        "twitch_broadcaster_display_name",
         "twitch_eventsub_secret",
         "twitch_reward_cost"
       ])

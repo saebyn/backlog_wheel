@@ -18,6 +18,8 @@ defmodule BacklogWheel.Communities.Community do
     field :steam_api_key, :string
     field :steam_id64, :string
     field :twitch_broadcaster_id, :string
+    field :twitch_broadcaster_login, :string
+    field :twitch_broadcaster_display_name, :string
     field :twitch_eventsub_secret, :string
     field :twitch_reward_cost, :integer, default: 100
 
@@ -95,8 +97,19 @@ defmodule BacklogWheel.Communities.Community do
   @doc false
   def twitch_settings_changeset(community, attrs) do
     community
-    |> cast(attrs, [:twitch_broadcaster_id, :twitch_eventsub_secret, :twitch_reward_cost])
-    |> normalize_blanks([:twitch_broadcaster_id, :twitch_eventsub_secret])
+    |> cast(attrs, [
+      :twitch_broadcaster_id,
+      :twitch_broadcaster_login,
+      :twitch_broadcaster_display_name,
+      :twitch_eventsub_secret,
+      :twitch_reward_cost
+    ])
+    |> normalize_blanks([
+      :twitch_broadcaster_id,
+      :twitch_broadcaster_login,
+      :twitch_broadcaster_display_name,
+      :twitch_eventsub_secret
+    ])
     |> validate_number(:twitch_reward_cost, greater_than: 0)
     |> validate_format(:twitch_broadcaster_id, ~r/^\d+$/, message: "must be a numeric Twitch ID")
     |> unique_constraint(:twitch_broadcaster_id)

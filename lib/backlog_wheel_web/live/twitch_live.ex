@@ -8,18 +8,18 @@ defmodule BacklogWheelWeb.TwitchLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_community={@current_community}>
-      <div class="grid gap-6 lg:grid-cols-[14rem_1fr]">
+      <div class="grid gap-6 lg:grid-cols-[14rem_minmax(0,1fr)]">
         <Layouts.settings_nav active={:twitch} />
 
-        <section class="rounded-[2rem] border border-base-300 bg-base-100 p-6 shadow-xl">
+        <section class="max-w-5xl rounded-[2rem] border border-base-300 bg-base-100 p-6 shadow-xl sm:p-8">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p class="text-sm font-semibold uppercase tracking-[0.24em] text-primary">
                 Twitch
               </p>
-              <h1 class="mt-2 text-4xl font-black tracking-tight">Connection</h1>
-              <p class="mt-3 text-base-content/70">
-                Authorize this local app to create and remove temporary channel point rewards.
+              <h1 class="mt-2 text-4xl font-black tracking-tight">Twitch integration</h1>
+              <p class="mt-3 max-w-3xl text-base-content/70">
+                Connect Twitch so Backlog Wheel can create and remove temporary channel point rewards for voting sessions.
               </p>
             </div>
 
@@ -35,27 +35,34 @@ defmodule BacklogWheelWeb.TwitchLive do
             </span>
           </div>
 
-          <div class="mt-6 grid gap-3 sm:grid-cols-2">
-            <div class="rounded-2xl bg-base-200 p-4">
-              <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-                Reward cost
-              </p>
-              <p id="twitch-settings-reward-cost" class="mt-1 font-bold">
-                {@reward_cost || "Not configured"}
-              </p>
-            </div>
-            <div class="min-w-0 rounded-2xl bg-base-200 p-4">
-              <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-                Channel
-              </p>
-              <p
+          <section
+            id="twitch-connected-account"
+            class="mt-8 rounded-3xl bg-base-200/60 p-5 sm:p-6"
+          >
+            <h2 class="text-lg font-bold">Connected account</h2>
+            <dl class="mt-4 grid gap-4 sm:grid-cols-[10rem_1fr] sm:items-start">
+              <dt class="text-sm font-semibold text-base-content/60">Connection status</dt>
+              <dd id="twitch-settings-account-status" class="font-semibold">
+                {if @twitch_connected?, do: "Connected", else: "Not connected"}
+              </dd>
+
+              <dt class="text-sm font-semibold text-base-content/60">Channel</dt>
+              <dd id="twitch-settings-channel-name" class="font-semibold">
+                {channel_label(@current_community)}
+              </dd>
+
+              <dt class="text-sm font-semibold text-base-content/60">Broadcaster ID</dt>
+              <dd
                 id="twitch-settings-broadcaster-id"
-                class="mt-1 break-words font-bold leading-snug [overflow-wrap:anywhere]"
+                class="break-words font-mono text-sm text-base-content/70 [overflow-wrap:anywhere]"
               >
-                {@current_community.twitch_broadcaster_id || "Connect Twitch"}
-              </p>
-            </div>
-          </div>
+                {@current_community.twitch_broadcaster_id || "Available after connecting Twitch"}
+              </dd>
+            </dl>
+            <p id="twitch-settings-capability" class="mt-4 text-sm leading-6 text-base-content/70">
+              Backlog Wheel can manage temporary custom rewards for game-voting sessions.
+            </p>
+          </section>
 
           <p
             :if={@missing_config != []}
@@ -65,53 +72,53 @@ defmodule BacklogWheelWeb.TwitchLive do
             Missing Twitch config: {Enum.join(@missing_config, ", ")}
           </p>
 
-          <.form
-            for={@form}
-            id="twitch-settings-form"
-            class="mt-6 grid gap-4 rounded-3xl border border-base-300 bg-base-200/60 p-5"
-            phx-change="validate"
-            phx-submit="save"
-          >
-            <div class="grid gap-4 md:grid-cols-2">
-              <div class="rounded-2xl border border-base-300 bg-base-100 p-4">
-                <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-                  Twitch broadcaster ID
-                </p>
-                <p id="twitch-settings-broadcaster-help" class="mt-1 text-sm text-base-content/70">
-                  This is detected automatically when you connect Twitch.
-                </p>
-              </div>
+          <section class="mt-8 border-t border-base-300 pt-8">
+            <h2 class="text-xl font-bold">Channel point rewards</h2>
+            <.form
+              for={@form}
+              id="twitch-settings-form"
+              class="mt-5 grid max-w-xl gap-4"
+              phx-change="validate"
+              phx-submit="save"
+            >
+              <p id="twitch-settings-reward-cost-help" class="text-sm leading-6 text-base-content/70">
+                The number of channel points viewers spend for each temporary game-voting reward.
+              </p>
               <.input
                 field={@form[:twitch_reward_cost]}
                 type="number"
                 label="Reward cost"
                 min="1"
               />
-            </div>
 
-            <div class="flex flex-wrap gap-2">
-              <.button id="save-twitch-settings">Save Twitch settings</.button>
-            </div>
-          </.form>
+              <div>
+                <.button id="save-twitch-settings" variant="primary">Save changes</.button>
+              </div>
+            </.form>
+          </section>
 
-          <div class="mt-6 flex flex-wrap gap-2">
-            <.button
-              id="connect-twitch"
-              href={~p"/twitch/oauth/start"}
-              disabled={!@twitch_configured?}
-            >
-              {if @twitch_connected?, do: "Reconnect Twitch", else: "Connect Twitch"}
-            </.button>
-            <.button
-              id="disconnect-twitch"
-              phx-click="disconnect"
-              disabled={!@twitch_connected?}
-              data-confirm="Disconnect Twitch from this local app? Existing channel point rewards are not removed."
-            >
-              Disconnect
-            </.button>
-            <.button id="back-to-voting" href={~p"/voting"}>Back to voting</.button>
-          </div>
+          <section class="mt-8 border-t border-base-300 pt-8">
+            <h2 class="text-xl font-bold">Connection management</h2>
+            <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <.button
+                id="connect-twitch"
+                href={~p"/twitch/oauth/start"}
+                class="btn btn-secondary btn-soft"
+                disabled={!@twitch_configured?}
+              >
+                {if @twitch_connected?, do: "Reconnect Twitch", else: "Connect Twitch"}
+              </.button>
+              <.button
+                id="disconnect-twitch"
+                phx-click="disconnect"
+                class="btn btn-error btn-soft"
+                disabled={!@twitch_connected?}
+                data-confirm="Disconnect Twitch? Backlog Wheel will stop using this connection for future voting sessions. Existing channel point rewards are not removed."
+              >
+                Disconnect Twitch
+              </.button>
+            </div>
+          </section>
         </section>
       </div>
     </Layouts.app>
@@ -120,7 +127,7 @@ defmodule BacklogWheelWeb.TwitchLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, socket |> assign(:page_title, "Twitch Connection") |> refresh()}
+    {:ok, socket |> assign(:page_title, "Twitch integration") |> refresh()}
   end
 
   @impl true
@@ -162,19 +169,27 @@ defmodule BacklogWheelWeb.TwitchLive do
   defp refresh(socket) do
     community = socket.assigns.current_community
     oauth_config = Twitch.oauth_config()
-    channel_config = Twitch.config(community)
 
     socket
     |> assign(:form, to_form(Communities.change_community_twitch_settings(community)))
     |> assign(:twitch_connected?, Twitch.credential_configured?())
     |> assign(:twitch_configured?, match?({:ok, _config}, oauth_config))
     |> assign(:missing_config, missing_config(oauth_config))
-    |> assign(:reward_cost, reward_cost(channel_config, community))
   end
 
   defp missing_config({:error, {:missing_config, missing}}), do: missing
   defp missing_config(_config), do: []
 
-  defp reward_cost({:ok, config}, _community), do: config.reward_cost
-  defp reward_cost(_config, community), do: community.twitch_reward_cost
+  defp channel_label(%{twitch_broadcaster_display_name: display_name})
+       when is_binary(display_name) and display_name != "",
+       do: display_name
+
+  defp channel_label(%{twitch_broadcaster_login: login}) when is_binary(login) and login != "",
+    do: login
+
+  defp channel_label(%{twitch_broadcaster_id: broadcaster_id})
+       when is_binary(broadcaster_id) and broadcaster_id != "",
+       do: "Name unavailable"
+
+  defp channel_label(_community), do: "Connect Twitch to choose a channel"
 end
