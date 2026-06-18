@@ -151,13 +151,14 @@ When registering a local development app at <https://dev.twitch.tv/console/apps/
 http://localhost:4000/twitch/oauth/callback
 ```
 
-Twitch allows HTTP redirect URLs for `localhost`. After setting the env vars, visit the Twitch page, set the reward cost, generate an EventSub secret, then click `Connect Twitch` to authorize the app. The connected Twitch user's broadcaster ID is detected and saved automatically.
+Twitch allows HTTP redirect URLs for `localhost`. After setting the env vars, visit the Twitch page, set the reward cost, then click `Connect Twitch` to authorize the app. The connected Twitch user's broadcaster ID is detected and saved automatically.
 
 Behavior today:
 
 - `TWITCH_CLIENT_ID` identifies the Twitch application/client.
 - `TWITCH_CLIENT_SECRET` is used by the local OAuth callback to exchange authorization codes.
-- Twitch broadcaster ID, reward cost, and EventSub secret are saved per community in Settings > Twitch. Broadcaster ID is detected when Twitch is connected.
+- Twitch broadcaster ID and reward cost are saved per community in Settings > Twitch. Broadcaster ID is detected when Twitch is connected.
+- EventSub webhook signing is configured automatically when Twitch is connected or reconnected.
 - If required config is missing, `BacklogWheel.Twitch.config/1` returns `{:error, {:missing_config, keys}}` and `BacklogWheel.Twitch.configured?/1` returns `false`.
 - Starting Twitch voting creates one positive channel point vote reward per game in the voting session.
 - EventSub signature verification uses the secret saved for the event's broadcaster community.

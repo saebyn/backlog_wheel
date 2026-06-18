@@ -17,7 +17,7 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
       {:error, {:missing_config, missing}} ->
         conn
         |> put_flash(:error, "Missing Twitch config: #{Enum.join(missing, ", ")}")
-        |> redirect(to: ~p"/voting")
+        |> redirect(to: ~p"/settings/twitch")
     end
   end
 
@@ -28,36 +28,37 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
            Twitch.client().exchange_code(oauth_config, code, Twitch.redirect_uri(conn)),
          {:ok, credential} <- Twitch.save_credential(token_attrs),
          {:ok, twitch_user} <- Twitch.client().fetch_current_user(oauth_config, credential),
-         {:ok, community} <- save_broadcaster_id(conn.assigns.current_community, twitch_user),
+         {:ok, community} <-
+           save_connection_settings(conn.assigns.current_community, twitch_user),
          {:ok, config} <- Twitch.config(community) do
       maybe_create_eventsub_subscription(conn, community, config)
 
       conn
       |> delete_session(:twitch_oauth_state)
       |> put_flash(:info, "Twitch connected")
-      |> redirect(to: ~p"/voting")
+      |> redirect(to: ~p"/settings/twitch")
     else
       {:error, :invalid_state} ->
         conn
         |> put_flash(:error, "Twitch authorization state did not match")
-        |> redirect(to: ~p"/voting")
+        |> redirect(to: ~p"/settings/twitch")
 
       {:error, {:missing_config, missing}} ->
         conn
         |> put_flash(:error, "Missing Twitch config: #{Enum.join(missing, ", ")}")
-        |> redirect(to: ~p"/voting")
+        |> redirect(to: ~p"/settings/twitch")
 
       {:error, _reason} ->
         conn
         |> put_flash(:error, "Twitch authorization failed")
-        |> redirect(to: ~p"/voting")
+        |> redirect(to: ~p"/settings/twitch")
     end
   end
 
   def callback(conn, %{"error" => error}) do
     conn
     |> put_flash(:error, "Twitch authorization failed: #{error}")
-    |> redirect(to: ~p"/voting")
+    |> redirect(to: ~p"/settings/twitch")
   end
 
   defp verify_state(conn, state) do
@@ -68,9 +69,10 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
     end
   end
 
-  defp save_broadcaster_id(community, %{id: broadcaster_id}) do
+  defp save_connection_settings(community, %{id: broadcaster_id}) do
     Communities.update_community_twitch_settings(community, %{
-      twitch_broadcaster_id: broadcaster_id
+      twitch_broadcaster_id: broadcaster_id,
+      twitch_eventsub_secret: Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
     })
   end
 

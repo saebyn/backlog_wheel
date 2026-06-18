@@ -14,6 +14,7 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
     )
 
     Application.put_env(:backlog_wheel, :twitch_client, BacklogWheel.FakeTwitchClient)
+    start_supervised!(BacklogWheel.FakeTwitchClient)
 
     on_exit(fn ->
       restore_env(:twitch, original_config)
@@ -37,17 +38,17 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
       |> Plug.Test.init_test_session(twitch_oauth_state: "state-1")
       |> get(~p"/twitch/oauth/callback?#{[code: "valid-code", state: "state-1"]}")
 
-    assert redirected_to(conn) == ~p"/voting"
+    assert redirected_to(conn) == ~p"/settings/twitch"
     assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Twitch connected"
     assert Twitch.get_credential().access_token == "access-token"
 
     community = Communities.get_community!(Process.get(:test_community).id)
     assert community.twitch_broadcaster_id == "28728577"
+    assert is_binary(community.twitch_eventsub_secret)
+    refute community.twitch_eventsub_secret == ""
   end
 
   test "callback creates EventSub subscription when configured", %{conn: conn} do
-    start_supervised!(BacklogWheel.FakeTwitchClient)
-
     Application.put_env(:backlog_wheel, :twitch,
       client_id: "client-id",
       client_secret: "client-secret",
@@ -66,11 +67,12 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
       |> Plug.Test.init_test_session(twitch_oauth_state: "state-1")
       |> get(~p"/twitch/oauth/callback?#{[code: "valid-code", state: "state-1"]}")
 
-    assert redirected_to(conn) == ~p"/voting"
+    assert redirected_to(conn) == ~p"/settings/twitch"
     assert Twitch.get_credential().access_token == "access-token"
 
     community = Communities.get_community!(Process.get(:test_community).id)
     assert community.twitch_broadcaster_id == "28728577"
+    assert community.twitch_eventsub_secret != "eventsub-secret"
 
     assert BacklogWheel.FakeTwitchClient.eventsub_callback_url() ==
              "https://example.com/twitch/eventsub"
@@ -82,7 +84,7 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
       |> Plug.Test.init_test_session(twitch_oauth_state: "state-1")
       |> get(~p"/twitch/oauth/callback?#{[code: "valid-code", state: "wrong-state"]}")
 
-    assert redirected_to(conn) == ~p"/voting"
+    assert redirected_to(conn) == ~p"/settings/twitch"
 
     assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
              "Twitch authorization state did not match"

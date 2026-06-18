@@ -73,6 +73,19 @@ To deploy only the service after stateful resources exist:
 AWS_PROFILE=your-profile cdk deploy BacklogWheelServiceStack
 ```
 
+### Runtime Secret Ownership Migration
+
+Older deployments created `backlog-wheel/prototype/runtime` in CloudFormation and exported it from `BacklogWheelStatefulStack` to `BacklogWheelServiceStack`. The current CDK app imports that secret by name instead, so CDK deployments no longer mutate the secret value.
+
+For the first deploy after this change, deploy the service stack exclusively before deploying the stateful stack. This updates the service stack so it stops importing the old runtime secret export:
+
+```sh
+AWS_PROFILE=your-profile cdk deploy --exclusively BacklogWheelServiceStack
+AWS_PROFILE=your-profile cdk deploy BacklogWheelStatefulStack BacklogWheelServiceStack
+```
+
+If you deploy both stacks without the exclusive service deploy first, CloudFormation may fail with `Cannot delete export ... RuntimeSecret ... as it is in use by BacklogWheelServiceStack`.
+
 The runtime secret must contain these JSON keys. Update this secret in AWS Secrets Manager when Discord or Twitch integration should be enabled:
 
 ```json

@@ -35,7 +35,7 @@ defmodule BacklogWheelWeb.TwitchLive do
             </span>
           </div>
 
-          <div class="mt-6 grid gap-3 sm:grid-cols-3">
+          <div class="mt-6 grid gap-3 sm:grid-cols-2">
             <div class="rounded-2xl bg-base-200 p-4">
               <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
                 Reward cost
@@ -55,14 +55,6 @@ defmodule BacklogWheelWeb.TwitchLive do
                 {@current_community.twitch_broadcaster_id || "Connect Twitch"}
               </p>
             </div>
-            <div class="rounded-2xl bg-base-200 p-4">
-              <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-                Webhook events
-              </p>
-              <p id="twitch-settings-eventsub-status" class="mt-1 font-bold">
-                {if @eventsub_configured?, do: "Configured", else: "Missing secret"}
-              </p>
-            </div>
           </div>
 
           <p
@@ -71,15 +63,6 @@ defmodule BacklogWheelWeb.TwitchLive do
             class="mt-4 rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm"
           >
             Missing Twitch config: {Enum.join(@missing_config, ", ")}
-          </p>
-
-          <p
-            :if={!@eventsub_configured?}
-            id="twitch-settings-eventsub-warning"
-            class="mt-4 rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm"
-          >
-            Twitch EventSub is not configured. Channel point rewards can be created, but redemptions
-            will not be delivered as votes until an EventSub secret is saved and Twitch is reconnected.
           </p>
 
           <.form
@@ -106,26 +89,8 @@ defmodule BacklogWheelWeb.TwitchLive do
               />
             </div>
 
-            <div class="rounded-2xl border border-base-300 bg-base-100 p-4">
-              <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-                EventSub secret
-              </p>
-              <p id="twitch-settings-eventsub-secret-status" class="mt-1 font-bold">
-                {if @eventsub_configured?, do: "Configured", else: "Missing"}
-              </p>
-              <p class="mt-2 text-sm text-base-content/70">
-                The secret is generated and stored by Backlog Wheel. Rotate it if it may have been
-                exposed, then reconnect Twitch to refresh the webhook subscription.
-              </p>
-            </div>
-
             <div class="flex flex-wrap gap-2">
               <.button id="save-twitch-settings">Save Twitch settings</.button>
-              <.button id="rotate-eventsub-secret" type="button" phx-click="rotate_secret">
-                {if @eventsub_configured?,
-                  do: "Rotate EventSub secret",
-                  else: "Generate EventSub secret"}
-              </.button>
             </div>
           </.form>
 
@@ -194,26 +159,6 @@ defmodule BacklogWheelWeb.TwitchLive do
     end
   end
 
-  @impl true
-  def handle_event("rotate_secret", _params, socket) do
-    params = %{
-      "twitch_reward_cost" => socket.assigns.current_community.twitch_reward_cost,
-      "twitch_eventsub_secret" => Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
-    }
-
-    case Communities.update_community_twitch_settings(socket.assigns.current_community, params) do
-      {:ok, community} ->
-        {:noreply,
-         socket
-         |> assign(:current_community, community)
-         |> put_flash(:info, "EventSub secret rotated. Reconnect Twitch to update the webhook.")
-         |> refresh()}
-
-      {:error, changeset} ->
-        {:noreply, assign(socket, :form, to_form(%{changeset | action: :insert}))}
-    end
-  end
-
   defp refresh(socket) do
     community = socket.assigns.current_community
     oauth_config = Twitch.oauth_config()
@@ -225,7 +170,6 @@ defmodule BacklogWheelWeb.TwitchLive do
     |> assign(:twitch_configured?, match?({:ok, _config}, oauth_config))
     |> assign(:missing_config, missing_config(oauth_config))
     |> assign(:reward_cost, reward_cost(channel_config, community))
-    |> assign(:eventsub_configured?, eventsub_configured?(community))
   end
 
   defp missing_config({:error, {:missing_config, missing}}), do: missing
@@ -233,6 +177,4 @@ defmodule BacklogWheelWeb.TwitchLive do
 
   defp reward_cost({:ok, config}, _community), do: config.reward_cost
   defp reward_cost(_config, community), do: community.twitch_reward_cost
-
-  defp eventsub_configured?(community), do: community.twitch_eventsub_secret not in [nil, ""]
 end

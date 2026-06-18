@@ -45,28 +45,11 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
     assert has_element?(view, "#settings-nav-twitch", "Twitch")
     assert has_element?(view, "#connect-twitch", "Connect Twitch")
     assert has_element?(view, "#disconnect-twitch[disabled]")
-    assert has_element?(view, "#twitch-settings-eventsub-status", "Missing secret")
-    assert has_element?(view, "#twitch-settings-eventsub-secret-status", "Missing")
-    assert has_element?(view, "#twitch-settings-eventsub-warning")
     assert has_element?(view, "#twitch-settings-form")
-    assert has_element?(view, "#rotate-eventsub-secret", "Generate EventSub secret")
-  end
-
-  test "shows EventSub configured when signing secret exists", %{conn: conn} do
-    {:ok, community} =
-      Communities.update_community_twitch_settings(Process.get(:test_community), %{
-        twitch_reward_cost: 123,
-        twitch_eventsub_secret: "eventsub-secret"
-      })
-
-    Process.put(:test_community, community)
-
-    {:ok, view, _html} = live(conn, ~p"/settings/twitch")
-
-    assert has_element?(view, "#twitch-settings-eventsub-status", "Configured")
-    assert has_element?(view, "#twitch-settings-eventsub-secret-status", "Configured")
-    assert has_element?(view, "#rotate-eventsub-secret", "Rotate EventSub secret")
+    refute has_element?(view, "#twitch-settings-eventsub-status")
+    refute has_element?(view, "#twitch-settings-eventsub-secret-status")
     refute has_element?(view, "#twitch-settings-eventsub-warning")
+    refute has_element?(view, "#rotate-eventsub-secret")
   end
 
   test "saves editable community Twitch settings without exposing EventSub secret", %{conn: conn} do
@@ -86,24 +69,6 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
     assert community.twitch_broadcaster_id == nil
     assert community.twitch_reward_cost == 250
     assert community.twitch_eventsub_secret == nil
-  end
-
-  test "generates and rotates EventSub secret server-side", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/settings/twitch")
-
-    assert view |> element("#rotate-eventsub-secret") |> render_click()
-    assert has_element?(view, "#flash-info", "EventSub secret rotated")
-    assert has_element?(view, "#twitch-settings-eventsub-secret-status", "Configured")
-
-    community = Communities.get_community!(Process.get(:test_community).id)
-    first_secret = community.twitch_eventsub_secret
-    assert is_binary(first_secret)
-    refute first_secret == ""
-
-    assert view |> element("#rotate-eventsub-secret") |> render_click()
-
-    community = Communities.get_community!(Process.get(:test_community).id)
-    assert community.twitch_eventsub_secret != first_secret
   end
 
   test "shows reconnect and disconnect when Twitch is connected", %{conn: conn} do
