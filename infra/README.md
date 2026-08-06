@@ -1,23 +1,17 @@
 # Backlog Wheel Infrastructure
 
-The repository includes a production Docker image and AWS CDK Python app for a small private deployment at `https://wheel.streamosaic.app`.
+The repository includes a production Docker image and AWS CDK Python app for the small EC2 deployment at `https://wheel.streamosaic.app`.
 
-The CDK app creates two stacks:
+The CDK app creates `BacklogWheelEc2Stack`, which owns:
 
-- `BacklogWheelStatefulStack` owns stateful resources: Aurora PostgreSQL and database credentials. It imports the runtime integration secret by name but does not own or mutate its value.
-- `BacklogWheelServiceStack` owns replaceable service resources: ECS cluster, task definition, Fargate service, service security group, load balancer, certificate, and Route 53 record.
+- A small EC2 instance.
+- An Elastic IP and Route 53 `A` record for `wheel.streamosaic.app`.
+- A security group allowing HTTP and HTTPS.
+- An IAM role with SSM Session Manager, ECR pull, and Secrets Manager read access.
+- A generated local Postgres credentials secret with a retain policy.
+- A production Docker image asset published through the CDK bootstrap ECR repository.
 
-Together they create:
-
-- An ECS Fargate service running one Phoenix release container.
-- An Aurora Serverless v2 PostgreSQL database.
-- It uses the account's default VPC rather than creating a project-specific VPC.
-- An internet-facing Application Load Balancer with HTTP to HTTPS redirect.
-- An ACM certificate and Route 53 `A` record for `wheel.streamosaic.app`.
-- A manually managed Secrets Manager secret named `backlog-wheel/prototype/runtime` for Phoenix and integration secrets.
-- A generated RDS credentials secret for the application database user.
-
-Docker image assets are still published through the CDK bootstrap ECR repository during `cdk deploy`. A dedicated application ECR repository would require a separate build/push/tag deployment flow.
+The instance runs Docker containers for Phoenix, Postgres, and Caddy. Caddy terminates HTTPS directly on the instance. Postgres data lives on the instance's Docker volume.
 
 ## Prerequisites
 
@@ -43,13 +37,8 @@ cdk bootstrap aws://159222827421/us-west-2
 ```
 
 The default account and region are set in `cdk.json` as `159222827421` and `us-west-2`.
-Override them for one-off deploys with CDK context values:
 
-```sh
-cdk deploy --context account=123456789012 --context region=us-east-1
-```
-
-Create the runtime secret before the first deploy. CDK imports this secret by name and must not manage its value, so deployments cannot overwrite manually edited OAuth credentials or `SECRET_KEY_BASE`:
+Create the runtime secret before the first deploy. CDK imports this secret by name and must not manage its value:
 
 ```sh
 aws secretsmanager create-secret \
@@ -57,34 +46,31 @@ aws secretsmanager create-secret \
   --secret-string '{"SECRET_KEY_BASE":"replace-with-mix-phx-gen-secret","DISCORD_CLIENT_ID":"","DISCORD_CLIENT_SECRET":"","TWITCH_CLIENT_ID":"","TWITCH_CLIENT_SECRET":""}'
 ```
 
-If the secret already exists, update it only through Secrets Manager or the AWS CLI, not by changing CDK-generated defaults.
+If the secret already exists, update it only through Secrets Manager or the AWS CLI.
 
 ## Deploy
 
-Deploy both stacks from the repository root:
+Deploy from the repository root:
 
 ```sh
-AWS_PROFILE=your-profile cdk deploy
+AWS_PROFILE=your-profile cdk deploy BacklogWheelEc2Stack
 ```
 
-To deploy only the service after stateful resources exist:
+The stack uses `t3a.micro` by default. Override it with context if needed:
 
 ```sh
-AWS_PROFILE=your-profile cdk deploy BacklogWheelServiceStack
+AWS_PROFILE=your-profile cdk deploy BacklogWheelEc2Stack \
+  --context ec2InstanceType=t3a.nano
 ```
 
-### Runtime Secret Ownership Migration
-
-Older deployments created `backlog-wheel/prototype/runtime` in CloudFormation and exported it from `BacklogWheelStatefulStack` to `BacklogWheelServiceStack`. The current CDK app imports that secret by name instead, so CDK deployments no longer mutate the secret value.
-
-For the first deploy after this change, deploy the service stack exclusively before deploying the stateful stack. This updates the service stack so it stops importing the old runtime secret export:
+The stack enables SSM Session Manager for shell access. It does not open SSH by default. To allow SSH from a specific CIDR, pass `ec2SshCidr`:
 
 ```sh
-AWS_PROFILE=your-profile cdk deploy --exclusively BacklogWheelServiceStack
-AWS_PROFILE=your-profile cdk deploy BacklogWheelStatefulStack BacklogWheelServiceStack
+AWS_PROFILE=your-profile cdk deploy BacklogWheelEc2Stack \
+  --context ec2SshCidr=203.0.113.10/32
 ```
 
-If you deploy both stacks without the exclusive service deploy first, CloudFormation may fail with `Cannot delete export ... RuntimeSecret ... as it is in use by BacklogWheelServiceStack`.
+## Runtime Configuration
 
 The runtime secret must contain these JSON keys. Update this secret in AWS Secrets Manager when Discord or Twitch integration should be enabled:
 
@@ -98,19 +84,44 @@ The runtime secret must contain these JSON keys. Update this secret in AWS Secre
 }
 ```
 
-The container also sets these non-secret runtime values:
+The app container also sets these non-secret runtime values:
 
-- `DATABASE_HOST=<aurora-cluster-endpoint>`
+- `DATABASE_HOST=backlog-wheel-postgres`
 - `DATABASE_NAME=backlog_wheel`
 - `DATABASE_PORT=5432`
-- `DATABASE_SSL=true`
+- `DATABASE_SSL=false`
 - `PHX_HOST=wheel.streamosaic.app`
 - `PHX_SERVER=true`
 - `PORT=4000`
 - `SIGNUP_ALLOWED_DISCORD_IDS=335983615613730819,117000360039546887`
 - `TWITCH_EVENTSUB_CALLBACK_URL=https://wheel.streamosaic.app/twitch/eventsub`
 
-The database username and password are injected from the generated RDS credentials secret. Database migrations run automatically when the Phoenix release starts. The Aurora cluster is configured with deletion protection and a `RETAIN` removal policy so application data is not accidentally deleted with the stack.
+The Phoenix release runs migrations automatically on startup.
+
+## Operations
+
+Use SSM Session Manager for access:
+
+```sh
+AWS_PROFILE=your-profile aws ssm start-session --target INSTANCE_ID
+```
+
+Useful instance commands:
+
+```sh
+sudo docker logs -f backlog-wheel-app
+sudo docker logs -f backlog-wheel-caddy
+sudo docker logs -f backlog-wheel-postgres
+```
+
+Create a local database backup from the instance:
+
+```sh
+DB_USERNAME=$(sudo python3 -c "import json; print(json.load(open('/opt/backlog-wheel/database-secret.json'))['username'])")
+sudo docker exec backlog-wheel-postgres pg_dump -U "$DB_USERNAME" -d backlog_wheel > "backlog_wheel-$(date +%Y%m%d%H%M%S).sql"
+```
+
+For app updates after the initial EC2 provision, deploy the new CDK image asset and then recreate the app container on the instance with the new image URI.
 
 ## Docker
 

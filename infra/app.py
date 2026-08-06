@@ -3,7 +3,7 @@ import os
 
 import aws_cdk as cdk
 
-from backlog_wheel_stack import BacklogWheelServiceStack, BacklogWheelStatefulStack
+from backlog_wheel_stack import BacklogWheelEc2Stack
 
 
 app = cdk.App()
@@ -15,18 +15,10 @@ env = cdk.Environment(
     region=region,
 )
 
-stateful_stack = BacklogWheelStatefulStack(
+BacklogWheelEc2Stack(
     app,
-    "BacklogWheelStatefulStack",
+    "BacklogWheelEc2Stack",
     env=env,
 )
-
-service_stack = BacklogWheelServiceStack(
-    app,
-    "BacklogWheelServiceStack",
-    env=env,
-    stateful_stack=stateful_stack,
-)
-service_stack.add_dependency(stateful_stack)
 
 app.synth()
