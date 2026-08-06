@@ -70,6 +70,8 @@ AWS_PROFILE=your-profile cdk deploy BacklogWheelEc2Stack \
   --context ec2SshCidr=203.0.113.10/32
 ```
 
+Each deploy publishes a new Docker image asset when application files change. The stack also updates a managed SSM association with that image URI, causing the EC2 instance to pull the image and recreate the `backlog-wheel-app` container automatically.
+
 ## Runtime Configuration
 
 The runtime secret must contain these JSON keys. Update this secret in AWS Secrets Manager when Discord or Twitch integration should be enabled:
@@ -141,7 +143,7 @@ DB_USERNAME=$(sudo python3 -c "import json; print(json.load(open('/opt/backlog-w
 sudo docker exec backlog-wheel-postgres pg_dump -U "$DB_USERNAME" -d backlog_wheel > "backlog_wheel-$(date +%Y%m%d%H%M%S).sql"
 ```
 
-For app updates after the initial EC2 provision, deploy the new CDK image asset and then recreate the app container on the instance with the new image URI.
+For app updates after the initial EC2 provision, run `cdk deploy BacklogWheelEc2Stack`. The CDK-managed `BacklogWheelDeployApp` SSM association pulls the new image and recreates the app container.
 
 ## Docker
 

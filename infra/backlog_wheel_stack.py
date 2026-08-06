@@ -226,6 +226,56 @@ class BacklogWheelEc2Stack(Stack):
             },
         )
 
+        deploy_app_document = ssm.CfnDocument(
+            self,
+            "DeployAppDocument",
+            document_type="Command",
+            name="BacklogWheelDeployApp",
+            content={
+                "schemaVersion": "2.2",
+                "description": "Pull and restart Backlog Wheel app container",
+                "parameters": {
+                    "AppImageUri": {
+                        "type": "String",
+                        "description": "Docker image URI to run for the app container",
+                    }
+                },
+                "mainSteps": [
+                    {
+                        "action": "aws:runShellScript",
+                        "name": "deployApp",
+                        "inputs": {
+                            "runCommand": [
+                                "set -euxo pipefail",
+                                "for i in {1..60}; do test -f /opt/backlog-wheel/app.env && docker network inspect backlog-wheel >/dev/null 2>&1 && break; sleep 5; done",
+                                "test -f /opt/backlog-wheel/app.env",
+                                "docker network inspect backlog-wheel >/dev/null",
+                                f"aws ecr get-login-password --region {self.region} | docker login --username AWS --password-stdin {ecr_registry}",
+                                "docker pull {{ AppImageUri }}",
+                                "docker rm -f backlog-wheel-app || true",
+                                "docker run -d --name backlog-wheel-app --restart unless-stopped --network backlog-wheel --env-file /opt/backlog-wheel/app.env {{ AppImageUri }}",
+                                "docker restart backlog-wheel-caddy || true",
+                            ]
+                        },
+                    }
+                ],
+            },
+        )
+
+        deploy_app_association = ssm.CfnAssociation(
+            self,
+            "DeployAppAssociation",
+            name=deploy_app_document.name,
+            targets=[
+                ssm.CfnAssociation.TargetProperty(
+                    key="InstanceIds",
+                    values=[instance.instance_id],
+                )
+            ],
+            parameters={"AppImageUri": [image.image_uri]},
+        )
+        deploy_app_association.add_dependency(deploy_app_document)
+
         if manage_dns:
             hosted_zone = route53.HostedZone.from_lookup(
                 self,
@@ -246,3 +296,4 @@ class BacklogWheelEc2Stack(Stack):
         cdk.CfnOutput(self, "Url", value=f"https://{domain_name}")
         cdk.CfnOutput(self, "DatabaseSecretName", value=database_credentials.secret_name)
         cdk.CfnOutput(self, "RefreshEnvDocument", value=refresh_env_document.name)
+        cdk.CfnOutput(self, "DeployAppDocumentName", value=deploy_app_document.name)
