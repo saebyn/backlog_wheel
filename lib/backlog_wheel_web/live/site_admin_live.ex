@@ -21,6 +21,15 @@ defmodule BacklogWheelWeb.SiteAdminLive do
             <p class="mt-4 text-base leading-7 text-base-content/70 sm:text-lg">
               This area is reserved for site-wide administration tools. We will add operational controls here as they are built.
             </p>
+            <div class="mt-8 flex flex-wrap gap-3">
+              <.link
+                id="site-admin-analytics-link"
+                href={~p"/admin/analytics"}
+                class="btn btn-primary hover-lift"
+              >
+                <.icon name="hero-chart-bar-square" class="size-5" /> View Analytics
+              </.link>
+            </div>
           </div>
         </div>
       </section>

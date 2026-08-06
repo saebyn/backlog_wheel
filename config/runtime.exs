@@ -104,6 +104,8 @@ if config_env() == :prod do
 
   host = System.get_env("PHX_HOST") || "example.com"
 
+  config :phoenix_analytics, app_domain: host
+
   config :backlog_wheel, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   config :backlog_wheel, BacklogWheelWeb.Endpoint,

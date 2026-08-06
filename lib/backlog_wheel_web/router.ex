@@ -1,5 +1,6 @@
 defmodule BacklogWheelWeb.Router do
   use BacklogWheelWeb, :router
+  use PhoenixAnalytics.Web, :router
 
   pipeline :browser do
     plug :accepts, ["html"]
@@ -85,6 +86,11 @@ defmodule BacklogWheelWeb.Router do
       on_mount: [{BacklogWheelWeb.UserAuth, :require_site_admin_user}] do
       live "/admin", SiteAdminLive, :show
     end
+
+    phoenix_analytics_dashboard("/admin/analytics",
+      as: :site_admin_analytics,
+      on_mount: [{BacklogWheelWeb.UserAuth, :require_site_admin_user}]
+    )
   end
 
   scope "/", BacklogWheelWeb do

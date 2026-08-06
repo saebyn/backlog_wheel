@@ -27,6 +27,10 @@ defmodule BacklogWheelWeb.Endpoint do
     only: BacklogWheelWeb.static_paths(),
     raise_on_missing_only: code_reloading?
 
+  if Application.compile_env(:backlog_wheel, :analytics_enabled, true) do
+    plug PhoenixAnalytics.Plugs.RequestTracker
+  end
+
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.
   if code_reloading? do

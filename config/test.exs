@@ -41,3 +41,5 @@ config :phoenix,
   sort_verified_routes_query_params: true
 
 config :backlog_wheel, signup_allowed_discord_ids: :all
+
+config :backlog_wheel, analytics_enabled: false

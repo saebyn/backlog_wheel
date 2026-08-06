@@ -11,6 +11,11 @@ config :backlog_wheel,
   ecto_repos: [BacklogWheel.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+config :phoenix_analytics,
+  repo: BacklogWheel.Repo,
+  app_domain: "localhost",
+  cache_ttl: 60
+
 # Configure the endpoint
 config :backlog_wheel, BacklogWheelWeb.Endpoint,
   url: [host: "localhost"],

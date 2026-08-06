@@ -12,6 +12,7 @@ defmodule BacklogWheelWeb.SiteAdminLiveTest do
     {:ok, view, _html} = live(conn, ~p"/admin")
 
     assert has_element?(view, "#site-admin-page")
+    assert has_element?(view, ~s|#site-admin-analytics-link[href="/admin/analytics"]|)
   end
 
   test "site admins without a community can access the site admin page", %{conn: conn} do
@@ -27,6 +28,10 @@ defmodule BacklogWheelWeb.SiteAdminLiveTest do
     assert {:error, {:redirect, %{to: "/dashboard"}}} = live(conn, ~p"/admin")
   end
 
+  test "community admins cannot access analytics dashboard", %{conn: conn} do
+    assert {:error, {:redirect, %{to: "/dashboard"}}} = live(conn, ~p"/admin/analytics")
+  end
+
   test "site admin nav is only visible to site admins", %{conn: conn} do
     {:ok, dashboard, _html} = live(conn, ~p"/dashboard")
     refute has_element?(dashboard, "#main-nav-site-admin")
@@ -39,6 +44,11 @@ defmodule BacklogWheelWeb.SiteAdminLiveTest do
   @tag :unauthenticated
   test "unauthenticated users are redirected to login", %{conn: conn} do
     assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/admin")
+  end
+
+  @tag :unauthenticated
+  test "unauthenticated users are redirected from analytics to login", %{conn: conn} do
+    assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/admin/analytics")
   end
 
   defp user_fixture(attrs) do
