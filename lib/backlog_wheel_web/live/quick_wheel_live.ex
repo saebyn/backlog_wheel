@@ -120,9 +120,7 @@ defmodule BacklogWheelWeb.QuickWheelLive do
                 type="textarea"
                 label="Paste multiple entries"
                 rows="5"
-                placeholder="One entry per line
-Another entry
-A third option"
+                placeholder={paste_entries_placeholder()}
               />
               <.button id="quick-wheel-paste-entries" class="btn w-full">
                 Add Pasted Entries
@@ -390,6 +388,10 @@ A third option"
 
   defp refresh_entry_count(socket),
     do: assign(socket, :entry_count, length(socket.assigns.entries))
+
+  defp paste_entries_placeholder do
+    Enum.join(["One entry per line", "Another entry", "A third option"], "\n")
+  end
 
   defp split_entries(value) do
     value

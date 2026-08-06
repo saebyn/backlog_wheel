@@ -81,9 +81,9 @@ defmodule BacklogWheelWeb.Layouts do
               <.link
                 id="main-nav-quick-wheel"
                 navigate={~p"/quick-wheel"}
-                class="btn btn-ghost hover-lift"
+                class="btn border-primary/20 bg-primary/10 text-primary shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/15 hover:shadow-md"
               >
-                Quick Wheel
+                <.icon name="hero-bolt" class="size-4" /> Quick Wheel
               </.link>
             </li>
             <li :if={@current_user}>
