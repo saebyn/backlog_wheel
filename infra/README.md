@@ -98,6 +98,26 @@ The app container also sets these non-secret runtime values:
 
 The Phoenix release runs migrations automatically on startup.
 
+## Updating Environment Variables
+
+Runtime secrets live in Secrets Manager under `backlog-wheel/prototype/runtime`. Update that secret first, then run the CDK-managed SSM document to refresh the instance env file and recreate the app container.
+
+```sh
+AWS_PROFILE=your-profile aws secretsmanager update-secret \
+  --secret-id backlog-wheel/prototype/runtime \
+  --secret-string '{"SECRET_KEY_BASE":"existing-secret-key-base","DISCORD_CLIENT_ID":"","DISCORD_CLIENT_SECRET":"","TWITCH_CLIENT_ID":"","TWITCH_CLIENT_SECRET":""}'
+```
+
+Run the refresh command:
+
+```sh
+AWS_PROFILE=your-profile aws ssm send-command \
+  --document-name BacklogWheelRefreshRuntimeEnv \
+  --instance-ids INSTANCE_ID
+```
+
+Get `INSTANCE_ID` from the `BacklogWheelEc2Stack` outputs or EC2 console. The command rewrites `/opt/backlog-wheel/app.env`, recreates `backlog-wheel-app` with the current app image, and restarts Caddy.
+
 ## Operations
 
 Use SSM Session Manager for access:

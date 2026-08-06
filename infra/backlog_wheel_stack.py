@@ -9,6 +9,7 @@ from aws_cdk import (
     aws_ecr_assets as ecr_assets,
     aws_route53 as route53,
     aws_secretsmanager as secretsmanager,
+    aws_ssm as ssm,
 )
 from constructs import Construct
 
@@ -169,6 +170,62 @@ class BacklogWheelEc2Stack(Stack):
             "docker run -d --name backlog-wheel-caddy --restart unless-stopped --network backlog-wheel -p 80:80 -p 443:443 -v /opt/backlog-wheel/Caddyfile:/etc/caddy/Caddyfile:ro -v backlog-wheel-caddy-data:/data -v backlog-wheel-caddy-config:/config caddy:2-alpine",
         )
 
+        refresh_env_document = ssm.CfnDocument(
+            self,
+            "RefreshRuntimeEnvDocument",
+            document_type="Command",
+            name="BacklogWheelRefreshRuntimeEnv",
+            content={
+                "schemaVersion": "2.2",
+                "description": "Refresh Backlog Wheel runtime env from Secrets Manager",
+                "mainSteps": [
+                    {
+                        "action": "aws:runShellScript",
+                        "name": "refreshRuntimeEnv",
+                        "inputs": {
+                            "runCommand": [
+                                "set -euxo pipefail",
+                                f"aws secretsmanager get-secret-value --region {self.region} --secret-id {runtime_secret.secret_name} --query SecretString --output text > /opt/backlog-wheel/runtime-secret.json",
+                                f"aws secretsmanager get-secret-value --region {self.region} --secret-id {database_credentials.secret_arn} --query SecretString --output text > /opt/backlog-wheel/database-secret.json",
+                                "cat > /opt/backlog-wheel/write-env.py <<'PY'\n"
+                                "import json\n"
+                                "from pathlib import Path\n"
+                                "runtime = json.loads(Path('/opt/backlog-wheel/runtime-secret.json').read_text())\n"
+                                "database = json.loads(Path('/opt/backlog-wheel/database-secret.json').read_text())\n"
+                                "values = {\n"
+                                f"    'PHX_HOST': '{domain_name}',\n"
+                                "    'PHX_SERVER': 'true',\n"
+                                "    'PORT': '4000',\n"
+                                "    'DATABASE_HOST': 'backlog-wheel-postgres',\n"
+                                "    'DATABASE_NAME': 'backlog_wheel',\n"
+                                "    'DATABASE_PORT': '5432',\n"
+                                "    'DATABASE_SSL': 'false',\n"
+                                "    'DATABASE_USERNAME': database['username'],\n"
+                                "    'DATABASE_PASSWORD': database['password'],\n"
+                                "    'POOL_SIZE': '5',\n"
+                                "    'SECRET_KEY_BASE': runtime['SECRET_KEY_BASE'],\n"
+                                "    'DISCORD_CLIENT_ID': runtime.get('DISCORD_CLIENT_ID', ''),\n"
+                                "    'DISCORD_CLIENT_SECRET': runtime.get('DISCORD_CLIENT_SECRET', ''),\n"
+                                "    'TWITCH_CLIENT_ID': runtime.get('TWITCH_CLIENT_ID', ''),\n"
+                                "    'TWITCH_CLIENT_SECRET': runtime.get('TWITCH_CLIENT_SECRET', ''),\n"
+                                f"    'TWITCH_EVENTSUB_CALLBACK_URL': 'https://{domain_name}/twitch/eventsub',\n"
+                                "    'SIGNUP_ALLOWED_DISCORD_IDS': '335983615613730819,117000360039546887',\n"
+                                "}\n"
+                                "Path('/opt/backlog-wheel/app.env').write_text(''.join(f'{key}={value}\\n' for key, value in values.items()))\n"
+                                "PY",
+                                "python3 /opt/backlog-wheel/write-env.py",
+                                "chmod 600 /opt/backlog-wheel/app.env /opt/backlog-wheel/*-secret.json",
+                                "APP_IMAGE=$(docker inspect backlog-wheel-app | python3 -c 'import json, sys; print(json.load(sys.stdin)[0][\"Config\"][\"Image\"])')",
+                                "docker rm -f backlog-wheel-app",
+                                "docker run -d --name backlog-wheel-app --restart unless-stopped --network backlog-wheel --env-file /opt/backlog-wheel/app.env \"$APP_IMAGE\"",
+                                "docker restart backlog-wheel-caddy || true",
+                            ]
+                        },
+                    }
+                ],
+            },
+        )
+
         if manage_dns:
             hosted_zone = route53.HostedZone.from_lookup(
                 self,
@@ -188,3 +245,4 @@ class BacklogWheelEc2Stack(Stack):
         cdk.CfnOutput(self, "InstancePublicIp", value=elastic_ip.ref)
         cdk.CfnOutput(self, "Url", value=f"https://{domain_name}")
         cdk.CfnOutput(self, "DatabaseSecretName", value=database_credentials.secret_name)
+        cdk.CfnOutput(self, "RefreshEnvDocument", value=refresh_env_document.name)
