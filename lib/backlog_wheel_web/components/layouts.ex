@@ -110,6 +110,17 @@ defmodule BacklogWheelWeb.Layouts do
                 Settings
               </.link>
             </li>
+            <li :if={@current_user && @current_user.site_admin}>
+              <.link
+                id="main-nav-site-admin"
+                navigate={~p"/admin"}
+                class="btn btn-ghost border-warning/20 text-warning hover-lift"
+                title="Site Admin"
+              >
+                <.icon name="hero-shield-check" class="size-5" />
+                <span class="sr-only sm:not-sr-only">Site Admin</span>
+              </.link>
+            </li>
             <li :if={@current_user}>
               <span id="current-user-role" class="badge badge-ghost capitalize">
                 {@current_user.role}

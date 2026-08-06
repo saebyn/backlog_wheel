@@ -11,6 +11,7 @@ defmodule BacklogWheel.Accounts.User do
     field :username, :string
     field :avatar_hash, :string
     field :role, :string
+    field :site_admin, :boolean, default: false
 
     has_many :community_memberships, CommunityMembership
 
@@ -19,7 +20,7 @@ defmodule BacklogWheel.Accounts.User do
 
   def changeset(user, attrs) do
     user
-    |> cast(attrs, [:discord_id, :username, :avatar_hash, :role])
+    |> cast(attrs, [:discord_id, :username, :avatar_hash, :role, :site_admin])
     |> validate_required([:discord_id, :username, :role])
     |> validate_inclusion(:role, @roles)
     |> unique_constraint(:discord_id)

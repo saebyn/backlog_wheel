@@ -20,6 +20,11 @@ defmodule BacklogWheelWeb.Router do
     plug BacklogWheelWeb.UserAuth, :require_authenticated_user
   end
 
+  pipeline :site_admin_browser do
+    plug BacklogWheelWeb.UserAuth, :require_authenticated_user
+    plug BacklogWheelWeb.UserAuth, :require_site_admin_user
+  end
+
   pipeline :api do
     plug :accepts, ["json"]
   end
@@ -70,6 +75,15 @@ defmodule BacklogWheelWeb.Router do
       live "/games/:id/edit", GameLive.Form, :edit
       live "/settings/formats", WheelFormatLive.Index, :index
       live "/settings/theme", SettingsLive.Theme, :edit
+    end
+  end
+
+  scope "/", BacklogWheelWeb do
+    pipe_through [:browser, :site_admin_browser]
+
+    live_session :site_admin,
+      on_mount: [{BacklogWheelWeb.UserAuth, :require_site_admin_user}] do
+      live "/admin", SiteAdminLive, :show
     end
   end
 

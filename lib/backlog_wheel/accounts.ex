@@ -22,6 +22,10 @@ defmodule BacklogWheel.Accounts do
     allowed_ids == :all or MapSet.member?(allowed_ids, discord_id)
   end
 
+  @spec site_admin?(User.t() | nil) :: boolean()
+  def site_admin?(%User{site_admin: true}), do: true
+  def site_admin?(_user), do: false
+
   @spec sync_discord_user(map()) ::
           {:ok, User.t()} | {:error, :signup_not_allowed | Ecto.Changeset.t()}
   def sync_discord_user(%{"id" => discord_id} = discord_user) do

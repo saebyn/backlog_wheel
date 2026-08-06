@@ -12,7 +12,8 @@ defmodule BacklogWheel.AccountsTest do
         discord_id: "discord-user-1",
         username: "Old User",
         avatar_hash: "old",
-        role: "admin"
+        role: "admin",
+        site_admin: true
       })
       |> Repo.insert!()
 
@@ -27,6 +28,13 @@ defmodule BacklogWheel.AccountsTest do
     assert updated_user.username == "new-user"
     assert updated_user.avatar_hash == "new"
     assert updated_user.role == "admin"
+    assert updated_user.site_admin
+  end
+
+  test "site_admin?/1 identifies site admins" do
+    assert Accounts.site_admin?(%User{site_admin: true})
+    refute Accounts.site_admin?(%User{site_admin: false})
+    refute Accounts.site_admin?(nil)
   end
 
   test "sync_discord_user/1 creates allowlisted Discord users" do
