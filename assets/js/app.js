@@ -24,6 +24,7 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/backlog_wheel"
 import topbar from "../vendor/topbar"
+import QuickWheelEntryForm from "./quick_wheel_entry_form"
 import RouletteWheel from "./roulette_wheel"
 import ThemeColorPicker from "./theme_color_picker"
 
@@ -31,7 +32,7 @@ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, RouletteWheel, ThemeColorPicker},
+  hooks: {...colocatedHooks, QuickWheelEntryForm, RouletteWheel, ThemeColorPicker},
 })
 
 // Show progress bar on live navigation and form submits

@@ -78,6 +78,15 @@ defmodule BacklogWheelWeb.Layouts do
               </.link>
             </li>
             <li :if={@current_user}>
+              <.link
+                id="main-nav-quick-wheel"
+                navigate={~p"/quick-wheel"}
+                class="btn btn-ghost hover-lift"
+              >
+                Quick Wheel
+              </.link>
+            </li>
+            <li :if={@current_user}>
               <.link id="main-nav-games" navigate={~p"/games"} class="btn btn-ghost hover-lift">
                 Games
               </.link>

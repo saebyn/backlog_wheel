@@ -59,6 +59,7 @@ defmodule BacklogWheelWeb.Router do
       live "/dashboard", DashboardLive, :show
       live "/settings/twitch", TwitchLive, :index
       live "/wheel", WheelLive, :show
+      live "/quick-wheel", QuickWheelLive, :show
       live "/history", SpinHistoryLive, :index
       live "/history/:id", SpinRecapLive, :show
       live "/voting", VotingSessionLive.Index, :index
