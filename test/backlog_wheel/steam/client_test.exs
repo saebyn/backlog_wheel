@@ -21,13 +21,20 @@ defmodule BacklogWheel.Steam.ClientTest do
     }
 
     assert Client.normalize_owned_games(body) == [
-             %{appid: 10, name: "Counter-Strike", image_url: nil, last_played_at: nil},
+             %{
+               appid: 10,
+               name: "Counter-Strike",
+               image_url: nil,
+               last_played_at: nil,
+               playtime_minutes: nil
+             },
              %{
                appid: 70,
                name: "Half-Life",
                image_url:
                  "https://media.steampowered.com/steamcommunity/public/images/apps/70/abcdef.jpg",
-               last_played_at: ~U[2024-06-01 01:46:40Z]
+               last_played_at: ~U[2024-06-01 01:46:40Z],
+               playtime_minutes: 120
              }
            ]
   end

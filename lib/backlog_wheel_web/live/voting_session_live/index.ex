@@ -59,6 +59,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
           <.form
             for={@wheel_format_form}
             id="create-session-from-format-form"
+            phx-change="select_wheel_format"
             phx-submit="create_session_from_format"
           >
             <div
@@ -80,6 +81,13 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                 label="Format"
                 options={@wheel_format_options}
               />
+              <p
+                :if={@selected_wheel_format}
+                id="selected-wheel-format-preview"
+                class="rounded-xl bg-base-100 px-3 py-2 text-sm font-semibold text-base-content/75"
+              >
+                Preview pool: {@selected_wheel_format_candidate_count} games match this format.
+              </p>
               <.button
                 id="create-voting-session-from-format"
                 variant="primary"
@@ -647,6 +655,13 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
      |> refresh()}
   end
 
+  def handle_event("select_wheel_format", %{"wheel_format" => %{"wheel_format_id" => id}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:selected_wheel_format_id, parsed_integer(id))
+     |> refresh()}
+  end
+
   def handle_event("select_session", %{"id" => id}, socket) do
     {:noreply, push_patch(socket, to: ~p"/voting?#{[session_id: id]}")}
   end
@@ -780,6 +795,10 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     sessions = Voting.list_voting_sessions(socket.assigns.current_community)
     wheel_formats = Voting.list_wheel_formats(socket.assigns.current_community)
     selected_session = selected_session(sessions, socket.assigns.selected_session_id)
+
+    selected_wheel_format =
+      selected_wheel_format(wheel_formats, socket.assigns.selected_wheel_format_id)
+
     pool_items = if selected_session, do: selected_session.voting_session_games, else: []
 
     unfiltered_available_games =
@@ -790,6 +809,14 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
     socket
     |> assign(:wheel_format_options, wheel_format_options(wheel_formats))
+    |> assign(:selected_wheel_format, selected_wheel_format)
+    |> assign(
+      :selected_wheel_format_candidate_count,
+      selected_wheel_format_candidate_count(
+        socket.assigns.current_community,
+        selected_wheel_format
+      )
+    )
     |> assign(
       :wheel_format_form,
       wheel_format_form(wheel_formats, socket.assigns.selected_wheel_format_id)
@@ -855,13 +882,35 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   defp selected_session_id_param(_params), do: nil
 
   defp selected_wheel_format_id_param(%{"wheel_format_id" => wheel_format_id}) do
-    case Integer.parse(wheel_format_id) do
-      {id, ""} -> id
+    parsed_integer(wheel_format_id)
+  end
+
+  defp selected_wheel_format_id_param(_params), do: nil
+
+  defp parsed_integer(value) when is_integer(value), do: value
+
+  defp parsed_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} -> integer
       _invalid -> nil
     end
   end
 
-  defp selected_wheel_format_id_param(_params), do: nil
+  defp parsed_integer(_value), do: nil
+
+  defp selected_wheel_format([], _selected_wheel_format_id), do: nil
+
+  defp selected_wheel_format(wheel_formats, nil), do: hd(wheel_formats)
+
+  defp selected_wheel_format(wheel_formats, selected_wheel_format_id) do
+    Enum.find(wheel_formats, &(&1.id == selected_wheel_format_id)) || hd(wheel_formats)
+  end
+
+  defp selected_wheel_format_candidate_count(_community, nil), do: 0
+
+  defp selected_wheel_format_candidate_count(community, selected_wheel_format) do
+    Voting.count_wheel_format_candidate_games(community, selected_wheel_format)
+  end
 
   defp session_button_class(%VotingSession{} = session, selected_session) do
     [

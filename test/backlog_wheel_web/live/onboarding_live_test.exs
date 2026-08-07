@@ -58,7 +58,7 @@ defmodule BacklogWheelWeb.OnboardingLiveTest do
     assert Repo.aggregate(
              from(format in WheelFormat, where: format.community_id == ^community.id),
              :count
-           ) == 3
+           ) == 4
   end
 
   @tag :unauthenticated

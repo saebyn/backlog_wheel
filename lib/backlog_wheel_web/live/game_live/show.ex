@@ -56,6 +56,7 @@ defmodule BacklogWheelWeb.GameLive.Show do
         <:item title="Image URL">{@game.image_url}</:item>
         <:item title="Include in wheel">{@game.include_in_wheel}</:item>
         <:item title="Played on stream">{@game.played_on_stream}</:item>
+        <:item title="Playtime">{format_playtime(@game.playtime_minutes)}</:item>
         <:item title="Last played at">{@game.last_played_at}</:item>
       </.list>
     </Layouts.app>
@@ -68,5 +69,19 @@ defmodule BacklogWheelWeb.GameLive.Show do
      socket
      |> assign(:page_title, "Show Game")
      |> assign(:game, Backlog.get_game!(socket.assigns.current_community, id))}
+  end
+
+  defp format_playtime(nil), do: "0m"
+  defp format_playtime(minutes) when minutes < 60, do: "#{minutes}m"
+
+  defp format_playtime(minutes) do
+    hours = div(minutes, 60)
+    remaining_minutes = rem(minutes, 60)
+
+    if remaining_minutes == 0 do
+      "#{hours}h"
+    else
+      "#{hours}h #{remaining_minutes}m"
+    end
   end
 end

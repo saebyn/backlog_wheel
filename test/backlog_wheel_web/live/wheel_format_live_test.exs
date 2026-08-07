@@ -20,6 +20,9 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
     assert has_element?(view, "#settings-nav-theme", "Theme")
     assert has_element?(view, "#settings-nav-formats", "Wheel Formats")
     assert has_element?(view, "#settings-nav-twitch", "Twitch")
+    assert has_element?(view, "#wheel-format-tabs")
+    assert has_element?(view, "#wheel-format-list-tab.btn-accent", "Formats List")
+    assert has_element?(view, "#wheel-format-editor-tab", "Create / Edit")
     assert has_element?(view, "#create-wheel-format", "Create Wheel Format")
     assert has_element?(view, "#wheel-format-#{format.id}", "Community Format")
     assert has_element?(view, "#edit-wheel-format-#{format.id}.btn", "Edit")
@@ -31,6 +34,10 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
   test "creates a custom Wheel Format", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/settings/formats")
 
+    view |> element("#create-wheel-format") |> render_click()
+
+    assert has_element?(view, "#wheel-format-editor-tab.btn-accent", "Create / Edit")
+
     view
     |> form("#wheel-format-form",
       wheel_format: %{
@@ -41,6 +48,9 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
         is_enabled: "true",
         include_in_wheel: "true",
         unplayed_only: "true",
+        under_1_hour: "true",
+        min_playtime_minutes: "",
+        max_playtime_minutes: "",
         base_weight: "3"
       }
     )
@@ -48,6 +58,7 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
 
     assert has_element?(view, "#wheel-formats-list", "Short Vote")
     assert has_element?(view, "#wheel-formats-list", "Unplayed games only")
+    assert has_element?(view, "#wheel-formats-list", "Under 1 hour")
 
     format =
       Process.get(:test_community)
@@ -56,6 +67,7 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
 
     assert format.default_session_title == "Short Vote Night"
     assert format.candidate_rules["played_on_stream"] == false
+    assert format.candidate_rules["max_playtime_minutes"] == 59
     assert format.weighting_rules["base_weight"] == 3
   end
 
@@ -63,6 +75,8 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
     format = wheel_format_fixture(%{name: "Original Format"})
 
     {:ok, view, _html} = live(conn, ~p"/settings/formats")
+
+    view |> element("#create-wheel-format") |> render_click()
 
     view
     |> form("#wheel-format-form",
@@ -74,10 +88,20 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
         is_enabled: "true",
         include_in_wheel: "true",
         unplayed_only: "false",
+        under_1_hour: "false",
+        min_playtime_minutes: "",
+        max_playtime_minutes: "",
         base_weight: "1"
       }
     )
     |> render_change()
+
+    assert has_element?(
+             view,
+             "#wheel-format-list-tab[data-confirm='Discard unsaved changes and return to the Wheel Format list?']"
+           )
+
+    view |> element("#wheel-format-list-tab") |> render_click()
 
     assert has_element?(
              view,
@@ -88,6 +112,7 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
 
     assert has_element?(view, "#wheel_format_name[value='Unsubmitted Create Format']")
 
+    view |> element("#wheel-format-list-tab") |> render_click()
     view |> element("#edit-wheel-format-#{format.id}") |> render_click()
 
     assert has_element?(view, "#wheel-format-editor.scroll-mt-24")
@@ -99,6 +124,7 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
     assert has_element?(view, "#wheel-format-form-title", "Create Format")
     refute has_element?(view, "#new-wheel-format")
 
+    view |> element("#wheel-format-list-tab") |> render_click()
     view |> element("#edit-wheel-format-#{format.id}") |> render_click()
 
     view
@@ -111,6 +137,9 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
         is_enabled: "true",
         include_in_wheel: "true",
         unplayed_only: "false",
+        under_1_hour: "false",
+        min_playtime_minutes: "60",
+        max_playtime_minutes: "180",
         base_weight: "2"
       }
     )
@@ -126,6 +155,8 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
       |> Voting.list_all_wheel_formats()
       |> Enum.find(& &1.is_default)
 
+    view |> element("#wheel-format-list-tab") |> render_click()
+
     assert has_element?(
              view,
              "#edit-wheel-format-#{format.id}[data-confirm='Discard unsaved changes and edit this Wheel Format?']"
@@ -135,6 +166,8 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
              view,
              "#edit-wheel-format-#{default_format.id}[data-confirm='Discard unsaved changes and edit this Wheel Format?']"
            )
+
+    view |> element("#edit-wheel-format-#{format.id}") |> render_click()
 
     view
     |> form("#wheel-format-form",
@@ -146,6 +179,9 @@ defmodule BacklogWheelWeb.WheelFormatLiveTest do
         is_enabled: "true",
         include_in_wheel: "true",
         unplayed_only: "false",
+        under_1_hour: "false",
+        min_playtime_minutes: "60",
+        max_playtime_minutes: "180",
         base_weight: "2"
       }
     )

@@ -146,10 +146,15 @@ defmodule BacklogWheel.VotingTest do
       assert {:ok, formats} = Voting.ensure_default_wheel_formats(community)
 
       assert Enum.map(formats, & &1.name) == [
+               "Backlog buster",
                "Fresh backlog",
                "Keep the streak alive",
                "Chaos night"
              ]
+
+      backlog_buster = Enum.find(formats, &(&1.name == "Backlog buster"))
+      assert backlog_buster.candidate_rules["include_in_wheel"] == true
+      assert backlog_buster.candidate_rules["max_playtime_minutes"] == 59
 
       assert {:ok, formats_again} = Voting.ensure_default_wheel_formats(community)
       assert Enum.map(formats_again, & &1.id) == Enum.map(formats, & &1.id)
@@ -243,6 +248,75 @@ defmodule BacklogWheel.VotingTest do
       assert pool_item.game_id == included_game.id
       assert pool_item.base_weight == 3
       refute Enum.any?(voting_session.voting_session_games, &(&1.game_id == played_game.id))
+    end
+
+    test "wheel format candidate playtime rules compose with eligibility rules" do
+      community = community_fixture()
+
+      no_recorded_playtime =
+        game_fixture(%{
+          community: community,
+          title: "No Recorded Playtime",
+          external_id: "no-recorded-playtime",
+          include_in_wheel: true,
+          played_on_stream: false,
+          playtime_minutes: nil
+        })
+
+      short_game =
+        game_fixture(%{
+          community: community,
+          title: "Short Game",
+          external_id: "short-game",
+          include_in_wheel: true,
+          played_on_stream: false,
+          playtime_minutes: 45
+        })
+
+      game_fixture(%{
+        community: community,
+        title: "Played Short Game",
+        external_id: "played-short-game",
+        include_in_wheel: true,
+        played_on_stream: true,
+        playtime_minutes: 30
+      })
+
+      game_fixture(%{
+        community: community,
+        title: "Long Game",
+        external_id: "long-game",
+        include_in_wheel: true,
+        played_on_stream: false,
+        playtime_minutes: 120
+      })
+
+      game_fixture(%{
+        community: community,
+        title: "Excluded Short Game",
+        external_id: "excluded-short-game",
+        include_in_wheel: false,
+        played_on_stream: false,
+        playtime_minutes: 15
+      })
+
+      wheel_format =
+        wheel_format_fixture(%{
+          community: community,
+          candidate_rules: %{
+            "include_in_wheel" => true,
+            "played_on_stream" => false,
+            "max_playtime_minutes" => 59
+          }
+        })
+
+      assert Enum.map(Voting.list_wheel_format_candidate_games(community, wheel_format), & &1.id) ==
+               [
+                 no_recorded_playtime.id,
+                 short_game.id
+               ]
+
+      assert Voting.count_wheel_format_candidate_games(community, wheel_format) == 2
     end
   end
 

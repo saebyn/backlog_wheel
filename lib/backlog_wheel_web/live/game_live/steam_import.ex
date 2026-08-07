@@ -106,8 +106,9 @@ defmodule BacklogWheelWeb.GameLive.SteamImport do
           <ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-base-content/70">
             <li>New Steam games are added with platform <code>steam</code>.</li>
             <li>Imported games are included on the wheel by default.</li>
+            <li>Steam playtime is saved from <code>playtime_forever</code>.</li>
             <li>Last played time is saved only when Steam returns <code>rtime_last_played</code>.</li>
-            <li>Re-imports refresh last played times from Steam.</li>
+            <li>Re-imports refresh playtime and last played times from Steam.</li>
             <li>Existing Steam games are skipped, preserving local edits.</li>
           </ul>
         </div>
@@ -115,7 +116,7 @@ defmodule BacklogWheelWeb.GameLive.SteamImport do
         <div :if={@summary} id="steam-import-summary" class="alert alert-info">
           <.icon name="hero-information-circle" class="size-5" />
           <div>
-            Imported {@summary.imported} games, refreshed {@summary.updated} last played times,
+            Imported {@summary.imported} games, refreshed {@summary.updated} Steam metadata updates,
             and skipped {@summary.skipped} existing games.
           </div>
         </div>

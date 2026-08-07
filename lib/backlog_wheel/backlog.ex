@@ -351,6 +351,7 @@ defmodule BacklogWheel.Backlog do
                external_id: external_id,
                image_url: Map.get(game_attrs, :image_url),
                include_in_wheel: true,
+               playtime_minutes: Map.get(game_attrs, :playtime_minutes),
                last_played_at: Map.get(game_attrs, :last_played_at)
              }) do
           {:ok, _game} -> {:ok, :imported}
@@ -365,7 +366,7 @@ defmodule BacklogWheel.Backlog do
   defp update_steam_game(%Game{} = game, game_attrs, external_id) do
     update_attrs =
       game_attrs
-      |> Map.take([:last_played_at, :image_url])
+      |> Map.take([:last_played_at, :image_url, :playtime_minutes])
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)
       |> Map.new()
 

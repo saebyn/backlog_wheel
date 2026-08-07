@@ -75,6 +75,12 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
 
     view
     |> form("#create-session-from-format-form", wheel_format: %{wheel_format_id: fresh_format.id})
+    |> render_change()
+
+    assert has_element?(view, "#selected-wheel-format-preview", "Preview pool: 1 games")
+
+    view
+    |> form("#create-session-from-format-form", wheel_format: %{wheel_format_id: fresh_format.id})
     |> render_submit()
 
     assert has_element?(view, "#selected-session-title", "Fresh Backlog Vote")
@@ -82,6 +88,42 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     assert has_element?(view, "#voting-session-pool", fresh_game.title)
     refute has_element?(view, "#voting-session-pool", "Played Format Game")
     assert has_element?(view, "#selected-session-pool-size", "1 games in this vote")
+  end
+
+  test "updates Wheel Format preview for playtime filters", %{conn: conn} do
+    community = Process.get(:test_community)
+
+    game_fixture(%{
+      title: "Unknown Playtime Game",
+      external_id: "unknown-playtime-game",
+      include_in_wheel: true,
+      playtime_minutes: nil
+    })
+
+    game_fixture(%{
+      title: "Short Preview Game",
+      external_id: "short-preview-game",
+      include_in_wheel: true,
+      playtime_minutes: 45
+    })
+
+    game_fixture(%{
+      title: "Long Preview Game",
+      external_id: "long-preview-game",
+      include_in_wheel: true,
+      playtime_minutes: 120
+    })
+
+    format =
+      wheel_format_fixture(%{
+        community: community,
+        name: "Under Hour Preview",
+        candidate_rules: %{"include_in_wheel" => true, "max_playtime_minutes" => 59}
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/voting?#{[wheel_format_id: format.id]}")
+
+    assert has_element?(view, "#selected-wheel-format-preview", "Preview pool: 2 games")
   end
 
   test "preselects a Wheel Format from the URL", %{conn: conn} do

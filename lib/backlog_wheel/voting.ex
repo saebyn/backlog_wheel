@@ -23,6 +23,15 @@ defmodule BacklogWheel.Voting do
 
   @default_wheel_formats [
     %{
+      name: "Backlog buster",
+      description: "Surface wheel-eligible games with less than one hour recorded playtime.",
+      default_session_title: "Backlog Buster Vote",
+      default_session_description: "A vote focused on barely-started or untouched backlog games.",
+      is_default: true,
+      candidate_rules: %{"include_in_wheel" => true, "max_playtime_minutes" => 59},
+      weighting_rules: %{"base_weight" => 1, "intent" => "under_one_hour"}
+    },
+    %{
       name: "Fresh backlog",
       description: "Prioritize games that have never been played on stream.",
       default_session_title: "Fresh Backlog Vote",
@@ -164,6 +173,25 @@ defmodule BacklogWheel.Voting do
   """
   def change_wheel_format(%WheelFormat{} = wheel_format, attrs \\ %{}) do
     WheelFormat.changeset(wheel_format, attrs)
+  end
+
+  @doc """
+  Returns games matching a Wheel Format's candidate rules.
+  """
+  def list_wheel_format_candidate_games(%Community{} = community, %WheelFormat{} = wheel_format) do
+    community
+    |> wheel_format_candidate_query(wheel_format)
+    |> order_by([game], asc: game.title)
+    |> Repo.all()
+  end
+
+  @doc """
+  Counts games matching a Wheel Format's candidate rules.
+  """
+  def count_wheel_format_candidate_games(%Community{} = community, %WheelFormat{} = wheel_format) do
+    community
+    |> wheel_format_candidate_query(wheel_format)
+    |> Repo.aggregate(:count, :id)
   end
 
   @doc """
@@ -1074,14 +1102,16 @@ defmodule BacklogWheel.Voting do
          %VotingSession{} = voting_session,
          %WheelFormat{} = wheel_format
        ) do
-    query =
-      Game
-      |> where([game], game.community_id == ^voting_session.community_id)
-      |> apply_candidate_rules(wheel_format.candidate_rules || %{})
-
-    query
+    %Community{id: voting_session.community_id}
+    |> wheel_format_candidate_query(wheel_format)
     |> order_by([game], asc: game.title)
     |> Repo.all()
+  end
+
+  defp wheel_format_candidate_query(%Community{} = community, %WheelFormat{} = wheel_format) do
+    Game
+    |> where([game], game.community_id == ^community.id)
+    |> apply_candidate_rules(wheel_format.candidate_rules || %{})
   end
 
   defp apply_candidate_rules(query, rules) do
@@ -1092,10 +1122,39 @@ defmodule BacklogWheel.Voting do
       {"played_on_stream", value}, query when is_boolean(value) ->
         where(query, [game], game.played_on_stream == ^value)
 
+      {"min_playtime_minutes", value}, query ->
+        case candidate_rule_integer(value) do
+          minutes when is_integer(minutes) ->
+            where(query, [game], fragment("coalesce(?, 0)", game.playtime_minutes) >= ^minutes)
+
+          nil ->
+            query
+        end
+
+      {"max_playtime_minutes", value}, query ->
+        case candidate_rule_integer(value) do
+          minutes when is_integer(minutes) ->
+            where(query, [game], fragment("coalesce(?, 0)", game.playtime_minutes) <= ^minutes)
+
+          nil ->
+            query
+        end
+
       _rule, query ->
         query
     end)
   end
+
+  defp candidate_rule_integer(value) when is_integer(value) and value >= 0, do: value
+
+  defp candidate_rule_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} when integer >= 0 -> integer
+      _invalid -> nil
+    end
+  end
+
+  defp candidate_rule_integer(_value), do: nil
 
   defp wheel_format_base_weight(%WheelFormat{weighting_rules: %{"base_weight" => weight}})
        when is_integer(weight) and weight > 0,

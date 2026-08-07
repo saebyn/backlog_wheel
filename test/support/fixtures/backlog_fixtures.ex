@@ -19,6 +19,7 @@ defmodule BacklogWheel.BacklogFixtures do
         include_in_wheel: true,
         last_played_at: ~U[2026-06-05 17:55:00Z],
         platform: "some platform",
+        playtime_minutes: 90,
         played_on_stream: true,
         title: "some title"
       })

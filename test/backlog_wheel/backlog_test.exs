@@ -344,6 +344,7 @@ defmodule BacklogWheel.BacklogTest do
         external_id: "some external_id",
         include_in_wheel: true,
         played_on_stream: true,
+        playtime_minutes: 240,
         last_played_at: ~U[2026-06-05 17:55:00Z]
       }
 
@@ -354,6 +355,7 @@ defmodule BacklogWheel.BacklogTest do
       assert game.community_id == community.id
       assert game.include_in_wheel == true
       assert game.played_on_stream == true
+      assert game.playtime_minutes == 240
       assert game.last_played_at == ~U[2026-06-05 17:55:00Z]
     end
 
@@ -393,6 +395,7 @@ defmodule BacklogWheel.BacklogTest do
       assert game.external_id == nil
       assert game.include_in_wheel == false
       assert game.played_on_stream == false
+      assert game.playtime_minutes == nil
       assert game.last_played_at == nil
     end
 
@@ -411,6 +414,7 @@ defmodule BacklogWheel.BacklogTest do
         external_id: "some updated external_id",
         include_in_wheel: false,
         played_on_stream: false,
+        playtime_minutes: 30,
         last_played_at: ~U[2026-06-06 17:55:00Z]
       }
 
@@ -420,6 +424,7 @@ defmodule BacklogWheel.BacklogTest do
       assert game.external_id == "some updated external_id"
       assert game.include_in_wheel == false
       assert game.played_on_stream == false
+      assert game.playtime_minutes == 30
       assert game.last_played_at == ~U[2026-06-06 17:55:00Z]
     end
 
@@ -458,6 +463,7 @@ defmodule BacklogWheel.BacklogTest do
                    appid: 10,
                    name: "Counter-Strike",
                    image_url: "https://example.com/counter-strike.jpg",
+                   playtime_minutes: 15,
                    last_played_at: ~U[2024-06-01 00:00:00Z]
                  },
                  %{appid: 70, name: "Half-Life"}
@@ -470,6 +476,7 @@ defmodule BacklogWheel.BacklogTest do
       assert counter_strike.title == "Counter-Strike"
       assert counter_strike.image_url == "https://example.com/counter-strike.jpg"
       assert counter_strike.include_in_wheel == true
+      assert counter_strike.playtime_minutes == 15
       assert counter_strike.last_played_at == ~U[2024-06-01 00:00:00Z]
 
       assert %Game{} =
@@ -494,11 +501,17 @@ defmodule BacklogWheel.BacklogTest do
 
       assert {:ok, %{imported: 0, updated: 1, skipped: 0, errors: []}} =
                Backlog.import_steam_games(community, [
-                 %{appid: 10, name: "Counter-Strike", last_played_at: ~U[2024-06-01 00:00:00Z]}
+                 %{
+                   appid: 10,
+                   name: "Counter-Strike",
+                   playtime_minutes: 20,
+                   last_played_at: ~U[2024-06-01 00:00:00Z]
+                 }
                ])
 
       assert Backlog.get_game!(existing.id).title == "My Edited Title"
       assert Backlog.get_game!(existing.id).include_in_wheel == false
+      assert Backlog.get_game!(existing.id).playtime_minutes == 20
       assert Backlog.get_game!(existing.id).last_played_at == ~U[2024-06-01 00:00:00Z]
     end
 

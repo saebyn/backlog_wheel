@@ -7,7 +7,7 @@ defmodule BacklogWheelWeb.SettingsLive.Theme do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_community={@current_community}>
-      <div class="grid gap-6 lg:grid-cols-[14rem_1fr]">
+      <div class="grid gap-6 lg:grid-cols-[12rem_minmax(0,1fr)]">
         <Layouts.settings_nav active={:theme} />
 
         <section class="space-y-6">

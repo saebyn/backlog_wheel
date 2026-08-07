@@ -141,6 +141,9 @@ defmodule BacklogWheelWeb.GameLive.Index do
             {if game.played_on_stream, do: "Played", else: "Unplayed"}
           </.button>
         </:col>
+        <:col :let={{_id, game}} label="Playtime">
+          {format_playtime(game.playtime_minutes)}
+        </:col>
         <:col :let={{_id, game}} label="Last played">
           <span title={format_utc_datetime(game.last_played_at)}>
             {format_datetime_with_age(game.last_played_at)}
@@ -301,5 +304,19 @@ defmodule BacklogWheelWeb.GameLive.Index do
 
   defp tag_filter_options(tags) do
     [{"All tags", ""} | Enum.map(tags, &{&1.name, &1.slug})]
+  end
+
+  defp format_playtime(nil), do: "0m"
+  defp format_playtime(minutes) when minutes < 60, do: "#{minutes}m"
+
+  defp format_playtime(minutes) do
+    hours = div(minutes, 60)
+    remaining_minutes = rem(minutes, 60)
+
+    if remaining_minutes == 0 do
+      "#{hours}h"
+    else
+      "#{hours}h #{remaining_minutes}m"
+    end
   end
 end

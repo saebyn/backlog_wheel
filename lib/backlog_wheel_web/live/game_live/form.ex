@@ -99,6 +99,7 @@ defmodule BacklogWheelWeb.GameLive.Form do
         </div>
         <.input field={@form[:include_in_wheel]} type="checkbox" label="Include in wheel" />
         <.input field={@form[:played_on_stream]} type="checkbox" label="Played on stream" />
+        <.input field={@form[:playtime_minutes]} type="number" label="Playtime minutes" min="0" />
         <.input field={@form[:last_played_at]} type="datetime-local" label="Last played at" />
         <footer>
           <.button phx-disable-with="Saving..." variant="primary">Save Game</.button>

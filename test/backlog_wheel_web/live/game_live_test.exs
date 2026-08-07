@@ -16,6 +16,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
     include_in_wheel: true,
     tag_names: "cozy, puzzle",
     played_on_stream: true,
+    playtime_minutes: 45,
     last_played_at: "2026-06-05T17:55:00Z"
   }
   @update_attrs %{
@@ -26,6 +27,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
     include_in_wheel: false,
     tag_names: "short",
     played_on_stream: false,
+    playtime_minutes: 120,
     last_played_at: "2026-06-06T17:55:00Z"
   }
   @invalid_attrs %{
@@ -36,6 +38,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
     include_in_wheel: false,
     tag_names: nil,
     played_on_stream: false,
+    playtime_minutes: nil,
     last_played_at: nil
   }
   defp create_game(_) do
@@ -81,6 +84,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
       assert html =~ "Game created successfully"
       assert html =~ "some title"
       assert html =~ "https://example.com/create-image.jpg"
+      assert html =~ "45m"
       assert html =~ "cozy"
       assert html =~ "puzzle"
     end
@@ -170,6 +174,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
       assert html =~ "Game updated successfully"
       assert html =~ "some updated title"
       assert html =~ "https://example.com/update-image.jpg"
+      assert html =~ "2h"
       assert html =~ "short"
     end
 
@@ -343,7 +348,7 @@ defmodule BacklogWheelWeb.GameLiveTest do
       assert html =~ "Steam configured"
       assert html =~ "Save Steam Credentials"
       assert html =~ "Imported games are included on the wheel by default"
-      assert html =~ "Re-imports refresh last played times"
+      assert html =~ "Re-imports refresh playtime and last played times"
     end
 
     test "saves Steam credentials for the current community", %{conn: conn} do

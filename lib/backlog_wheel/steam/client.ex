@@ -38,7 +38,8 @@ defmodule BacklogWheel.Steam.Client do
       appid: appid,
       name: name,
       image_url: steam_icon_url(appid, game["img_icon_url"]),
-      last_played_at: normalize_last_played_at(game["rtime_last_played"])
+      last_played_at: normalize_last_played_at(game["rtime_last_played"]),
+      playtime_minutes: normalize_playtime_minutes(game["playtime_forever"])
     }
   end
 
@@ -60,6 +61,19 @@ defmodule BacklogWheel.Steam.Client do
   end
 
   defp normalize_last_played_at(_unix_timestamp), do: nil
+
+  defp normalize_playtime_minutes(nil), do: nil
+
+  defp normalize_playtime_minutes(minutes) when is_integer(minutes) and minutes >= 0, do: minutes
+
+  defp normalize_playtime_minutes(minutes) when is_binary(minutes) do
+    case Integer.parse(minutes) do
+      {minutes, ""} when minutes >= 0 -> minutes
+      _invalid -> nil
+    end
+  end
+
+  defp normalize_playtime_minutes(_minutes), do: nil
 
   defp steam_icon_url(_appid, icon_hash) when icon_hash in [nil, ""], do: nil
 

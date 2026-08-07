@@ -14,6 +14,7 @@ defmodule BacklogWheel.Backlog.Game do
     field :include_in_wheel, :boolean, default: false
     field :played_on_stream, :boolean, default: false
     field :last_played_at, :utc_datetime
+    field :playtime_minutes, :integer
     field :tag_names, :string, virtual: true
 
     belongs_to :community, Community
@@ -35,9 +36,11 @@ defmodule BacklogWheel.Backlog.Game do
       :include_in_wheel,
       :played_on_stream,
       :last_played_at,
+      :playtime_minutes,
       :tag_names
     ])
     |> validate_required([:title, :community_id])
+    |> validate_number(:playtime_minutes, greater_than_or_equal_to: 0)
     |> unique_constraint([:community_id, :platform, :external_id],
       name: :games_community_platform_external_id_index
     )

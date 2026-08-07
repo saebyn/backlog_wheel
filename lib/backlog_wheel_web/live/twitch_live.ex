@@ -8,7 +8,7 @@ defmodule BacklogWheelWeb.TwitchLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_community={@current_community}>
-      <div class="grid gap-6 lg:grid-cols-[14rem_minmax(0,1fr)]">
+      <div class="grid gap-6 lg:grid-cols-[12rem_minmax(0,1fr)]">
         <Layouts.settings_nav active={:twitch} />
 
         <section class="max-w-5xl rounded-[2rem] border border-base-300 bg-base-100 p-6 shadow-xl sm:p-8">

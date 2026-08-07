@@ -8,7 +8,7 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_user={@current_user} current_community={@current_community}>
-      <div class="grid gap-6 lg:grid-cols-[14rem_1fr]">
+      <div class="grid gap-6 lg:grid-cols-[12rem_minmax(0,1fr)]">
         <Layouts.settings_nav active={:formats} />
 
         <section id="wheel-format-management" class="space-y-8">
@@ -39,8 +39,30 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
             </div>
           </div>
 
-          <div class="grid gap-6 xl:grid-cols-[1fr_25rem]">
-            <section id="wheel-formats-list" class="space-y-4">
+          <div class="space-y-6">
+            <div
+              id="wheel-format-tabs"
+              class="flex flex-wrap gap-2 rounded-2xl border border-base-300 bg-base-100 p-2 shadow-sm"
+            >
+              <.button
+                id="wheel-format-list-tab"
+                phx-click="show_list"
+                data-confirm={list_tab_confirm(@form_dirty?)}
+                class={tab_button_class(@active_tab, :list)}
+              >
+                Formats List
+              </.button>
+              <.button
+                id="wheel-format-editor-tab"
+                phx-click="new"
+                data-confirm={new_format_confirm(@editing_format, @editing_dirty?)}
+                class={tab_button_class(@active_tab, :editor)}
+              >
+                Create / Edit
+              </.button>
+            </div>
+
+            <section :if={@active_tab == :list} id="wheel-formats-list" class="space-y-4">
               <article
                 :for={format <- @wheel_formats}
                 id={"wheel-format-#{format.id}"}
@@ -70,8 +92,9 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
                       {format.default_session_description}
                     </p>
                     <div class="mt-4 flex flex-wrap gap-2 text-xs font-bold uppercase tracking-[0.16em] text-base-content/50">
-                      <span>{format_rule_label(format)}</span>
+                      <span :for={label <- format_rule_labels(format)}>{label}</span>
                       <span>Base weight {format_base_weight(format)}</span>
+                      <span>{Map.fetch!(@candidate_counts, format.id)} preview games</span>
                     </div>
                   </div>
 
@@ -124,9 +147,10 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
               </article>
             </section>
 
-            <aside
+            <section
+              :if={@active_tab == :editor}
               id="wheel-format-editor"
-              class="scroll-mt-24 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl xl:sticky xl:top-6 xl:self-start"
+              class="scroll-mt-24 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl"
             >
               <div class="flex items-start justify-between gap-3">
                 <div>
@@ -185,13 +209,32 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
                     type="checkbox"
                     label="Include only unplayed games"
                   />
+                  <.input
+                    field={@form[:under_1_hour]}
+                    type="checkbox"
+                    label="Under 1 hour played"
+                  />
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <.input
+                      field={@form[:min_playtime_minutes]}
+                      type="number"
+                      label="Minimum playtime minutes"
+                      min="0"
+                    />
+                    <.input
+                      field={@form[:max_playtime_minutes]}
+                      type="number"
+                      label="Maximum playtime minutes"
+                      min="0"
+                    />
+                  </div>
                   <.input field={@form[:base_weight]} type="number" label="Base weight" min="1" />
                 </div>
                 <.button id="save-wheel-format" class="btn btn-accent w-full hover-lift">
                   {if(@editing_format, do: "Save Wheel Format", else: "Create Wheel Format")}
                 </.button>
               </.form>
-            </aside>
+            </section>
           </div>
         </section>
       </div>
@@ -207,6 +250,7 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
     {:ok,
      socket
      |> assign(:page_title, "Wheel Formats")
+     |> assign(:active_tab, :list)
      |> assign(:editing_format, nil)
      |> assign(:editing_dirty?, false)
      |> assign(:form_dirty?, false)
@@ -215,6 +259,10 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
   end
 
   @impl true
+  def handle_event("show_list", _params, socket) do
+    {:noreply, assign(socket, :active_tab, :list)}
+  end
+
   def handle_event("new", _params, socket) do
     socket =
       if socket.assigns.editing_format do
@@ -227,10 +275,13 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
           is_enabled: true
         })
       else
-        socket
+        assign(socket, :active_tab, :editor)
       end
 
-    {:noreply, push_event(socket, "wheel-format-editing", %{id: "wheel-format-editor"})}
+    {:noreply,
+     socket
+     |> assign(:active_tab, :editor)
+     |> push_event("wheel-format-editing", %{id: "wheel-format-editor"})}
   end
 
   def handle_event("edit", %{"id" => id}, socket) do
@@ -239,6 +290,7 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
     {:noreply,
      socket
      |> assign(:editing_format, format)
+     |> assign(:active_tab, :editor)
      |> assign(:editing_dirty?, false)
      |> assign(:form_dirty?, false)
      |> assign_form(format)
@@ -268,6 +320,7 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
         {:noreply,
          socket
          |> put_flash(:info, "Wheel Format saved")
+         |> assign(:active_tab, :list)
          |> assign(:editing_format, nil)
          |> assign(:editing_dirty?, false)
          |> assign(:form_dirty?, false)
@@ -304,6 +357,7 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
         {:noreply,
          socket
          |> put_flash(:info, "Wheel Format removed")
+         |> assign(:active_tab, :list)
          |> assign(:editing_format, nil)
          |> assign(:editing_dirty?, false)
          |> assign(:form_dirty?, false)
@@ -319,11 +373,18 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
   end
 
   defp assign_formats(socket) do
+    wheel_formats = Voting.list_all_wheel_formats(socket.assigns.current_community)
+    candidate_counts = Map.new(wheel_formats, &{&1.id, candidate_count(socket, &1)})
+
     assign(
       socket,
-      :wheel_formats,
-      Voting.list_all_wheel_formats(socket.assigns.current_community)
+      wheel_formats: wheel_formats,
+      candidate_counts: candidate_counts
     )
+  end
+
+  defp candidate_count(socket, %WheelFormat{} = format) do
+    Voting.count_wheel_format_candidate_games(socket.assigns.current_community, format)
   end
 
   defp assign_form(socket, %WheelFormat{} = format) do
@@ -336,6 +397,17 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
     do: "Discard unsaved changes and create a new Wheel Format?"
 
   defp new_format_confirm(_editing_format, _editing_dirty?), do: nil
+
+  defp list_tab_confirm(true), do: "Discard unsaved changes and return to the Wheel Format list?"
+  defp list_tab_confirm(false), do: nil
+
+  defp tab_button_class(active_tab, tab) do
+    [
+      "btn btn-sm hover-lift",
+      active_tab == tab && "btn-accent",
+      active_tab != tab && "btn-ghost"
+    ]
+  end
 
   defp edit_format_confirm(true), do: "Discard unsaved changes and edit this Wheel Format?"
   defp edit_format_confirm(false), do: nil
@@ -367,6 +439,9 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
       "is_enabled" => format.is_enabled,
       "include_in_wheel" => Map.get(format.candidate_rules || %{}, "include_in_wheel", true),
       "unplayed_only" => Map.get(format.candidate_rules || %{}, "played_on_stream") == false,
+      "under_1_hour" => Map.get(format.candidate_rules || %{}, "max_playtime_minutes") == 59,
+      "min_playtime_minutes" => Map.get(format.candidate_rules || %{}, "min_playtime_minutes"),
+      "max_playtime_minutes" => Map.get(format.candidate_rules || %{}, "max_playtime_minutes"),
       "base_weight" => format_base_weight(format)
     }
   end
@@ -378,6 +453,23 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
     unplayed_only? =
       truthy?(Map.get(params, "unplayed_only", Map.get(params, :unplayed_only, false)))
 
+    under_1_hour? =
+      truthy?(Map.get(params, "under_1_hour", Map.get(params, :under_1_hour, false)))
+
+    min_playtime_minutes =
+      optional_non_negative_integer(
+        Map.get(params, "min_playtime_minutes", Map.get(params, :min_playtime_minutes))
+      )
+
+    max_playtime_minutes =
+      if under_1_hour? do
+        59
+      else
+        optional_non_negative_integer(
+          Map.get(params, "max_playtime_minutes", Map.get(params, :max_playtime_minutes))
+        )
+      end
+
     base_weight =
       positive_integer(Map.get(params, "base_weight", Map.get(params, :base_weight, 1)))
 
@@ -385,6 +477,8 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
       %{}
       |> maybe_put_rule("include_in_wheel", include_in_wheel?)
       |> maybe_put_rule("played_on_stream", false, unplayed_only?)
+      |> maybe_put_integer_rule("min_playtime_minutes", min_playtime_minutes)
+      |> maybe_put_integer_rule("max_playtime_minutes", max_playtime_minutes)
 
     %{
       name: Map.get(params, "name", Map.get(params, :name)),
@@ -408,6 +502,9 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
   defp maybe_put_rule(rules, key, value, true), do: Map.put(rules, key, value)
   defp maybe_put_rule(rules, _key, _value, false), do: rules
 
+  defp maybe_put_integer_rule(rules, _key, nil), do: rules
+  defp maybe_put_integer_rule(rules, key, value), do: Map.put(rules, key, value)
+
   defp truthy?(value) when value in [true, "true", "1", 1], do: true
   defp truthy?(_value), do: false
 
@@ -422,13 +519,65 @@ defmodule BacklogWheelWeb.WheelFormatLive.Index do
 
   defp positive_integer(_value), do: 1
 
-  defp format_rule_label(%WheelFormat{candidate_rules: %{"played_on_stream" => false}}),
-    do: "Unplayed games only"
+  defp optional_non_negative_integer(nil), do: nil
+  defp optional_non_negative_integer(""), do: nil
+  defp optional_non_negative_integer(value) when is_integer(value) and value >= 0, do: value
 
-  defp format_rule_label(%WheelFormat{candidate_rules: %{"include_in_wheel" => true}}),
-    do: "Wheel-eligible games"
+  defp optional_non_negative_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} when integer >= 0 -> integer
+      _invalid -> nil
+    end
+  end
 
-  defp format_rule_label(_format), do: "Broad game pool"
+  defp optional_non_negative_integer(_value), do: nil
+
+  defp format_rule_labels(%WheelFormat{} = format) do
+    rules = format.candidate_rules || %{}
+
+    [
+      if(rules["played_on_stream"] == false,
+        do: "Unplayed games only",
+        else: wheel_eligibility_label(rules)
+      ),
+      playtime_rule_label(rules)
+    ]
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp wheel_eligibility_label(%{"include_in_wheel" => true}), do: "Wheel-eligible games"
+  defp wheel_eligibility_label(_rules), do: "Broad game pool"
+
+  defp playtime_rule_label(%{"max_playtime_minutes" => 59, "min_playtime_minutes" => min})
+       when min in [nil, 0],
+       do: "Under 1 hour"
+
+  defp playtime_rule_label(%{"max_playtime_minutes" => 59}), do: "Under 1 hour"
+
+  defp playtime_rule_label(%{"min_playtime_minutes" => min, "max_playtime_minutes" => max})
+       when is_integer(min) and is_integer(max),
+       do: "Playtime #{format_playtime_minutes(min)}-#{format_playtime_minutes(max)}"
+
+  defp playtime_rule_label(%{"min_playtime_minutes" => min}) when is_integer(min),
+    do: "Playtime #{format_playtime_minutes(min)}+"
+
+  defp playtime_rule_label(%{"max_playtime_minutes" => max}) when is_integer(max),
+    do: "Playtime up to #{format_playtime_minutes(max)}"
+
+  defp playtime_rule_label(_rules), do: nil
+
+  defp format_playtime_minutes(minutes) when minutes < 60, do: "#{minutes}m"
+
+  defp format_playtime_minutes(minutes) do
+    hours = div(minutes, 60)
+    remaining_minutes = rem(minutes, 60)
+
+    if remaining_minutes == 0 do
+      "#{hours}h"
+    else
+      "#{hours}h #{remaining_minutes}m"
+    end
+  end
 
   defp format_base_weight(%WheelFormat{weighting_rules: %{"base_weight" => weight}})
        when is_integer(weight),
