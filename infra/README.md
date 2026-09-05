@@ -2,7 +2,11 @@
 
 The repository includes a production Docker image and AWS CDK Python app for the small EC2 deployment at `https://wheel.streamosaic.app`.
 
-The CDK app creates `BacklogWheelEc2Stack`, which owns:
+The CDK app creates `BacklogWheelBackupStack`, which owns:
+
+- A retained, versioned S3 bucket for database backups.
+
+The CDK app also creates `BacklogWheelEc2Stack`, which owns:
 
 - A small EC2 instance.
 - An Elastic IP and Route 53 `A` record for `wheel.streamosaic.app`.
@@ -11,7 +15,7 @@ The CDK app creates `BacklogWheelEc2Stack`, which owns:
 - A generated local Postgres credentials secret with a retain policy.
 - A production Docker image asset published through the CDK bootstrap ECR repository.
 
-The instance runs Docker containers for Phoenix, Postgres, and Caddy. Caddy terminates HTTPS directly on the instance. Postgres data lives on the instance's Docker volume.
+The instance runs Docker containers for Phoenix, Postgres, and Caddy. Caddy terminates HTTPS directly on the instance. Postgres data lives on the instance's Docker volume. On first boot, the instance starts Postgres and restores the latest retained S3 backup before starting Phoenix if the database has no public tables. App deploys upload a `pg_dump -Fc` backup to the retained backup bucket before replacing the app container. Backups also run hourly through a systemd timer and during graceful instance shutdown through a systemd service stop hook.
 
 ## Prerequisites
 
@@ -51,6 +55,36 @@ If the secret already exists, update it only through Secrets Manager or the AWS 
 ## Deploy
 
 Deploy from the repository root:
+
+Deploy the backup bucket first. This does not touch the EC2 instance:
+
+```sh
+AWS_PROFILE=your-profile cdk deploy BacklogWheelBackupStack
+```
+
+To immediately upload manual backups from the current instance before deploying the EC2 stack changes, deploy the backup stack with the current instance role ARN:
+
+```sh
+INSTANCE_ID=your-instance-id
+PROFILE=your-profile
+INSTANCE_PROFILE_ARN=$(AWS_PROFILE="$PROFILE" aws ec2 describe-instances \
+  --instance-ids "$INSTANCE_ID" \
+  --query 'Reservations[0].Instances[0].IamInstanceProfile.Arn' \
+  --output text)
+INSTANCE_PROFILE_NAME=${INSTANCE_PROFILE_ARN##*/}
+ROLE_NAME=$(AWS_PROFILE="$PROFILE" aws iam get-instance-profile \
+  --instance-profile-name "$INSTANCE_PROFILE_NAME" \
+  --query 'InstanceProfile.Roles[0].RoleName' \
+  --output text)
+ROLE_ARN=$(AWS_PROFILE="$PROFILE" aws iam get-role \
+  --role-name "$ROLE_NAME" \
+  --query 'Role.Arn' \
+  --output text)
+AWS_PROFILE="$PROFILE" cdk deploy BacklogWheelBackupStack \
+  --context ec2InstanceRoleArn="$ROLE_ARN"
+```
+
+Then deploy the EC2 stack only after `cdk diff BacklogWheelEc2Stack` confirms the instance will not be replaced:
 
 ```sh
 AWS_PROFILE=your-profile cdk deploy BacklogWheelEc2Stack
@@ -100,6 +134,10 @@ The app container also sets these non-secret runtime values:
 
 The Phoenix release runs migrations automatically on startup.
 
+On new EC2 instance bootstrap, the stack starts Postgres and runs `/usr/local/bin/backlog-wheel-restore-latest-db` before starting Phoenix. The restore script skips restore when the database already has public tables, restores the newest `database/*.dump` object from the backup bucket when the database is empty, and continues with an empty database only when no backup exists.
+
+The host backup/restore scripts live in `infra/scripts/`, and their systemd units live in `infra/systemd/`. CDK reads these files at synth time and writes them onto the EC2 host through user data and the app deploy SSM document.
+
 ## Updating Environment Variables
 
 Runtime secrets live in Secrets Manager under `backlog-wheel/prototype/runtime`. Update that secret first, then run the CDK-managed SSM document to refresh the instance env file and recreate the app container.
@@ -136,11 +174,62 @@ sudo docker logs -f backlog-wheel-caddy
 sudo docker logs -f backlog-wheel-postgres
 ```
 
-Create a local database backup from the instance:
+Create a database backup from the instance and upload it to the retained backup bucket:
+
+```sh
+sudo /usr/local/bin/backlog-wheel-backup-db
+```
+
+Inspect the scheduled backup timer and shutdown backup hook:
+
+```sh
+sudo systemctl status backlog-wheel-backup.timer
+sudo systemctl list-timers backlog-wheel-backup.timer
+sudo systemctl status backlog-wheel-backup-on-shutdown.service
+```
+
+Run the same scheduled backup unit manually:
+
+```sh
+sudo systemctl start backlog-wheel-backup.service
+```
+
+Run the bootstrap restore command manually. It will skip restore unless the database has no public tables:
+
+```sh
+sudo /usr/local/bin/backlog-wheel-restore-latest-db
+```
+
+After the backup bucket and SSM deploy document are in place, disable root volume deletion for the current EC2 instance without replacing it:
+
+```sh
+AWS_PROFILE=your-profile aws ec2 modify-instance-attribute \
+  --instance-id INSTANCE_ID \
+  --block-device-mappings '[{"DeviceName":"/dev/xvda","Ebs":{"DeleteOnTermination":false}}]'
+```
+
+Create a local SQL database backup from the instance:
 
 ```sh
 DB_USERNAME=$(sudo python3 -c "import json; print(json.load(open('/opt/backlog-wheel/database-secret.json'))['username'])")
 sudo docker exec backlog-wheel-postgres pg_dump -U "$DB_USERNAME" -d backlog_wheel > "backlog_wheel-$(date +%Y%m%d%H%M%S).sql"
+```
+
+List retained backup files:
+
+```sh
+AWS_PROFILE=your-profile aws s3 ls s3://BACKUP_BUCKET_NAME/database/
+```
+
+Use the `DatabaseBackupBucketName` stack output for `BACKUP_BUCKET_NAME`.
+
+Restore a compressed backup on the instance:
+
+```sh
+AWS_PROFILE=your-profile aws s3 cp s3://BACKUP_BUCKET_NAME/database/BACKUP_FILE.dump ./BACKUP_FILE.dump
+DB_USERNAME=$(sudo python3 -c "import json; print(json.load(open('/opt/backlog-wheel/database-secret.json'))['username'])")
+sudo docker cp ./BACKUP_FILE.dump backlog-wheel-postgres:/tmp/restore.dump
+sudo docker exec backlog-wheel-postgres pg_restore -U "$DB_USERNAME" -d backlog_wheel --clean --if-exists /tmp/restore.dump
 ```
 
 For app updates after the initial EC2 provision, run `cdk deploy BacklogWheelEc2Stack`. The CDK-managed `BacklogWheelDeployApp` SSM association pulls the new image and recreates the app container.

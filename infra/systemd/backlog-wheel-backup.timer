@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Backlog Wheel database backup hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=5m
+Unit=backlog-wheel-backup.service
+
+[Install]
+WantedBy=timers.target

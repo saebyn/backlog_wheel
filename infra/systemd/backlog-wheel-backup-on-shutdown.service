@@ -1,0 +1,14 @@
+[Unit]
+Description=Back up Backlog Wheel database on shutdown
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/usr/local/bin/backlog-wheel-backup-db
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target

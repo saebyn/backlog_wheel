@@ -3,6 +3,7 @@ import os
 
 import aws_cdk as cdk
 
+from backup_stack import BacklogWheelBackupStack
 from backlog_wheel_stack import BacklogWheelEc2Stack
 
 
@@ -15,9 +16,16 @@ env = cdk.Environment(
     region=region,
 )
 
+backup_stack = BacklogWheelBackupStack(
+    app,
+    "BacklogWheelBackupStack",
+    env=env,
+)
+
 BacklogWheelEc2Stack(
     app,
     "BacklogWheelEc2Stack",
+    backup_bucket=backup_stack.database_backup_bucket,
     env=env,
 )
 

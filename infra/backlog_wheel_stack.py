@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import aws_cdk as cdk
 from aws_cdk import (
@@ -8,14 +9,32 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_ecr_assets as ecr_assets,
     aws_route53 as route53,
+    aws_s3 as s3,
     aws_secretsmanager as secretsmanager,
     aws_ssm as ssm,
 )
 from constructs import Construct
 
 
+INFRA_DIR = Path(__file__).parent
+
+
+def read_infra_file(path: str) -> str:
+    return (INFRA_DIR / path).read_text()
+
+
+def write_file_command(path: str, content: str, marker: str) -> str:
+    return f"cat > {path} <<'{marker}'\n{content}\n{marker}"
+
+
 class BacklogWheelEc2Stack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        backup_bucket: s3.IBucket,
+        **kwargs,
+    ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         domain_name = self.node.try_get_context("domainName") or "wheel.streamosaic.app"
@@ -61,6 +80,7 @@ class BacklogWheelEc2Stack(Stack):
         )
         runtime_secret.grant_read(role)
         database_credentials.grant_read(role)
+        backup_bucket.grant_read_write(role)
 
         security_group = ec2.SecurityGroup(
             self,
@@ -116,6 +136,48 @@ class BacklogWheelEc2Stack(Stack):
             instance_id=instance.instance_id,
         )
 
+        backup_script = read_infra_file(
+            "scripts/backlog-wheel-backup-db.sh"
+        ).replace("__DATABASE_BACKUP_BUCKET__", backup_bucket.bucket_name)
+        restore_script = read_infra_file(
+            "scripts/backlog-wheel-restore-latest-db.sh"
+        ).replace("__DATABASE_BACKUP_BUCKET__", backup_bucket.bucket_name)
+
+        backup_install_commands = [
+            write_file_command(
+                "/usr/local/bin/backlog-wheel-backup-db", backup_script, "SCRIPT"
+            ),
+            "chmod 700 /usr/local/bin/backlog-wheel-backup-db",
+            write_file_command(
+                "/etc/systemd/system/backlog-wheel-backup.service",
+                read_infra_file("systemd/backlog-wheel-backup.service"),
+                "UNIT",
+            ),
+            write_file_command(
+                "/etc/systemd/system/backlog-wheel-backup.timer",
+                read_infra_file("systemd/backlog-wheel-backup.timer"),
+                "UNIT",
+            ),
+            write_file_command(
+                "/etc/systemd/system/backlog-wheel-backup-on-shutdown.service",
+                read_infra_file("systemd/backlog-wheel-backup-on-shutdown.service"),
+                "UNIT",
+            ),
+            "systemctl daemon-reload",
+            "systemctl enable --now backlog-wheel-backup.timer",
+            "systemctl enable --now backlog-wheel-backup-on-shutdown.service",
+        ]
+
+        restore_bootstrap_commands = [
+            write_file_command(
+                "/usr/local/bin/backlog-wheel-restore-latest-db",
+                restore_script,
+                "SCRIPT",
+            ),
+            "chmod 700 /usr/local/bin/backlog-wheel-restore-latest-db",
+            "/usr/local/bin/backlog-wheel-restore-latest-db",
+        ]
+
         instance.add_user_data(
             "set -euxo pipefail",
             "dnf update -y",
@@ -153,6 +215,7 @@ class BacklogWheelEc2Stack(Stack):
             "PY",
             "python3 /opt/backlog-wheel/write-env.py",
             "chmod 600 /opt/backlog-wheel/app.env /opt/backlog-wheel/*-secret.json",
+            *backup_install_commands,
             "docker network create backlog-wheel || true",
             "docker volume create backlog-wheel-postgres",
             "docker volume create backlog-wheel-caddy-data",
@@ -162,6 +225,7 @@ class BacklogWheelEc2Stack(Stack):
             "docker rm -f backlog-wheel-postgres || true",
             "docker run -d --name backlog-wheel-postgres --restart unless-stopped --network backlog-wheel --network-alias postgres -e POSTGRES_USER=\"$DB_USERNAME\" -e POSTGRES_PASSWORD=\"$DB_PASSWORD\" -e POSTGRES_DB=backlog_wheel -v backlog-wheel-postgres:/var/lib/postgresql/data postgres:17-alpine",
             "until docker exec backlog-wheel-postgres pg_isready -U \"$DB_USERNAME\" -d backlog_wheel; do sleep 2; done",
+            *restore_bootstrap_commands,
             f"docker pull {image.image_uri}",
             "docker rm -f backlog-wheel-app || true",
             f"docker run -d --name backlog-wheel-app --restart unless-stopped --network backlog-wheel --env-file /opt/backlog-wheel/app.env {image.image_uri}",
@@ -175,6 +239,7 @@ class BacklogWheelEc2Stack(Stack):
             "RefreshRuntimeEnvDocument",
             document_type="Command",
             name="BacklogWheelRefreshRuntimeEnv",
+            update_method="NewVersion",
             content={
                 "schemaVersion": "2.2",
                 "description": "Refresh Backlog Wheel runtime env from Secrets Manager",
@@ -231,6 +296,7 @@ class BacklogWheelEc2Stack(Stack):
             "DeployAppDocument",
             document_type="Command",
             name="BacklogWheelDeployApp",
+            update_method="NewVersion",
             content={
                 "schemaVersion": "2.2",
                 "description": "Pull and restart Backlog Wheel app container",
@@ -250,6 +316,8 @@ class BacklogWheelEc2Stack(Stack):
                                 "for i in {1..60}; do test -f /opt/backlog-wheel/app.env && docker network inspect backlog-wheel >/dev/null 2>&1 && break; sleep 5; done",
                                 "test -f /opt/backlog-wheel/app.env",
                                 "docker network inspect backlog-wheel >/dev/null",
+                                *backup_install_commands,
+                                "if test -x /usr/local/bin/backlog-wheel-backup-db; then /usr/local/bin/backlog-wheel-backup-db; fi",
                                 f"aws ecr get-login-password --region {self.region} | docker login --username AWS --password-stdin {ecr_registry}",
                                 "docker pull {{ AppImageUri }}",
                                 "docker rm -f backlog-wheel-app || true",
@@ -295,5 +363,6 @@ class BacklogWheelEc2Stack(Stack):
         cdk.CfnOutput(self, "InstancePublicIp", value=elastic_ip.ref)
         cdk.CfnOutput(self, "Url", value=f"https://{domain_name}")
         cdk.CfnOutput(self, "DatabaseSecretName", value=database_credentials.secret_name)
+        cdk.CfnOutput(self, "DatabaseBackupBucketName", value=backup_bucket.bucket_name)
         cdk.CfnOutput(self, "RefreshEnvDocument", value=refresh_env_document.name)
         cdk.CfnOutput(self, "DeployAppDocumentName", value=deploy_app_document.name)
