@@ -23,16 +23,17 @@ The instance runs Docker containers for Phoenix, Postgres, and Caddy. Caddy term
 - A default VPC in the target account and region.
 - The `streamosaic.app` Route 53 hosted zone in the target account.
 - Docker running locally for the CDK Docker image asset build.
-- AWS CDK v2 available, for example with `npm install -g aws-cdk`.
+- The repository Nix shell. It provides AWS CLI, AWS CDK v2, Python, and the CDK Python dependencies.
 
 ## Setup
 
-Install the CDK Python dependencies from the repository root:
+Enter the repository Nix shell from the repository root:
 
 ```sh
-python3 -m venv infra/.venv
-infra/.venv/bin/pip install -r infra/requirements.txt
+nix-shell
 ```
+
+The shell creates and maintains `infra/.venv` from `infra/requirements.txt`. Re-enter the shell after changing `infra/requirements.txt` so the Python dependencies are synced before running `cdk`.
 
 Bootstrap the account and region once:
 
