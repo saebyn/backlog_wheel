@@ -138,28 +138,50 @@ defmodule BacklogWheel.Twitch.Client do
 
   def create_redemption_eventsub_subscription(
         %Config{} = config,
-        %Credential{} = credential,
+        %Credential{},
         callback_url,
         secret
       ) do
-    case request(:create_redemption_eventsub_subscription, :post, @eventsub_subscriptions_url,
-           headers: [
-             {"client-id", config.client_id},
-             {"authorization", "Bearer #{credential.access_token}"}
-           ],
-           json: %{
-             type: "channel.channel_points_custom_reward_redemption.add",
-             version: "1",
-             condition: %{broadcaster_user_id: config.broadcaster_id},
-             transport: %{
-               method: "webhook",
-               callback: callback_url,
-               secret: secret
+    with {:ok, app_access_token} <- fetch_app_access_token(config),
+         {:ok, %{status: status, body: body}} when status in 200..299 <-
+           request(:create_redemption_eventsub_subscription, :post, @eventsub_subscriptions_url,
+             headers: [
+               {"client-id", config.client_id},
+               {"authorization", "Bearer #{app_access_token}"}
+             ],
+             json: %{
+               type: "channel.channel_points_custom_reward_redemption.add",
+               version: "1",
+               condition: %{broadcaster_user_id: config.broadcaster_id},
+               transport: %{
+                 method: "webhook",
+                 callback: callback_url,
+                 secret: secret
+               }
              }
-           }
+           ),
+         {:ok, subscription} <- normalize_eventsub_subscription_response(body) do
+      {:ok, subscription}
+    else
+      {:ok, %{status: status, body: body}} -> {:error, {:twitch_http_error, status, body}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp fetch_app_access_token(%Config{} = config) do
+    case request(:fetch_app_access_token, :post, @token_url,
+           form: [
+             client_id: config.client_id,
+             client_secret: config.client_secret,
+             grant_type: "client_credentials"
+           ]
          ) do
+      {:ok, %{status: status, body: %{"access_token" => access_token}}}
+      when status in 200..299 and is_binary(access_token) and access_token != "" ->
+        {:ok, access_token}
+
       {:ok, %{status: status, body: body}} when status in 200..299 ->
-        normalize_eventsub_subscription_response(body)
+        {:error, {:invalid_twitch_app_token_response, body}}
 
       {:ok, %{status: status, body: body}} ->
         {:error, {:twitch_http_error, status, body}}
