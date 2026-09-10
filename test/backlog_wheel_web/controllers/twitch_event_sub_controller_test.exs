@@ -3,6 +3,7 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
 
   import BacklogWheel.BacklogFixtures
   import BacklogWheel.VotingFixtures
+  import ExUnit.CaptureLog
 
   alias BacklogWheel.Repo
   alias BacklogWheel.Communities
@@ -79,15 +80,21 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
   test "rejects invalid Twitch EventSub signatures", %{conn: conn} do
     body = redemption_notification_body("bad-signature-redemption", "reward-id")
 
-    conn =
-      conn
-      |> put_req_header("content-type", "application/json")
-      |> put_req_header("twitch-eventsub-message-id", "message-id")
-      |> put_req_header("twitch-eventsub-message-timestamp", "2026-06-10T00:00:00Z")
-      |> put_req_header("twitch-eventsub-message-signature", "sha256=invalid")
-      |> post(~p"/twitch/eventsub", body)
+    log =
+      capture_log(fn ->
+        conn =
+          conn
+          |> put_req_header("content-type", "application/json")
+          |> put_req_header("twitch-eventsub-message-id", "message-id")
+          |> put_req_header("twitch-eventsub-message-timestamp", "2026-06-10T00:00:00Z")
+          |> put_req_header("twitch-eventsub-message-signature", "sha256=invalid")
+          |> post(~p"/twitch/eventsub", body)
 
-    assert response(conn, 403) == ""
+        assert response(conn, 403) == ""
+      end)
+
+    assert log =~ "Rejected Twitch EventSub webhook with invalid signature"
+    assert log =~ ~s(message_id="message-id")
     assert Repo.aggregate(ChannelPointVote, :count, :id) == 0
   end
 

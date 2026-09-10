@@ -12,6 +12,7 @@ The CDK app also creates `BacklogWheelEc2Stack`, which owns:
 - An Elastic IP and Route 53 `A` record for `wheel.streamosaic.app`.
 - A security group allowing HTTP and HTTPS.
 - An IAM role with SSM Session Manager, ECR pull, and Secrets Manager read access.
+- A CloudWatch Logs group receiving Phoenix application logs with 30-day retention.
 - A generated local Postgres credentials secret with a retain policy.
 - A production Docker image asset published through the CDK bootstrap ECR repository.
 
@@ -174,6 +175,14 @@ sudo docker logs -f backlog-wheel-app
 sudo docker logs -f backlog-wheel-caddy
 sudo docker logs -f backlog-wheel-postgres
 ```
+
+Follow Phoenix application logs in CloudWatch:
+
+```sh
+AWS_PROFILE=your-profile aws logs tail /backlog-wheel/application --follow --since 1h
+```
+
+Each EC2 instance writes to a stream named with its instance ID. The Docker `awslogs` driver ships both standard output and standard error, so Elixir Logger and server crash output are included.
 
 Create a database backup from the instance and upload it to the retained backup bucket:
 

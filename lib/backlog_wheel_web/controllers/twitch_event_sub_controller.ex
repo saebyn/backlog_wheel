@@ -23,6 +23,10 @@ defmodule BacklogWheelWeb.TwitchEventSubController do
         send_resp(conn, :service_unavailable, "")
 
       {:error, :invalid_signature} ->
+        Logger.warning(
+          "Rejected Twitch EventSub webhook with invalid signature message_id=#{inspect(header(conn, "twitch-eventsub-message-id"))}"
+        )
+
         send_resp(conn, :forbidden, "")
     end
   end

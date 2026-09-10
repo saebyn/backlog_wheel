@@ -8,6 +8,7 @@ from aws_cdk import (
     aws_iam as iam,
     aws_ec2 as ec2,
     aws_ecr_assets as ecr_assets,
+    aws_logs as logs,
     aws_route53 as route53,
     aws_s3 as s3,
     aws_secretsmanager as secretsmanager,
@@ -68,6 +69,13 @@ class BacklogWheelEc2Stack(Stack):
         )
         database_credentials.apply_removal_policy(RemovalPolicy.RETAIN)
 
+        application_log_group = logs.LogGroup(
+            self,
+            "ApplicationLogGroup",
+            log_group_name="/backlog-wheel/application",
+            retention=logs.RetentionDays.ONE_MONTH,
+        )
+
         role = iam.Role(
             self,
             "InstanceRole",
@@ -81,6 +89,7 @@ class BacklogWheelEc2Stack(Stack):
         runtime_secret.grant_read(role)
         database_credentials.grant_read(role)
         backup_bucket.grant_read_write(role)
+        application_log_group.grant_write(role)
 
         security_group = ec2.SecurityGroup(
             self,
@@ -126,6 +135,12 @@ class BacklogWheelEc2Stack(Stack):
                     ),
                 )
             ],
+        )
+        instance.node.add_dependency(application_log_group)
+        application_log_options = (
+            f"--log-driver=awslogs --log-opt awslogs-region={self.region} "
+            f"--log-opt awslogs-group={application_log_group.log_group_name} "
+            f"--log-opt awslogs-stream={instance.instance_id}"
         )
 
         elastic_ip = ec2.CfnEIP(self, "ElasticIp", domain="vpc")
@@ -228,7 +243,7 @@ class BacklogWheelEc2Stack(Stack):
             *restore_bootstrap_commands,
             f"docker pull {image.image_uri}",
             "docker rm -f backlog-wheel-app || true",
-            f"docker run -d --name backlog-wheel-app --restart unless-stopped --network backlog-wheel --env-file /opt/backlog-wheel/app.env {image.image_uri}",
+            f"docker run -d --name backlog-wheel-app --restart unless-stopped --network backlog-wheel {application_log_options} --env-file /opt/backlog-wheel/app.env {image.image_uri}",
             f"cat > /opt/backlog-wheel/Caddyfile <<'CADDY'\n{domain_name} {{\n  encode zstd gzip\n  reverse_proxy backlog-wheel-app:4000\n}}\nCADDY",
             "docker rm -f backlog-wheel-caddy || true",
             "docker run -d --name backlog-wheel-caddy --restart unless-stopped --network backlog-wheel -p 80:80 -p 443:443 -v /opt/backlog-wheel/Caddyfile:/etc/caddy/Caddyfile:ro -v backlog-wheel-caddy-data:/data -v backlog-wheel-caddy-config:/config caddy:2-alpine",
@@ -282,7 +297,7 @@ class BacklogWheelEc2Stack(Stack):
                                 "chmod 600 /opt/backlog-wheel/app.env /opt/backlog-wheel/*-secret.json",
                                 "APP_IMAGE=$(docker inspect backlog-wheel-app | python3 -c 'import json, sys; print(json.load(sys.stdin)[0][\"Config\"][\"Image\"])')",
                                 "docker rm -f backlog-wheel-app",
-                                "docker run -d --name backlog-wheel-app --restart unless-stopped --network backlog-wheel --env-file /opt/backlog-wheel/app.env \"$APP_IMAGE\"",
+                                f"docker run -d --name backlog-wheel-app --restart unless-stopped --network backlog-wheel {application_log_options} --env-file /opt/backlog-wheel/app.env \"$APP_IMAGE\"",
                                 "docker restart backlog-wheel-caddy || true",
                             ]
                         },
@@ -321,7 +336,7 @@ class BacklogWheelEc2Stack(Stack):
                                 f"aws ecr get-login-password --region {self.region} | docker login --username AWS --password-stdin {ecr_registry}",
                                 "docker pull {{ AppImageUri }}",
                                 "docker rm -f backlog-wheel-app || true",
-                                "docker run -d --name backlog-wheel-app --restart unless-stopped --network backlog-wheel --env-file /opt/backlog-wheel/app.env {{ AppImageUri }}",
+                                f"docker run -d --name backlog-wheel-app --restart unless-stopped --network backlog-wheel {application_log_options} --env-file /opt/backlog-wheel/app.env {{{{ AppImageUri }}}}",
                                 "docker restart backlog-wheel-caddy || true",
                             ]
                         },
@@ -364,5 +379,6 @@ class BacklogWheelEc2Stack(Stack):
         cdk.CfnOutput(self, "Url", value=f"https://{domain_name}")
         cdk.CfnOutput(self, "DatabaseSecretName", value=database_credentials.secret_name)
         cdk.CfnOutput(self, "DatabaseBackupBucketName", value=backup_bucket.bucket_name)
+        cdk.CfnOutput(self, "ApplicationLogGroupName", value=application_log_group.log_group_name)
         cdk.CfnOutput(self, "RefreshEnvDocument", value=refresh_env_document.name)
         cdk.CfnOutput(self, "DeployAppDocumentName", value=deploy_app_document.name)

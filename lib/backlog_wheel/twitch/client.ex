@@ -5,6 +5,8 @@ defmodule BacklogWheel.Twitch.Client do
   EventSub and redemption ingestion are intentionally outside this module.
   """
 
+  require Logger
+
   alias BacklogWheel.Twitch.Config
   alias BacklogWheel.Twitch.Credential
 
@@ -46,7 +48,7 @@ defmodule BacklogWheel.Twitch.Client do
   end
 
   def exchange_code(%Config{} = config, code, redirect_uri) do
-    case Req.post(@token_url,
+    case request(:exchange_code, :post, @token_url,
            form: [
              client_id: config.client_id,
              client_secret: config.client_secret,
@@ -69,7 +71,7 @@ defmodule BacklogWheel.Twitch.Client do
   def refresh_access_token(%Config{} = config, %Credential{} = credential) do
     with {:ok, refresh_token} <- fetch_refresh_token(credential),
          {:ok, %{status: status, body: body}} when status in 200..299 <-
-           Req.post(@token_url,
+           request(:refresh_access_token, :post, @token_url,
              form: [
                client_id: config.client_id,
                client_secret: config.client_secret,
@@ -85,7 +87,7 @@ defmodule BacklogWheel.Twitch.Client do
   end
 
   def fetch_current_user(%Config{} = config, %Credential{} = credential) do
-    case Req.get(@users_url,
+    case request(:fetch_current_user, :get, @users_url,
            headers: [
              {"client-id", config.client_id},
              {"authorization", "Bearer #{credential.access_token}"}
@@ -104,7 +106,7 @@ defmodule BacklogWheel.Twitch.Client do
 
   def create_custom_reward(%Config{} = config, %Credential{} = credential, attrs) do
     with {:ok, %{status: status, body: body}} when status in 200..299 <-
-           Req.post(@custom_rewards_url,
+           request(:create_custom_reward, :post, @custom_rewards_url,
              params: [broadcaster_id: config.broadcaster_id],
              headers: [
                {"client-id", config.client_id},
@@ -121,7 +123,7 @@ defmodule BacklogWheel.Twitch.Client do
   end
 
   def delete_custom_reward(%Config{} = config, %Credential{} = credential, reward_id) do
-    case Req.delete(@custom_rewards_url,
+    case request(:delete_custom_reward, :delete, @custom_rewards_url,
            params: [broadcaster_id: config.broadcaster_id, id: reward_id],
            headers: [
              {"client-id", config.client_id},
@@ -140,7 +142,7 @@ defmodule BacklogWheel.Twitch.Client do
         callback_url,
         secret
       ) do
-    case Req.post(@eventsub_subscriptions_url,
+    case request(:create_redemption_eventsub_subscription, :post, @eventsub_subscriptions_url,
            headers: [
              {"client-id", config.client_id},
              {"authorization", "Bearer #{credential.access_token}"}
@@ -180,6 +182,37 @@ defmodule BacklogWheel.Twitch.Client do
       expires_at: expires_at
     }
   end
+
+  defp request(operation, method, url, options) do
+    started_at = System.monotonic_time()
+    result = apply(Req, method, [url, options])
+
+    duration_ms =
+      System.convert_time_unit(System.monotonic_time() - started_at, :native, :millisecond)
+
+    case result do
+      {:ok, %{status: status}} when status in 200..299 ->
+        Logger.info(
+          "Twitch API request succeeded operation=#{operation} status=#{status} duration_ms=#{duration_ms}"
+        )
+
+      {:ok, %{status: status, body: body}} ->
+        Logger.warning(
+          "Twitch API request failed operation=#{operation} status=#{status} duration_ms=#{duration_ms} error=#{twitch_error(body)}"
+        )
+
+      {:error, reason} ->
+        Logger.warning(
+          "Twitch API request failed operation=#{operation} duration_ms=#{duration_ms} error=#{inspect(reason)}"
+        )
+    end
+
+    result
+  end
+
+  defp twitch_error(%{"error" => error, "message" => message}), do: inspect({error, message})
+  defp twitch_error(%{"message" => message}), do: inspect(message)
+  defp twitch_error(_body), do: "unavailable"
 
   defp expires_at(seconds) when is_integer(seconds) do
     DateTime.utc_now()
