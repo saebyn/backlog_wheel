@@ -140,8 +140,12 @@ class BacklogWheelEc2Stack(Stack):
         application_log_options = (
             f"--log-driver=awslogs --log-opt awslogs-region={self.region} "
             f"--log-opt awslogs-group={application_log_group.log_group_name} "
-            f"--log-opt awslogs-stream={instance.instance_id}"
+            '--log-opt awslogs-stream="$INSTANCE_ID"'
         )
+        instance_id_commands = [
+            "IMDS_TOKEN=$(curl --fail --silent --show-error --request PUT --header 'X-aws-ec2-metadata-token-ttl-seconds: 21600' http://169.254.169.254/latest/api/token)",
+            'INSTANCE_ID=$(curl --fail --silent --show-error --header "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/instance-id)',
+        ]
 
         elastic_ip = ec2.CfnEIP(self, "ElasticIp", domain="vpc")
         ec2.CfnEIPAssociation(
@@ -194,6 +198,7 @@ class BacklogWheelEc2Stack(Stack):
         ]
 
         instance.add_user_data(
+            "# force recreate",
             "set -euxo pipefail",
             "dnf update -y",
             "dnf install -y awscli docker",
@@ -241,6 +246,7 @@ class BacklogWheelEc2Stack(Stack):
             "docker run -d --name backlog-wheel-postgres --restart unless-stopped --network backlog-wheel --network-alias postgres -e POSTGRES_USER=\"$DB_USERNAME\" -e POSTGRES_PASSWORD=\"$DB_PASSWORD\" -e POSTGRES_DB=backlog_wheel -v backlog-wheel-postgres:/var/lib/postgresql/data postgres:17-alpine",
             "until docker exec backlog-wheel-postgres pg_isready -U \"$DB_USERNAME\" -d backlog_wheel; do sleep 2; done",
             *restore_bootstrap_commands,
+            *instance_id_commands,
             f"docker pull {image.image_uri}",
             "docker rm -f backlog-wheel-app || true",
             f"docker run -d --name backlog-wheel-app --restart unless-stopped --network backlog-wheel {application_log_options} --env-file /opt/backlog-wheel/app.env {image.image_uri}",
@@ -265,6 +271,7 @@ class BacklogWheelEc2Stack(Stack):
                         "inputs": {
                             "runCommand": [
                                 "set -euxo pipefail",
+                                *instance_id_commands,
                                 f"aws secretsmanager get-secret-value --region {self.region} --secret-id {runtime_secret.secret_name} --query SecretString --output text > /opt/backlog-wheel/runtime-secret.json",
                                 f"aws secretsmanager get-secret-value --region {self.region} --secret-id {database_credentials.secret_arn} --query SecretString --output text > /opt/backlog-wheel/database-secret.json",
                                 "cat > /opt/backlog-wheel/write-env.py <<'PY'\n"
@@ -328,6 +335,7 @@ class BacklogWheelEc2Stack(Stack):
                         "inputs": {
                             "runCommand": [
                                 "set -euxo pipefail",
+                                *instance_id_commands,
                                 "for i in {1..60}; do test -f /opt/backlog-wheel/app.env && docker network inspect backlog-wheel >/dev/null 2>&1 && break; sleep 5; done",
                                 "test -f /opt/backlog-wheel/app.env",
                                 "docker network inspect backlog-wheel >/dev/null",
