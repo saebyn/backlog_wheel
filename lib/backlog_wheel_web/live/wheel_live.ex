@@ -71,7 +71,7 @@ defmodule BacklogWheelWeb.WheelLive do
                       transform={label_transform(candidate)}
                       class="select-none [paint-order:stroke] [stroke:rgba(0,0,0,0.55)] [stroke-width:0.45px]"
                     >
-                      {truncate_title(candidate.title)}
+                      {truncate_title("##{candidate.pool_item.option_number} #{candidate.title}")}
                     </text>
                   <% end %>
                 </g>
@@ -158,7 +158,7 @@ defmodule BacklogWheelWeb.WheelLive do
                   class="rounded-xl bg-base-100 p-3"
                 >
                   <div class="flex items-center justify-between gap-3">
-                    <p class="font-semibold leading-tight">{candidate.title}</p>
+                    <p class="font-semibold leading-tight">#{candidate.pool_item.option_number} · {candidate.title}</p>
                     <p class="text-sm font-black text-primary">{candidate.weight}</p>
                   </div>
                   <div class="mt-2 h-2 overflow-hidden rounded-full bg-base-300">

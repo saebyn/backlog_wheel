@@ -11,6 +11,7 @@ defmodule BacklogWheel.Voting.VotingSession do
     field :title, :string
     field :description, :string
     field :status, :string, default: "draft"
+    field :next_option_number, :integer, default: 1
 
     belongs_to :community, Community
     belongs_to :wheel_format, WheelFormat

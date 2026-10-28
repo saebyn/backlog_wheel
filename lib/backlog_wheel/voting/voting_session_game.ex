@@ -7,6 +7,7 @@ defmodule BacklogWheel.Voting.VotingSessionGame do
 
   schema "voting_session_games" do
     field :base_weight, :integer, default: 1
+    field :option_number, :integer
     field :twitch_reward_id, :string
     field :twitch_reward_title, :string
     field :twitch_reward_cost, :integer
@@ -26,7 +27,7 @@ defmodule BacklogWheel.Voting.VotingSessionGame do
   def changeset(voting_session_game, attrs) do
     voting_session_game
     |> cast(attrs, [:base_weight])
-    |> validate_required([:voting_session_id, :game_id, :base_weight])
+    |> validate_required([:voting_session_id, :game_id, :base_weight, :option_number])
     |> validate_number(:base_weight, greater_than: 0)
     |> unique_constraint([:voting_session_id, :game_id])
   end

@@ -427,9 +427,34 @@ defmodule BacklogWheel.Voting do
   """
   def add_game_to_session(%VotingSession{} = voting_session, %Game{} = game, attrs \\ %{}) do
     if game.community_id == voting_session.community_id do
-      %VotingSessionGame{voting_session_id: voting_session.id, game_id: game.id}
-      |> VotingSessionGame.changeset(attrs)
-      |> Repo.insert()
+      Repo.transaction(fn ->
+        session =
+          VotingSession
+          |> where([session], session.id == ^voting_session.id)
+          |> lock("FOR UPDATE")
+          |> Repo.one!()
+
+        result =
+          %VotingSessionGame{
+            voting_session_id: session.id,
+            game_id: game.id,
+            option_number: session.next_option_number
+          }
+          |> VotingSessionGame.changeset(attrs)
+          |> Repo.insert()
+
+        case result do
+          {:ok, pool_item} ->
+            session
+            |> Ecto.Changeset.change(next_option_number: session.next_option_number + 1)
+            |> Repo.update!()
+
+            pool_item
+
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+      end)
       |> broadcast_voting_session_change()
     else
       {:error, :game_not_in_session_community}

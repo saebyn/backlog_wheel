@@ -334,6 +334,23 @@ defmodule BacklogWheel.VotingTest do
       assert voting_session_game.base_weight == 3
     end
 
+    test "option numbers remain stable and are not reused when a game is removed" do
+      community = community_fixture()
+      session = voting_session_fixture(%{community: community})
+      first = game_fixture(%{community: community, title: "First"})
+      second = game_fixture(%{community: community, title: "Second"})
+      third = game_fixture(%{community: community, title: "Third"})
+
+      first_item = voting_session_game_fixture(session, first)
+      second_item = voting_session_game_fixture(session, second)
+      assert {first_item.option_number, second_item.option_number} == {1, 2}
+
+      assert {:ok, _} = Voting.remove_game_from_session(first_item)
+      third_item = voting_session_game_fixture(session, third)
+      assert third_item.option_number == 3
+      assert Enum.map(Voting.get_voting_session!(community, session.id).voting_session_games, & &1.option_number) == [2, 3]
+    end
+
     test "add_game_to_session/3 rejects games from another community" do
       first_community = community_fixture(%{slug: "first-pool"})
       second_community = community_fixture(%{slug: "second-pool"})

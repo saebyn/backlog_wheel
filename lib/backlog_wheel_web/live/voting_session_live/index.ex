@@ -457,7 +457,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                   >
                     <div class="flex items-start justify-between gap-3">
                       <div>
-                        <h3 class="font-bold leading-tight">{pool_item.game.title}</h3>
+                        <h3 class="font-bold leading-tight">#{pool_item.option_number} · {pool_item.game.title}</h3>
                         <div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
                           <div class="rounded-xl bg-base-100 p-2">
                             <p class="font-semibold uppercase tracking-wide text-base-content/50">
