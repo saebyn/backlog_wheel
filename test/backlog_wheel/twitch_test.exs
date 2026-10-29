@@ -197,6 +197,42 @@ defmodule BacklogWheel.TwitchTest do
     assert Twitch.get_credential(community).access_token == "refreshed-stale-access-token"
   end
 
+  test "refreshing a community token keeps a rotated refresh token" do
+    start_supervised!(BacklogWheel.FakeTwitchClient)
+    community = community_fixture()
+
+    config = %Config{
+      client_id: "client-id",
+      client_secret: "secret",
+      broadcaster_id: "123",
+      reward_cost: 100
+    }
+
+    assert {:ok, _} =
+             Twitch.save_credential(community, %{
+               access_token: "old",
+               refresh_token: "old-refresh",
+               scopes: "channel:manage:redemptions"
+             })
+
+    BacklogWheel.FakeTwitchClient.rotate_refresh_token("new-refresh")
+
+    assert {:ok, _} = Twitch.refresh_credential(community, config, BacklogWheel.FakeTwitchClient)
+    assert Twitch.get_credential(community).refresh_token == "new-refresh"
+  end
+
+  test "creating a subscription requires the channel's own credential" do
+    start_supervised!(BacklogWheel.FakeTwitchClient)
+    Application.put_env(:backlog_wheel, :twitch_client, BacklogWheel.FakeTwitchClient)
+    Application.put_env(:backlog_wheel, :twitch, client_id: "client-id", client_secret: "secret")
+
+    community =
+      community_fixture(%{twitch_broadcaster_id: "123", twitch_eventsub_secret: "secret"})
+
+    assert {:error, :missing_twitch_credential} =
+             Twitch.ensure_redemption_eventsub_subscription(Plug.Test.conn(:get, "/"), community)
+  end
+
   test "delete_credential/1 removes the community's Twitch OAuth token" do
     community = community_fixture()
 

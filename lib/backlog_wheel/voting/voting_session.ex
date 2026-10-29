@@ -3,7 +3,13 @@ defmodule BacklogWheel.Voting.VotingSession do
   import Ecto.Changeset
 
   alias BacklogWheel.Communities.Community
-  alias BacklogWheel.Voting.{TwitchVotingReward, VotingSessionGame, WheelFormat}
+
+  alias BacklogWheel.Voting.{
+    TwitchVotingReward,
+    TwitchVotingWindow,
+    VotingSessionGame,
+    WheelFormat
+  }
 
   @statuses ["draft", "open", "locked", "completed", "closed", "cancelled"]
 
@@ -17,6 +23,7 @@ defmodule BacklogWheel.Voting.VotingSession do
     belongs_to :wheel_format, WheelFormat
     has_many :voting_session_games, VotingSessionGame
     has_one :twitch_voting_reward, TwitchVotingReward
+    has_many :twitch_voting_windows, TwitchVotingWindow
 
     timestamps(type: :utc_datetime)
   end

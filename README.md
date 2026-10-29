@@ -163,10 +163,12 @@ Behavior today:
 - EventSub webhook signing is configured automatically when Twitch is connected or reconnected.
 - If required config is missing, `BacklogWheel.Twitch.config/1` returns `{:error, {:missing_config, keys}}` and `BacklogWheel.Twitch.configured?/1` returns `false`.
 - Starting Twitch voting creates one channel point reward for the session. Viewers enter the game number shown in the voting pool and wheel; each valid redemption adds one vote.
-- Game numbers are assigned permanently within a session, including after a game is removed. Invalid numbers and redemptions received after voting closes are canceled to refund points, with an addressed chat message explaining the refund.
+- Game numbers are assigned permanently within a session, including after a game is removed. Twitch's redemption time determines whether a vote was made while voting was open, even if its notification arrives later. Invalid numbers and redemptions made outside a voting window are canceled to refund points, with an addressed chat message explaining the refund.
 - Resolution and feedback failures are retained and retried; the session page reports redemptions that need attention. The app also checks Twitch for unfulfilled redemptions to recover missed EventSub deliveries. Check the Twitch connection and permissions if retries continue to fail.
-- The reward is disabled when voting is frozen or closed. Disabled rewards are retained so late EventSub deliveries can still be refunded; they may be removed manually from Twitch once all redemptions have been resolved. Twitch counts disabled rewards toward its 50-reward channel limit, so periodically remove finished rewards. Legacy per-game rewards are not managed and can be removed manually.
-- OAuth requests `channel:manage:redemptions` and `user:write:chat`. Existing users should disconnect and reconnect Twitch to grant chat permission.
+- Freezing records a cutoff and disables the reward. Before spinning, the app reconciles Twitch's unfulfilled redemptions; if Twitch cannot be reached, the spin is blocked until reconciliation succeeds.
+- For finished sessions, the app automatically deletes the reward after Twitch's unfulfilled queue is empty and local redemption resolutions are complete. Subsequent notifications for that deleted reward are ignored. Legacy per-game rewards are not managed and can be removed manually.
+- A finished session can be reused after reward cleanup. Returning it to draft or reopening it clears the previous round's votes while keeping its games and option numbers; starting Twitch voting creates a new reward.
+- OAuth requests `channel:manage:redemptions` and `user:write:chat`; credentials are stored per community. Existing users must reconnect Twitch once because older global credentials cannot be safely attributed to a particular community.
 - EventSub signature verification uses the secret saved for the event's broadcaster community.
 
 ## Terminology

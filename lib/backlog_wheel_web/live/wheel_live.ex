@@ -369,6 +369,13 @@ defmodule BacklogWheelWeb.WheelLive do
            :error,
            "Voting was frozen, but the Twitch reward could not be disabled. Retry cleanup from the voting session before spinning."
          )}
+
+      {:error, {:twitch_reconciliation_failed, _reason}} ->
+        {:noreply,
+         put_flash(socket, :error, "Twitch votes could not be reconciled. Retry before spinning.")}
+
+      {:error, :session_not_ready} ->
+        {:noreply, put_flash(socket, :error, "This voting session has already ended.")}
     end
   end
 

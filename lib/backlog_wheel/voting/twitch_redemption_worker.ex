@@ -32,6 +32,7 @@ defmodule BacklogWheel.Voting.TwitchRedemptionWorker do
   def handle_info(:process, state) do
     try do
       TwitchRedemptions.process_pending()
+      BacklogWheel.Voting.cleanup_finished_twitch_rewards()
     rescue
       error ->
         Logger.error(

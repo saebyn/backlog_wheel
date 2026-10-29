@@ -446,7 +446,10 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                     class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <p class="text-sm text-base-content/70">
-                      Return to setup mode so you can freely revise the vote.
+                      {if @selected_session.status in ["completed", "closed", "cancelled"],
+                        do:
+                          "Start a new round with the same games and numbers; previous votes will be cleared.",
+                        else: "Return to setup mode so you can revise the vote."}
                     </p>
                     <.button id="set-session-draft" phx-click="set_status" phx-value-status="draft">
                       Back to draft
@@ -695,6 +698,25 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
          |> put_flash(:error, "Session marked #{status}, but #{twitch_error(reason)}")
          |> refresh()}
 
+      {:error, {:twitch_reconciliation_failed, session, _reason}} ->
+        {:noreply,
+         socket
+         |> assign(:selected_session_id, session.id)
+         |> put_flash(
+           :error,
+           "Twitch votes could not be reconciled. Retry before editing the pool."
+         )
+         |> refresh()}
+
+      {:error, :twitch_cleanup_pending} ->
+        {:noreply,
+         socket
+         |> put_flash(
+           :error,
+           "The previous Twitch reward is still being cleaned up. Retry when cleanup finishes."
+         )
+         |> refresh()}
+
       {:error, {:voting_session_pool_too_small, _count, _min_count} = reason} ->
         {:noreply,
          socket
@@ -778,6 +800,10 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
          socket
          |> put_flash(:error, "Games with Twitch votes cannot be removed from this session.")
          |> refresh()}
+
+      {:error, :twitch_reconciliation_required} ->
+        {:noreply,
+         socket |> put_flash(:error, "Reconcile Twitch votes before removing games.") |> refresh()}
     end
   end
 
@@ -1230,6 +1256,9 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
   defp twitch_error(:empty_pool), do: "Add games to this vote before starting Twitch voting"
   defp twitch_error(:no_twitch_rewards), do: "No active Twitch reward to disable"
+
+  defp twitch_error(:twitch_cleanup_pending),
+    do: "The previous Twitch reward is still being cleaned up. Retry when cleanup finishes."
 
   defp twitch_error({:voting_session_pool_too_small, _count, _min_count} = reason),
     do: voting_session_pool_error(reason)

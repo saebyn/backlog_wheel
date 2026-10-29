@@ -333,6 +333,13 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
 
     assert has_element?(view, "#view-session-recap", "View recap")
     assert has_element?(view, "#set-session-draft", "Back to draft")
+
+    assert has_element?(
+             view,
+             "#voting-session-secondary-actions",
+             "previous votes will be cleared"
+           )
+
     refute has_element?(view, "#set-session-cancelled")
   end
 

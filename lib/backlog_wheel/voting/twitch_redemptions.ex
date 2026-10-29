@@ -13,6 +13,7 @@ defmodule BacklogWheel.Voting.TwitchRedemptions do
   alias BacklogWheel.Voting.{
     TwitchVotingRedemption,
     TwitchVotingReward,
+    TwitchVotingWindow,
     VotingSession,
     VotingSessionGame
   }
@@ -28,14 +29,31 @@ defmodule BacklogWheel.Voting.TwitchRedemptions do
       when is_binary(id) and id != "" and is_binary(user_id) and user_id != "" and
              is_binary(login) and login != "" do
     case Repo.get_by(TwitchVotingReward, reward_id: reward_id) do
-      nil -> {:ignored, :unknown_twitch_reward}
-      reward -> persist_decision(reward, id, user_id, login, event["user_input"])
+      nil ->
+        {:ignored, :unknown_twitch_reward}
+
+      %{status: "deleted"} ->
+        {:ignored, :unknown_twitch_reward}
+
+      reward ->
+        with {:ok, redeemed_at} <- redemption_time(event) do
+          persist_decision(reward, id, user_id, login, event["user_input"], redeemed_at)
+        end
     end
   end
 
   def ingest(_event), do: {:error, :invalid_twitch_redemption}
 
-  defp persist_decision(reward, id, user_id, login, input) do
+  defp redemption_time(%{"redeemed_at" => time}) when is_binary(time) do
+    case DateTime.from_iso8601(time) do
+      {:ok, datetime, _offset} -> {:ok, datetime}
+      _ -> {:error, :invalid_redemption_time}
+    end
+  end
+
+  defp redemption_time(_event), do: {:error, :invalid_redemption_time}
+
+  defp persist_decision(reward, id, user_id, login, input, redeemed_at) do
     result =
       Repo.transaction(fn ->
         session =
@@ -46,7 +64,7 @@ defmodule BacklogWheel.Voting.TwitchRedemptions do
 
         case Repo.get_by(TwitchVotingRedemption, redemption_id: id) do
           %TwitchVotingRedemption{} = existing -> existing
-          nil -> create_decision(session, reward, id, user_id, login, input)
+          nil -> create_decision(session, reward, id, user_id, login, input, redeemed_at)
         end
       end)
 
@@ -61,9 +79,9 @@ defmodule BacklogWheel.Voting.TwitchRedemptions do
     result
   end
 
-  defp create_decision(session, reward, id, user_id, login, input) do
+  defp create_decision(session, reward, id, user_id, login, input, redeemed_at) do
     pool_item = matching_pool_item(session, input)
-    valid? = session.status == "open" and not is_nil(pool_item)
+    valid? = within_voting_window?(session, redeemed_at) and not is_nil(pool_item)
 
     if valid? do
       case Voting.record_vote(pool_item, %{
@@ -81,10 +99,20 @@ defmodule BacklogWheel.Voting.TwitchRedemptions do
       redemption_id: id,
       user_id: user_id,
       user_login: login,
+      redeemed_at: redeemed_at,
       decision: if(valid?, do: "valid", else: "invalid"),
       feedback_status: if(valid?, do: "not_needed", else: "pending")
     })
     |> Repo.insert!()
+  end
+
+  defp within_voting_window?(session, redeemed_at) do
+    Repo.exists?(
+      from window in TwitchVotingWindow,
+        where:
+          window.voting_session_id == ^session.id and window.opened_at <= ^redeemed_at and
+            (is_nil(window.closed_at) or window.closed_at > ^redeemed_at)
+    )
   end
 
   defp matching_pool_item(session, input) when is_binary(input) do
@@ -118,12 +146,22 @@ defmodule BacklogWheel.Voting.TwitchRedemptions do
   """
   def reconcile_rewards(client \\ Twitch.client()) do
     TwitchVotingReward
+    |> where([reward], reward.status != "deleted")
     |> Repo.all()
     |> Enum.each(&reconcile_reward(&1, client))
   end
 
+  def reconcile_session(%VotingSession{id: id}, client \\ Twitch.client()) do
+    case Repo.get_by(TwitchVotingReward, voting_session_id: id) do
+      nil -> :ok
+      %{status: "deleted"} -> :ok
+      reward -> reconcile_reward(reward, client)
+    end
+  end
+
   defp reconcile_reward(reward, client) do
     session = Repo.get!(VotingSession, reward.voting_session_id) |> Repo.preload(:community)
+    scan_started_at = DateTime.utc_now()
 
     result =
       with {:ok, config} <- Twitch.config(session.community),
@@ -132,6 +170,9 @@ defmodule BacklogWheel.Voting.TwitchRedemptions do
              client.list_unfulfilled_redemptions(config, credential, reward.reward_id) do
         ingest_reconciled(events, reward.reward_id)
       end
+
+    result = handle_missing_reward(result, session, reward)
+    mark_reconciled_windows(result, reward, session, scan_started_at)
 
     error =
       case result do
@@ -148,7 +189,29 @@ defmodule BacklogWheel.Voting.TwitchRedemptions do
         {:voting_session_changed, session.id}
       )
     end
+
+    result
   end
+
+  defp handle_missing_reward({:error, {:twitch_http_error, 404, _}} = missing, session, reward) do
+    case BacklogWheel.Voting.TwitchSessionRewards.mark_missing_reward(session, reward) do
+      :ok -> :ok
+      {:error, _} -> missing
+    end
+  end
+
+  defp handle_missing_reward(result, _session, _reward), do: result
+
+  defp mark_reconciled_windows(:ok, %{status: "disabled"}, session, scan_started_at) do
+    from(window in TwitchVotingWindow,
+      where:
+        window.voting_session_id == ^session.id and not is_nil(window.closed_at) and
+          window.closed_at <= ^scan_started_at and is_nil(window.reconciled_at)
+    )
+    |> Repo.update_all(set: [reconciled_at: scan_started_at, updated_at: scan_started_at])
+  end
+
+  defp mark_reconciled_windows(_result, _reward, _session, _scan_started_at), do: :ok
 
   defp ingest_reconciled(events, reward_id) do
     Enum.reduce_while(events, :ok, fn event, :ok ->
@@ -225,7 +288,13 @@ defmodule BacklogWheel.Voting.TwitchRedemptions do
 
   defp process_locked(redemption, client) do
     reward = Repo.get!(TwitchVotingReward, redemption.twitch_voting_reward_id)
-    session = Repo.get!(VotingSession, reward.voting_session_id) |> Repo.preload(:community)
+
+    session =
+      VotingSession
+      |> where([session], session.id == ^reward.voting_session_id)
+      |> lock("FOR UPDATE")
+      |> Repo.one!()
+      |> Repo.preload(:community)
 
     result =
       with {:ok, config} <- Twitch.config(session.community),

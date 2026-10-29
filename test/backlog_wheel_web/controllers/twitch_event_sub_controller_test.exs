@@ -120,6 +120,7 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
         "user_login" => "webhookviewer",
         "user_name" => "WebhookViewer",
         "user_input" => "1",
+        "redeemed_at" => DateTime.to_iso8601(DateTime.utc_now()),
         "reward" => %{"id" => reward_id}
       }
     })

@@ -7,7 +7,13 @@ defmodule BacklogWheel.Voting.TwitchSessionRewards do
   alias BacklogWheel.Repo
   alias BacklogWheel.Twitch
   alias BacklogWheel.Voting
-  alias BacklogWheel.Voting.{TwitchVotingReward, VotingSession}
+
+  alias BacklogWheel.Voting.{
+    TwitchVotingRedemption,
+    TwitchVotingReward,
+    TwitchVotingWindow,
+    VotingSession
+  }
 
   def start(session, opts \\ []) do
     client = Keyword.get(opts, :client, Twitch.client())
@@ -47,10 +53,133 @@ defmodule BacklogWheel.Voting.TwitchSessionRewards do
 
     case Repo.get_by(TwitchVotingReward, voting_session_id: session.id) do
       nil -> {:error, :no_twitch_rewards}
-      %{status: "disabled"} -> {:error, :no_twitch_rewards}
+      %{status: status} when status in ["disabled", "deleted"] -> {:error, :no_twitch_rewards}
       reward -> disable(session, reward, client)
     end
   end
+
+  def cleanup_finished(opts \\ []) do
+    client = Keyword.get(opts, :client, Twitch.client())
+
+    ids =
+      from(reward in TwitchVotingReward,
+        join: session in VotingSession,
+        on: session.id == reward.voting_session_id,
+        where:
+          session.status in ["completed", "closed", "cancelled"] and reward.status != "deleted",
+        select: session.id
+      )
+      |> Repo.all()
+
+    Enum.each(ids, &cleanup_session(&1, client))
+    :ok
+  end
+
+  def mark_missing_reward(session, reward) do
+    result =
+      Repo.transaction(fn ->
+        session =
+          VotingSession |> where([s], s.id == ^session.id) |> lock("FOR UPDATE") |> Repo.one!()
+
+        reward = Repo.get!(TwitchVotingReward, reward.id)
+
+        if session.status in ["completed", "closed", "cancelled"] and reward.status != "deleted" and
+             not unresolved_redemptions?(reward) do
+          {:ok, _} = mark_deleted(reward)
+          now = DateTime.utc_now()
+
+          from(window in TwitchVotingWindow,
+            where:
+              window.voting_session_id == ^session.id and not is_nil(window.closed_at) and
+                is_nil(window.reconciled_at)
+          )
+          |> Repo.update_all(set: [reconciled_at: now, updated_at: now])
+
+          :ok
+        else
+          Repo.rollback(:unresolved_redemptions)
+        end
+      end)
+
+    case result do
+      {:ok, :ok} ->
+        broadcast_change(session.id)
+        :ok
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp cleanup_session(id, client) do
+    result =
+      Repo.transaction(fn ->
+        session =
+          VotingSession
+          |> where([s], s.id == ^id)
+          |> lock("FOR UPDATE")
+          |> Repo.one!()
+          |> Repo.preload(:community)
+
+        reward = Repo.get_by!(TwitchVotingReward, voting_session_id: id)
+
+        if session.status in ["completed", "closed", "cancelled"] and reward.status != "deleted" do
+          cleanup_reward(session, reward, client)
+        end
+      end)
+
+    if match?({:ok, _}, result), do: broadcast_change(id)
+  end
+
+  defp cleanup_reward(session, reward, client) do
+    with {:ok, reward} <- ensure_disabled(session, reward, client),
+         false <- unresolved_redemptions?(reward),
+         {:ok, config} <- Twitch.config(session.community),
+         {:ok, credential} <- credential(session.community, config, client) do
+      cleanup_drained_reward(reward, config, credential, client)
+    else
+      true -> :pending
+      {:error, reason} -> update_reward(reward, %{cleanup_error: inspect(reason)})
+    end
+  end
+
+  defp ensure_disabled(_session, %{status: "disabled"} = reward, _client), do: {:ok, reward}
+
+  defp ensure_disabled(session, reward, client) do
+    case disable(session, reward, client) do
+      {:ok, session} -> {:ok, session.twitch_voting_reward}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp unresolved_redemptions?(reward) do
+    Repo.exists?(
+      from redemption in TwitchVotingRedemption,
+        where:
+          redemption.twitch_voting_reward_id == ^reward.id and
+            redemption.resolution_status != "done"
+    )
+  end
+
+  defp cleanup_drained_reward(reward, config, credential, client) do
+    case client.list_unfulfilled_redemptions(config, credential, reward.reward_id) do
+      {:ok, []} -> delete_drained_reward(reward, config, credential, client)
+      {:ok, _events} -> :pending
+      {:error, {:twitch_http_error, 404, _}} -> mark_deleted(reward)
+      {:error, reason} -> update_reward(reward, %{cleanup_error: inspect(reason)})
+    end
+  end
+
+  defp delete_drained_reward(reward, config, credential, client) do
+    case client.delete_custom_reward(config, credential, reward.reward_id) do
+      :ok -> mark_deleted(reward)
+      {:error, {:twitch_http_error, 404, _}} -> mark_deleted(reward)
+      {:error, reason} -> update_reward(reward, %{cleanup_error: inspect(reason)})
+    end
+  end
+
+  defp mark_deleted(reward),
+    do: update_reward(reward, %{status: "deleted", cleanup_error: nil, reconciliation_error: nil})
 
   defp disable(session, reward, client) do
     result =
@@ -77,13 +206,19 @@ defmodule BacklogWheel.Voting.TwitchSessionRewards do
       VotingSession |> where([s], s.id == ^session.id) |> lock("FOR UPDATE") |> Repo.one!()
 
       case Repo.get_by(TwitchVotingReward, voting_session_id: session.id) do
-        nil -> create_reward(session, config, credential, client)
-        reward -> reward
+        nil ->
+          create_reward(session, nil, config, credential, client)
+
+        %{status: "deleted"} = reward ->
+          create_reward(session, reward, config, credential, client)
+
+        reward ->
+          reward
       end
     end)
   end
 
-  defp create_reward(session, config, credential, client) do
+  defp create_reward(session, previous_reward, config, credential, client) do
     title = "Backlog Wheel Vote #{session.id}"
 
     result =
@@ -105,14 +240,16 @@ defmodule BacklogWheel.Voting.TwitchSessionRewards do
 
     case result do
       {:ok, remote} ->
-        %TwitchVotingReward{voting_session_id: session.id}
+        (previous_reward || %TwitchVotingReward{voting_session_id: session.id})
         |> TwitchVotingReward.changeset(%{
           reward_id: remote.id,
           title: remote.title,
           cost: remote.cost,
-          status: "disabled"
+          status: "disabled",
+          cleanup_error: nil,
+          reconciliation_error: nil
         })
-        |> Repo.insert!()
+        |> Repo.insert_or_update!()
 
       {:error, reason} ->
         Repo.rollback(reason)

@@ -8,6 +8,7 @@ defmodule BacklogWheel.Voting.TwitchVotingRedemption do
     field :redemption_id, :string
     field :user_id, :string
     field :user_login, :string
+    field :redeemed_at, :utc_datetime_usec
     field :decision, :string
     field :resolution_status, :string, default: "pending"
     field :feedback_status, :string, default: "pending"
@@ -22,6 +23,7 @@ defmodule BacklogWheel.Voting.TwitchVotingRedemption do
       :redemption_id,
       :user_id,
       :user_login,
+      :redeemed_at,
       :decision,
       :resolution_status,
       :feedback_status,

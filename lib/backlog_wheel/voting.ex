@@ -13,6 +13,7 @@ defmodule BacklogWheel.Voting do
 
   alias BacklogWheel.Voting.{
     ChannelPointVote,
+    TwitchVotingWindow,
     Viewer,
     ViewerIdentity,
     VotingSession,
@@ -248,10 +249,25 @@ defmodule BacklogWheel.Voting do
   Creates a voting session for a community.
   """
   def create_voting_session(%Community{} = community, attrs \\ %{}) do
-    %VotingSession{community_id: community.id}
-    |> VotingSession.changeset(attrs)
-    |> Repo.insert()
+    Repo.transaction(fn ->
+      case %VotingSession{community_id: community.id}
+           |> VotingSession.changeset(attrs)
+           |> Repo.insert() do
+        {:ok, session} ->
+          open_initial_window(session)
+
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
   end
+
+  defp open_initial_window(%VotingSession{status: "open"} = session) do
+    update_voting_window(session, "open", DateTime.utc_now())
+    session
+  end
+
+  defp open_initial_window(session), do: session
 
   @doc """
   Creates a voting session from a Wheel Format and populates its initial game pool.
@@ -283,11 +299,64 @@ defmodule BacklogWheel.Voting do
   def update_voting_session_status(%VotingSession{} = voting_session, status)
       when is_binary(status) do
     with :ok <- validate_status_transition(voting_session, status) do
-      voting_session
-      |> VotingSession.changeset(%{status: status})
-      |> Repo.update()
+      transition_session(voting_session, status)
       |> broadcast_voting_session_change()
     end
+  end
+
+  defp transition_session(voting_session, status, allowed_statuses \\ nil) do
+    Repo.transaction(fn ->
+      session =
+        VotingSession
+        |> where([s], s.id == ^voting_session.id)
+        |> lock("FOR UPDATE")
+        |> Repo.one!()
+
+      if allowed_statuses && session.status not in allowed_statuses,
+        do: Repo.rollback(:session_not_ready)
+
+      prepare_next_round!(session, status)
+      now = DateTime.utc_now()
+      update_voting_window(session, status, now)
+
+      case session |> VotingSession.changeset(%{status: status}) |> Repo.update() do
+        {:ok, session} -> Repo.preload(session, :community)
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  defp prepare_next_round!(%VotingSession{status: previous} = session, status)
+       when previous in ["completed", "closed", "cancelled"] and status in ["open", "draft"] do
+    reward = Repo.get_by(BacklogWheel.Voting.TwitchVotingReward, voting_session_id: session.id)
+    if reward && reward.status != "deleted", do: Repo.rollback(:twitch_cleanup_pending)
+
+    from(vote in ChannelPointVote,
+      join: game in VotingSessionGame,
+      on: game.id == vote.voting_session_game_id,
+      where: game.voting_session_id == ^session.id
+    )
+    |> Repo.delete_all()
+  end
+
+  defp prepare_next_round!(_session, _status), do: :ok
+
+  defp update_voting_window(session, "open", now) do
+    active =
+      from(window in TwitchVotingWindow,
+        where: window.voting_session_id == ^session.id and is_nil(window.closed_at)
+      )
+
+    unless Repo.exists?(active) do
+      Repo.insert!(%TwitchVotingWindow{voting_session_id: session.id, opened_at: now})
+    end
+  end
+
+  defp update_voting_window(session, _status, now) do
+    from(window in TwitchVotingWindow,
+      where: window.voting_session_id == ^session.id and is_nil(window.closed_at)
+    )
+    |> Repo.update_all(set: [closed_at: now, updated_at: now])
   end
 
   @doc """
@@ -312,16 +381,30 @@ defmodule BacklogWheel.Voting do
     with {:ok, session} <- update_voting_session_status(voting_session, status) do
       case remove_twitch_rewards(session, opts) do
         {:ok, session} ->
-          {:ok, session}
+          reconcile_before_draft(session, status, opts)
 
         {:error, :no_twitch_rewards} ->
-          {:ok, reload_voting_session!(session)}
+          reconcile_before_draft(reload_voting_session!(session), status, opts)
 
         {:error, reason} ->
           {:error, {:twitch_reward_cleanup_failed, reload_voting_session!(session), reason}}
       end
     end
   end
+
+  defp reconcile_before_draft(session, "draft", opts) do
+    client = Keyword.get(opts, :client, BacklogWheel.Twitch.client())
+
+    case BacklogWheel.Voting.TwitchRedemptions.reconcile_session(session, client) do
+      :ok ->
+        {:ok, reload_voting_session!(session)}
+
+      {:error, reason} ->
+        {:error, {:twitch_reconciliation_failed, reload_voting_session!(session), reason}}
+    end
+  end
+
+  defp reconcile_before_draft(session, _status, _opts), do: {:ok, session}
 
   @doc """
   Starts Twitch voting using one reward for the session.
@@ -348,6 +431,13 @@ defmodule BacklogWheel.Voting do
   """
   def remove_twitch_rewards(%VotingSession{} = voting_session, opts \\ []) do
     BacklogWheel.Voting.TwitchSessionRewards.stop(voting_session, opts)
+  end
+
+  @doc """
+  Deletes finished session rewards after Twitch confirms their redemption queues are drained.
+  """
+  def cleanup_finished_twitch_rewards(opts \\ []) do
+    BacklogWheel.Voting.TwitchSessionRewards.cleanup_finished(opts)
   end
 
   @doc """
@@ -411,10 +501,11 @@ defmodule BacklogWheel.Voting do
   """
   def remove_game_from_session(%VotingSessionGame{} = voting_session_game) do
     Repo.transaction(fn ->
-      VotingSession
-      |> where([session], session.id == ^voting_session_game.voting_session_id)
-      |> lock("FOR UPDATE")
-      |> Repo.one!()
+      session =
+        VotingSession
+        |> where([session], session.id == ^voting_session_game.voting_session_id)
+        |> lock("FOR UPDATE")
+        |> Repo.one!()
 
       if Repo.exists?(
            from vote in ChannelPointVote,
@@ -425,12 +516,29 @@ defmodule BacklogWheel.Voting do
         Repo.rollback(:game_has_twitch_votes)
       end
 
+      require_reconciled_pool!(session)
+
       case Repo.delete(voting_session_game) do
         {:ok, pool_item} -> pool_item
         {:error, reason} -> Repo.rollback(reason)
       end
     end)
     |> broadcast_voting_session_change(voting_session_game.voting_session_id)
+  end
+
+  defp require_reconciled_pool!(session) do
+    reward = Repo.get_by(BacklogWheel.Voting.TwitchVotingReward, voting_session_id: session.id)
+
+    pending_window? =
+      Repo.exists?(
+        from window in TwitchVotingWindow,
+          where:
+            window.voting_session_id == ^session.id and not is_nil(window.closed_at) and
+              is_nil(window.reconciled_at)
+      )
+
+    if reward && (reward.status not in ["disabled", "deleted"] or pending_window?),
+      do: Repo.rollback(:twitch_reconciliation_required)
   end
 
   @doc """
@@ -508,14 +616,32 @@ defmodule BacklogWheel.Voting do
   Selects one game from a voting session pool by final weight and records the spin.
   """
   def spin_voting_session_wheel(%VotingSession{} = voting_session) do
-    with {:ok, session} <- freeze_for_spin(voting_session) do
-      do_spin_voting_session_wheel(session)
+    with {:ok, session} <- freeze_for_spin(voting_session),
+         {:ok, result} <- reconcile_and_spin(session) do
+      result
     end
+  end
+
+  defp reconcile_and_spin(voting_session) do
+    Repo.transaction(fn ->
+      session =
+        VotingSession
+        |> where([s], s.id == ^voting_session.id)
+        |> lock("FOR UPDATE")
+        |> Repo.one!()
+
+      if session.status != "locked", do: Repo.rollback(:session_not_ready)
+
+      case BacklogWheel.Voting.TwitchRedemptions.reconcile_session(session) do
+        :ok -> do_spin_voting_session_wheel(session)
+        {:error, reason} -> Repo.rollback({:twitch_reconciliation_failed, reason})
+      end
+    end)
   end
 
   defp freeze_for_spin(voting_session) do
     with {:ok, session} <-
-           voting_session |> VotingSession.changeset(%{status: "locked"}) |> Repo.update() do
+           transition_session(voting_session, "locked", ["draft", "open", "locked"]) do
       case remove_twitch_rewards(session) do
         {:ok, session} -> {:ok, session}
         {:error, :no_twitch_rewards} -> {:ok, session}
@@ -629,6 +755,7 @@ defmodule BacklogWheel.Voting do
     voting_sessions
     |> Repo.preload(
       twitch_voting_reward: [],
+      twitch_voting_windows: [],
       voting_session_games: {ordered_voting_session_games_query(), [:game, :channel_point_votes]}
     )
     |> Enum.map(fn voting_session ->
