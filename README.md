@@ -162,7 +162,11 @@ Behavior today:
 - Twitch broadcaster ID and reward cost are saved per community in Settings > Twitch. Broadcaster ID is detected when Twitch is connected.
 - EventSub webhook signing is configured automatically when Twitch is connected or reconnected.
 - If required config is missing, `BacklogWheel.Twitch.config/1` returns `{:error, {:missing_config, keys}}` and `BacklogWheel.Twitch.configured?/1` returns `false`.
-- Starting Twitch voting creates one positive channel point vote reward per game in the voting session.
+- Starting Twitch voting creates one channel point reward for the session. Viewers enter the game number shown in the voting pool and wheel; each valid redemption adds one vote.
+- Game numbers are assigned permanently within a session, including after a game is removed. Invalid numbers and redemptions received after voting closes are canceled to refund points, with an addressed chat message explaining the refund.
+- Resolution and feedback failures are retained and retried; the session page reports redemptions that need attention. The app also checks Twitch for unfulfilled redemptions to recover missed EventSub deliveries. Check the Twitch connection and permissions if retries continue to fail.
+- The reward is disabled when voting is frozen or closed. Disabled rewards are retained so late EventSub deliveries can still be refunded; they may be removed manually from Twitch once all redemptions have been resolved. Twitch counts disabled rewards toward its 50-reward channel limit, so periodically remove finished rewards. Legacy per-game rewards are not managed and can be removed manually.
+- OAuth requests `channel:manage:redemptions` and `user:write:chat`. Existing users should disconnect and reconnect Twitch to grant chat permission.
 - EventSub signature verification uses the secret saved for the event's broadcaster community.
 
 ## Terminology

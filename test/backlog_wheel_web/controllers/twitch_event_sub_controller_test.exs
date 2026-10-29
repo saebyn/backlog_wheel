@@ -8,7 +8,7 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
   alias BacklogWheel.Repo
   alias BacklogWheel.Communities
   alias BacklogWheel.Voting.ChannelPointVote
-  alias BacklogWheel.Voting.VotingSessionGame
+  alias BacklogWheel.Voting.TwitchVotingReward
 
   @eventsub_secret "eventsub-secret"
   @broadcaster_id "28728577"
@@ -54,14 +54,14 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
     game = game_fixture(%{title: "Webhook Reward Game"})
     pool_item = voting_session_game_fixture(voting_session, game)
 
-    pool_item
-    |> VotingSessionGame.twitch_reward_changeset(%{
-      twitch_reward_id: "webhook-reward",
-      twitch_reward_title: "Vote ##{pool_item.id}: Webhook Reward Game",
-      twitch_reward_cost: 100,
-      twitch_reward_status: "enabled"
+    %TwitchVotingReward{voting_session_id: voting_session.id}
+    |> TwitchVotingReward.changeset(%{
+      reward_id: "webhook-reward",
+      title: "Vote",
+      cost: 100,
+      status: "enabled"
     })
-    |> Repo.update!()
+    |> Repo.insert!()
 
     body = redemption_notification_body("webhook-redemption", "webhook-reward")
 
@@ -117,7 +117,9 @@ defmodule BacklogWheelWeb.TwitchEventSubControllerTest do
         "broadcaster_user_id" => @broadcaster_id,
         "id" => redemption_id,
         "user_id" => "twitch-user-1",
+        "user_login" => "webhookviewer",
         "user_name" => "WebhookViewer",
+        "user_input" => "1",
         "reward" => %{"id" => reward_id}
       }
     })

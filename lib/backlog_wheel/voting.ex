@@ -10,7 +10,6 @@ defmodule BacklogWheel.Voting do
   alias BacklogWheel.Communities
   alias BacklogWheel.Communities.Community
   alias BacklogWheel.Repo
-  alias BacklogWheel.Twitch
 
   alias BacklogWheel.Voting.{
     ChannelPointVote,
@@ -72,9 +71,6 @@ defmodule BacklogWheel.Voting do
   @landing_edge_inset_ratio 0.25
   @landing_edge_inset_degrees 18.0
   @voting_session_pool_min_size 2
-  @twitch_reward_title_max_length 45
-  @voting_session_pool_max_size 50
-  @twitch_reward_pool_max_size @voting_session_pool_max_size
   @spin_easing_profile %{
     "type" => "cubic-bezier",
     "x1" => 0.08,
@@ -301,23 +297,18 @@ defmodule BacklogWheel.Voting do
     voting_session = reload_voting_session!(voting_session)
     pool_size = length(voting_session.voting_session_games)
 
-    cond do
-      pool_size < @voting_session_pool_min_size ->
-        {:error, {:voting_session_pool_too_small, pool_size, @voting_session_pool_min_size}}
-
-      pool_size > @voting_session_pool_max_size ->
-        {:error, {:voting_session_pool_too_large, pool_size, @voting_session_pool_max_size}}
-
-      true ->
-        :ok
+    if pool_size < @voting_session_pool_min_size do
+      {:error, {:voting_session_pool_too_small, pool_size, @voting_session_pool_min_size}}
+    else
+      :ok
     end
   end
 
   @doc """
-  Completes or cancels a voting session and attempts to delete its Twitch rewards.
+  Changes the session status and attempts to disable its Twitch reward.
   """
   def close_voting_session(%VotingSession{} = voting_session, status, opts \\ [])
-      when status in ["completed", "closed", "cancelled"] do
+      when status in ["draft", "locked", "completed", "closed", "cancelled"] do
     with {:ok, session} <- update_voting_session_status(voting_session, status) do
       case remove_twitch_rewards(session, opts) do
         {:ok, session} ->
@@ -333,19 +324,10 @@ defmodule BacklogWheel.Voting do
   end
 
   @doc """
-  Starts Twitch voting by creating one positive channel point vote reward per game.
+  Starts Twitch voting using one reward for the session.
   """
   def start_twitch_voting(%VotingSession{} = voting_session, opts \\ []) do
-    client = Keyword.get(opts, :client, Twitch.client())
-
-    voting_session = reload_voting_session!(voting_session)
-
-    with {:ok, config} <- Twitch.config(voting_session.community),
-         {:ok, credential} <- fetch_twitch_credential(config, client),
-         {:ok, _pool_items} <- create_twitch_rewards(voting_session, config, credential, client),
-         {:ok, session} <- update_voting_session_status(voting_session, "open") do
-      {:ok, reload_voting_session!(session)}
-    end
+    BacklogWheel.Voting.TwitchSessionRewards.start(voting_session, opts)
   end
 
   @doc """
@@ -355,24 +337,9 @@ defmodule BacklogWheel.Voting do
     voting_session = reload_voting_session!(voting_session)
     pool_items = voting_session.voting_session_games
 
-    cond do
-      pool_size_error = pool_size_error(pool_items) ->
-        {:error, pool_size_error}
-
-      length(pool_items) > @twitch_reward_pool_max_size ->
-        {:error,
-         {:twitch_reward_pool_too_large, length(pool_items), @twitch_reward_pool_max_size}}
-
-      too_long_title = Enum.find(pool_items, &twitch_reward_title_too_long?/1) ->
-        {:error,
-         {:twitch_reward_title_too_long, twitch_reward_title_for_validation(too_long_title),
-          @twitch_reward_title_max_length}}
-
-      duplicate_titles = duplicate_twitch_reward_titles(pool_items) ->
-        {:error, {:duplicate_twitch_reward_titles, duplicate_titles}}
-
-      true ->
-        :ok
+    case pool_size_error(pool_items) do
+      nil -> :ok
+      error -> {:error, error}
     end
   end
 
@@ -380,28 +347,7 @@ defmodule BacklogWheel.Voting do
   Deletes Twitch rewards for a voting session without changing session status.
   """
   def remove_twitch_rewards(%VotingSession{} = voting_session, opts \\ []) do
-    client = Keyword.get(opts, :client, Twitch.client())
-    voting_session = reload_voting_session!(voting_session)
-    pool_items = twitch_reward_pool_items(voting_session)
-
-    case pool_items do
-      [] ->
-        {:error, :no_twitch_rewards}
-
-      pool_items ->
-        with {:ok, config} <- Twitch.config(voting_session.community),
-             {:ok, credential} <- fetch_twitch_credential(config, client),
-             {:ok, _pool_items} <- delete_twitch_rewards(pool_items, config, credential, client) do
-          {:ok, reload_voting_session!(voting_session)}
-        else
-          {:error, {:twitch_reward_deletion_failed, _count} = reason} ->
-            {:error, reason}
-
-          {:error, reason} ->
-            mark_twitch_reward_deletions_failed(pool_items, reason)
-            {:error, reason}
-        end
-    end
+    BacklogWheel.Voting.TwitchSessionRewards.stop(voting_session, opts)
   end
 
   @doc """
@@ -427,37 +373,36 @@ defmodule BacklogWheel.Voting do
   """
   def add_game_to_session(%VotingSession{} = voting_session, %Game{} = game, attrs \\ %{}) do
     if game.community_id == voting_session.community_id do
-      Repo.transaction(fn ->
-        session =
-          VotingSession
-          |> where([session], session.id == ^voting_session.id)
-          |> lock("FOR UPDATE")
-          |> Repo.one!()
-
-        result =
-          %VotingSessionGame{
-            voting_session_id: session.id,
-            game_id: game.id,
-            option_number: session.next_option_number
-          }
-          |> VotingSessionGame.changeset(attrs)
-          |> Repo.insert()
-
-        case result do
-          {:ok, pool_item} ->
-            session
-            |> Ecto.Changeset.change(next_option_number: session.next_option_number + 1)
-            |> Repo.update!()
-
-            pool_item
-
-          {:error, changeset} ->
-            Repo.rollback(changeset)
-        end
-      end)
+      Repo.transaction(fn -> insert_numbered_session_game(voting_session, game, attrs) end)
       |> broadcast_voting_session_change()
     else
       {:error, :game_not_in_session_community}
+    end
+  end
+
+  defp insert_numbered_session_game(voting_session, game, attrs) do
+    session =
+      VotingSession
+      |> where([session], session.id == ^voting_session.id)
+      |> lock("FOR UPDATE")
+      |> Repo.one!()
+
+    case %VotingSessionGame{
+           voting_session_id: session.id,
+           game_id: game.id,
+           option_number: session.next_option_number
+         }
+         |> VotingSessionGame.changeset(attrs)
+         |> Repo.insert() do
+      {:ok, pool_item} ->
+        session
+        |> Ecto.Changeset.change(next_option_number: session.next_option_number + 1)
+        |> Repo.update!()
+
+        pool_item
+
+      {:error, changeset} ->
+        Repo.rollback(changeset)
     end
   end
 
@@ -465,7 +410,26 @@ defmodule BacklogWheel.Voting do
   Removes a game from a voting session pool.
   """
   def remove_game_from_session(%VotingSessionGame{} = voting_session_game) do
-    Repo.delete(voting_session_game)
+    Repo.transaction(fn ->
+      VotingSession
+      |> where([session], session.id == ^voting_session_game.voting_session_id)
+      |> lock("FOR UPDATE")
+      |> Repo.one!()
+
+      if Repo.exists?(
+           from vote in ChannelPointVote,
+             where:
+               vote.voting_session_game_id == ^voting_session_game.id and
+                 vote.source == "twitch_channel_points"
+         ) do
+        Repo.rollback(:game_has_twitch_votes)
+      end
+
+      case Repo.delete(voting_session_game) do
+        {:ok, pool_item} -> pool_item
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
     |> broadcast_voting_session_change(voting_session_game.voting_session_id)
   end
 
@@ -498,21 +462,11 @@ defmodule BacklogWheel.Voting do
   @doc """
   Ingests a Twitch channel point reward redemption as one positive vote.
 
-  Duplicate redemption IDs are idempotent. Redemptions for unknown or inactive
-  rewards are ignored because Twitch can retry delivery after local cleanup.
+  Duplicate redemption IDs are idempotent. Known rewards are retained so late
+  redemptions can be canceled and refunded after voting closes.
   """
   def ingest_twitch_reward_redemption(attrs) when is_map(attrs) do
-    with {:ok, redemption_id} <- fetch_redemption_id(attrs),
-         {:ok, reward_id} <- fetch_redemption_reward_id(attrs),
-         {:ok, twitch_user_id} <- fetch_twitch_user_id(attrs) do
-      case get_active_pool_item_by_twitch_reward_id(reward_id) do
-        nil ->
-          {:ignored, :unknown_twitch_reward}
-
-        pool_item ->
-          record_twitch_redemption(pool_item, attrs, twitch_user_id, redemption_id)
-      end
-    end
+    BacklogWheel.Voting.TwitchRedemptions.ingest(attrs)
   end
 
   @doc """
@@ -554,6 +508,23 @@ defmodule BacklogWheel.Voting do
   Selects one game from a voting session pool by final weight and records the spin.
   """
   def spin_voting_session_wheel(%VotingSession{} = voting_session) do
+    with {:ok, session} <- freeze_for_spin(voting_session) do
+      do_spin_voting_session_wheel(session)
+    end
+  end
+
+  defp freeze_for_spin(voting_session) do
+    with {:ok, session} <-
+           voting_session |> VotingSession.changeset(%{status: "locked"}) |> Repo.update() do
+      case remove_twitch_rewards(session) do
+        {:ok, session} -> {:ok, session}
+        {:error, :no_twitch_rewards} -> {:ok, session}
+        {:error, reason} -> {:error, {:twitch_reward_cleanup_failed, session, reason}}
+      end
+    end
+  end
+
+  defp do_spin_voting_session_wheel(%VotingSession{} = voting_session) do
     entries =
       voting_session
       |> list_voting_session_wheel_entries()
@@ -648,291 +619,6 @@ defmodule BacklogWheel.Voting do
     |> Repo.one()
   end
 
-  defp fetch_redemption_id(attrs), do: fetch_required_string(attrs, [:id, :redemption_id])
-
-  defp fetch_twitch_user_id(attrs), do: fetch_required_string(attrs, [:user_id, :user_login_id])
-
-  defp fetch_redemption_reward_id(attrs) do
-    reward = Map.get(attrs, :reward) || Map.get(attrs, "reward") || %{}
-    fetch_required_string(reward, [:id, :reward_id])
-  end
-
-  defp fetch_required_string(attrs, keys) do
-    keys
-    |> Enum.find_value(fn key ->
-      value = Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key))
-
-      if is_binary(value) and value != "" do
-        value
-      end
-    end)
-    |> case do
-      nil -> {:error, {:missing_twitch_redemption_field, hd(keys)}}
-      value -> {:ok, value}
-    end
-  end
-
-  defp get_active_pool_item_by_twitch_reward_id(reward_id) do
-    VotingSessionGame
-    |> join(:inner, [pool_item], session in assoc(pool_item, :voting_session))
-    |> where([pool_item, session], session.status == "open")
-    |> where([pool_item, _session], pool_item.twitch_reward_id == ^reward_id)
-    |> where(
-      [pool_item, _session],
-      is_nil(pool_item.twitch_reward_deletion_status) or
-        pool_item.twitch_reward_deletion_status != "deleted"
-    )
-    |> preload([_pool_item, session], voting_session: session)
-    |> Repo.one()
-  end
-
-  defp get_or_create_twitch_viewer(%VotingSessionGame{} = pool_item, attrs, twitch_user_id) do
-    display_name = twitch_redemption_display_name(attrs, twitch_user_id)
-    community_id = pool_item.voting_session.community_id
-
-    case get_twitch_viewer_identity(community_id, twitch_user_id) do
-      %ViewerIdentity{} = identity ->
-        {:ok, Repo.get!(Viewer, identity.viewer_id)}
-
-      nil ->
-        create_twitch_viewer_identity(community_id, twitch_user_id, display_name)
-    end
-  end
-
-  defp record_twitch_redemption(pool_item, attrs, twitch_user_id, redemption_id) do
-    with {:ok, viewer} <- get_or_create_twitch_viewer(pool_item, attrs, twitch_user_id) do
-      record_vote(pool_item, viewer, %{
-        strength: 1,
-        source: "twitch_channel_points",
-        external_event_id: redemption_id
-      })
-    end
-  end
-
-  defp get_twitch_viewer_identity(community_id, twitch_user_id) do
-    Repo.get_by(ViewerIdentity,
-      community_id: community_id,
-      platform: "twitch",
-      platform_user_id: twitch_user_id
-    )
-  end
-
-  defp create_twitch_viewer_identity(community_id, twitch_user_id, display_name) do
-    Repo.transaction(fn ->
-      with {:ok, viewer} <-
-             %Viewer{community_id: community_id}
-             |> Viewer.changeset(%{display_name: display_name})
-             |> Repo.insert(),
-           {:ok, _identity} <-
-             %ViewerIdentity{community_id: community_id, viewer_id: viewer.id}
-             |> ViewerIdentity.changeset(%{
-               platform: "twitch",
-               platform_user_id: twitch_user_id,
-               display_name: display_name
-             })
-             |> Repo.insert() do
-        viewer
-      else
-        {:error, changeset} -> Repo.rollback(changeset)
-      end
-    end)
-  end
-
-  defp twitch_redemption_display_name(attrs, fallback) do
-    Enum.find_value([:user_name, :user_login, :display_name], fallback, fn key ->
-      value = Map.get(attrs, key) || Map.get(attrs, Atom.to_string(key))
-
-      if is_binary(value) and value != "" do
-        value
-      end
-    end)
-  end
-
-  defp fetch_twitch_credential(config, client) do
-    case Twitch.get_credential() do
-      nil ->
-        {:error, :missing_twitch_credential}
-
-      credential ->
-        if credential.refresh_token in [nil, ""] do
-          {:ok, credential}
-        else
-          Twitch.refresh_credential(config, client)
-        end
-    end
-  end
-
-  defp create_twitch_rewards(%VotingSession{} = voting_session, config, credential, client) do
-    voting_session = reload_voting_session!(voting_session)
-
-    case validate_twitch_reward_creation(voting_session) do
-      :ok ->
-        create_twitch_rewards_for_pool_items(
-          voting_session.voting_session_games,
-          config,
-          credential,
-          client
-        )
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp create_twitch_rewards_for_pool_items(pool_items, config, credential, client) do
-    pool_items
-    |> Enum.reduce_while({:ok, []}, fn pool_item, {:ok, created_pool_items} ->
-      case maybe_create_twitch_reward(pool_item, config, credential, client) do
-        {:ok, updated_pool_item} -> {:cont, {:ok, [updated_pool_item | created_pool_items]}}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-    |> then(fn
-      {:ok, created_pool_items} -> {:ok, Enum.reverse(created_pool_items)}
-      {:error, reason} -> {:error, reason}
-    end)
-  end
-
-  defp delete_twitch_rewards(pool_items, config, credential, client) do
-    results =
-      Enum.map(pool_items, fn pool_item ->
-        case delete_twitch_reward(pool_item, config, credential, client) do
-          {:ok, updated_pool_item} -> {:ok, updated_pool_item}
-          {:error, reason} -> {:error, pool_item, reason}
-        end
-      end)
-
-    failures = Enum.filter(results, &match?({:error, _pool_item, _reason}, &1))
-
-    if failures == [] do
-      {:ok, Enum.map(results, fn {:ok, pool_item} -> pool_item end)}
-    else
-      {:error, {:twitch_reward_deletion_failed, length(failures)}}
-    end
-  end
-
-  defp delete_twitch_reward(%VotingSessionGame{} = pool_item, config, credential, client) do
-    pool_item = mark_twitch_reward_deleting!(pool_item)
-
-    case client.delete_custom_reward(config, credential, pool_item.twitch_reward_id) do
-      :ok ->
-        pool_item
-        |> VotingSessionGame.clear_twitch_reward_changeset()
-        |> Repo.update()
-        |> broadcast_voting_session_change(pool_item.voting_session_id)
-
-      {:error, reason} ->
-        pool_item
-        |> VotingSessionGame.twitch_reward_deletion_failed_changeset(reason)
-        |> Repo.update()
-        |> broadcast_voting_session_change(pool_item.voting_session_id)
-
-        {:error, reason}
-    end
-  end
-
-  defp mark_twitch_reward_deleting!(%VotingSessionGame{} = pool_item) do
-    pool_item
-    |> VotingSessionGame.twitch_reward_deleting_changeset()
-    |> Repo.update!()
-  end
-
-  defp mark_twitch_reward_deletions_failed(pool_items, reason) do
-    Enum.each(pool_items, fn pool_item ->
-      pool_item
-      |> VotingSessionGame.twitch_reward_deletion_failed_changeset(reason)
-      |> Repo.update()
-      |> broadcast_voting_session_change(pool_item.voting_session_id)
-    end)
-  end
-
-  defp maybe_create_twitch_reward(
-         %VotingSessionGame{
-           twitch_reward_id: reward_id,
-           twitch_reward_deletion_status: deletion_status
-         } =
-           pool_item,
-         _config,
-         _credential,
-         _client
-       )
-       when reward_id not in [nil, ""] and deletion_status != "deleted" do
-    {:ok, pool_item}
-  end
-
-  defp maybe_create_twitch_reward(%VotingSessionGame{} = pool_item, config, credential, client) do
-    attrs = twitch_reward_attrs(pool_item, config)
-
-    with {:ok, reward} <- client.create_custom_reward(config, credential, attrs) do
-      persist_twitch_reward(pool_item, reward)
-    end
-  end
-
-  defp persist_twitch_reward(%VotingSessionGame{} = pool_item, reward) do
-    pool_item
-    |> VotingSessionGame.twitch_reward_changeset(%{
-      twitch_reward_id: Map.fetch!(reward, :id),
-      twitch_reward_title: Map.fetch!(reward, :title),
-      twitch_reward_cost: Map.fetch!(reward, :cost),
-      twitch_reward_status: Map.fetch!(reward, :status),
-      twitch_reward_deletion_status: nil,
-      twitch_reward_deletion_error: nil,
-      twitch_reward_deleted_at: nil
-    })
-    |> Repo.update()
-    |> broadcast_voting_session_change(pool_item.voting_session_id)
-  end
-
-  defp twitch_reward_attrs(%VotingSessionGame{} = pool_item, config) do
-    %{
-      voting_session_game_id: pool_item.id,
-      title: twitch_reward_title(pool_item),
-      cost: config.reward_cost
-    }
-  end
-
-  defp twitch_reward_title(%VotingSessionGame{} = pool_item) do
-    prefix = "Vote ##{pool_item.id}: "
-
-    prefix <>
-      String.slice(
-        pool_item.game.title,
-        0,
-        max(0, @twitch_reward_title_max_length - String.length(prefix))
-      )
-  end
-
-  defp twitch_reward_title_for_validation(%VotingSessionGame{} = pool_item) do
-    if pool_item.twitch_reward_id not in [nil, ""] and
-         pool_item.twitch_reward_deletion_status != "deleted" do
-      pool_item.twitch_reward_title || twitch_reward_title(pool_item)
-    else
-      twitch_reward_title(pool_item)
-    end
-  end
-
-  defp twitch_reward_title_too_long?(%VotingSessionGame{} = pool_item) do
-    String.length(twitch_reward_title_for_validation(pool_item)) > @twitch_reward_title_max_length
-  end
-
-  defp duplicate_twitch_reward_titles(pool_items) do
-    duplicates =
-      pool_items
-      |> Enum.map(&twitch_reward_title_for_validation/1)
-      |> Enum.frequencies()
-      |> Enum.filter(fn {_title, count} -> count > 1 end)
-      |> Enum.map(fn {title, _count} -> title end)
-
-    if duplicates == [], do: nil, else: duplicates
-  end
-
-  defp twitch_reward_pool_items(%VotingSession{} = voting_session) do
-    Enum.filter(voting_session.voting_session_games, fn pool_item ->
-      pool_item.twitch_reward_id not in [nil, ""] and
-        pool_item.twitch_reward_deletion_status != "deleted"
-    end)
-  end
-
   defp preload_pool_games_with_votes(%VotingSession{} = voting_session) do
     [voting_session]
     |> preload_pool_games_with_votes()
@@ -942,6 +628,7 @@ defmodule BacklogWheel.Voting do
   defp preload_pool_games_with_votes(voting_sessions) when is_list(voting_sessions) do
     voting_sessions
     |> Repo.preload(
+      twitch_voting_reward: [],
       voting_session_games: {ordered_voting_session_games_query(), [:game, :channel_point_votes]}
     )
     |> Enum.map(fn voting_session ->

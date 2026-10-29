@@ -82,6 +82,23 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
              "https://example.com/twitch/eventsub"
   end
 
+  test "reconnecting the same channel preserves the EventSub signing secret", %{conn: conn} do
+    {:ok, community} =
+      Communities.update_community_twitch_settings(Process.get(:test_community), %{
+        twitch_broadcaster_id: "28728577",
+        twitch_eventsub_secret: "existing-eventsub-secret"
+      })
+
+    Process.put(:test_community, community)
+
+    conn
+    |> Plug.Test.init_test_session(twitch_oauth_state: "state-1")
+    |> get(~p"/twitch/oauth/callback?#{[code: "valid-code", state: "state-1"]}")
+
+    assert Communities.get_community!(community.id).twitch_eventsub_secret ==
+             "existing-eventsub-secret"
+  end
+
   test "callback rejects mismatched state", %{conn: conn} do
     conn =
       conn

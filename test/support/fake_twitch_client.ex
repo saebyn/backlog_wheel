@@ -48,7 +48,8 @@ defmodule BacklogWheel.FakeTwitchClient do
   end
 
   def create_custom_reward(_config, _credential, attrs) do
-    voting_session_game_id = Map.fetch!(attrs, :voting_session_game_id)
+    voting_session_game_id =
+      Map.get(attrs, :voting_session_game_id) || Map.fetch!(attrs, :voting_session_id)
 
     Agent.update(@agent, fn state ->
       put_in(state, [:rewards, voting_session_game_id], attrs)
@@ -74,6 +75,98 @@ defmodule BacklogWheel.FakeTwitchClient do
 
       :ok
     end
+  end
+
+  def update_redemption(_config, _credential, reward_id, redemption_id, status) do
+    Agent.get_and_update(@agent, fn state ->
+      if Map.get(state, :fail_resolution, false) do
+        {{:error, :resolution_failed}, state}
+      else
+        {resolution_result(state), put_redemption(state, reward_id, redemption_id, status)}
+      end
+    end)
+  end
+
+  defp resolution_result(%{ambiguous_resolution: true}), do: {:error, :timeout}
+  defp resolution_result(_state), do: :ok
+
+  defp put_redemption(state, reward_id, redemption_id, status) do
+    Map.update(state, :redemptions, %{redemption_id => {reward_id, status}}, fn redemptions ->
+      Map.put(redemptions, redemption_id, {reward_id, status})
+    end)
+  end
+
+  def send_chat_message(_config, _credential, message) do
+    Agent.get_and_update(@agent, fn state ->
+      if Map.get(state, :fail_chat, false) do
+        {{:error, :chat_failed}, state}
+      else
+        {:ok,
+         Map.update(state, :chat_messages, [message], fn messages -> [message | messages] end)}
+      end
+    end)
+  end
+
+  def fail_resolution(value), do: Agent.update(@agent, &Map.put(&1, :fail_resolution, value))
+
+  def ambiguous_resolution(value),
+    do: Agent.update(@agent, &Map.put(&1, :ambiguous_resolution, value))
+
+  def fail_chat(value), do: Agent.update(@agent, &Map.put(&1, :fail_chat, value))
+  def chat_messages, do: Agent.get(@agent, &Map.get(&1, :chat_messages, []))
+  def redemption_status(id), do: Agent.get(@agent, &get_in(&1, [:redemptions, id]))
+
+  def set_reward_enabled(_config, _credential, reward_id, enabled) do
+    if not enabled and fail_deletion?(reward_id) do
+      {:error, :disable_failed}
+    else
+      Agent.update(
+        @agent,
+        &Map.update(&1, :reward_enabled, %{reward_id => enabled}, fn states ->
+          Map.put(states, reward_id, enabled)
+        end)
+      )
+
+      :ok
+    end
+  end
+
+  def reward_enabled?(reward_id), do: Agent.get(@agent, &get_in(&1, [:reward_enabled, reward_id]))
+
+  def list_unfulfilled_redemptions(_config, _credential, reward_id) do
+    Agent.get(@agent, fn state -> {:ok, get_in(state, [:unfulfilled, reward_id]) || []} end)
+  end
+
+  def set_unfulfilled(reward_id, events) do
+    Agent.update(
+      @agent,
+      &Map.update(&1, :unfulfilled, %{reward_id => events}, fn values ->
+        Map.put(values, reward_id, events)
+      end)
+    )
+  end
+
+  def find_custom_reward(_config, _credential, title) do
+    Agent.get(@agent, fn state ->
+      case Enum.find(state.rewards, &reward_title_matches?(&1, title)) do
+        nil ->
+          {:ok, nil}
+
+        {id, attrs} ->
+          {:ok, %{id: "reward-#{id}", title: attrs.title, cost: attrs.cost, status: "disabled"}}
+      end
+    end)
+  end
+
+  defp reward_title_matches?({_id, attrs}, title), do: attrs.title == title
+
+  def get_redemption_status(_config, _credential, _reward_id, redemption_id) do
+    Agent.get(@agent, fn state ->
+      case get_in(state, [:redemptions, redemption_id]) do
+        {_reward_id, status} -> {:ok, status}
+        nil -> {:ok, "UNFULFILLED"}
+      end
+    end)
   end
 
   def create_redemption_eventsub_subscription(_config, _credential, callback_url, _secret) do

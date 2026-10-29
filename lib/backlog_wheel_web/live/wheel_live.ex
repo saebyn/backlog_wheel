@@ -158,7 +158,9 @@ defmodule BacklogWheelWeb.WheelLive do
                   class="rounded-xl bg-base-100 p-3"
                 >
                   <div class="flex items-center justify-between gap-3">
-                    <p class="font-semibold leading-tight">#{candidate.pool_item.option_number} · {candidate.title}</p>
+                    <p class="font-semibold leading-tight">
+                      #{candidate.pool_item.option_number} · {candidate.title}
+                    </p>
                     <p class="text-sm font-black text-primary">{candidate.weight}</p>
                   </div>
                   <div class="mt-2 h-2 overflow-hidden rounded-full bg-base-300">
@@ -359,6 +361,14 @@ defmodule BacklogWheelWeb.WheelLive do
       {:error, :no_candidates} ->
         {:noreply,
          put_flash(socket, :error, "Add at least one game to the voting session before spinning")}
+
+      {:error, {:twitch_reward_cleanup_failed, _session, _reason}} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Voting was frozen, but the Twitch reward could not be disabled. Retry cleanup from the voting session before spinning."
+         )}
     end
   end
 

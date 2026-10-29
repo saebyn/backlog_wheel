@@ -51,7 +51,7 @@ defmodule BacklogWheelWeb.TwitchEventSubController do
 
       {:error, reason} ->
         Logger.warning("Failed to ingest Twitch reward redemption: #{inspect(reason)}")
-        send_resp(conn, :unprocessable_entity, "")
+        send_resp(conn, :service_unavailable, "")
     end
   end
 

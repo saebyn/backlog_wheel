@@ -70,11 +70,19 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
   end
 
   defp save_connection_settings(community, twitch_user) do
+    secret =
+      if community.twitch_broadcaster_id == twitch_user.id and
+           community.twitch_eventsub_secret not in [nil, ""] do
+        community.twitch_eventsub_secret
+      else
+        Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+      end
+
     Communities.update_community_twitch_settings(community, %{
       twitch_broadcaster_id: twitch_user.id,
       twitch_broadcaster_login: twitch_user.login,
       twitch_broadcaster_display_name: twitch_user.display_name,
-      twitch_eventsub_secret: Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+      twitch_eventsub_secret: secret
     })
   end
 

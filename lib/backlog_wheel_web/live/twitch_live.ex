@@ -19,7 +19,7 @@ defmodule BacklogWheelWeb.TwitchLive do
               </p>
               <h1 class="mt-2 text-4xl font-black tracking-tight">Twitch integration</h1>
               <p class="mt-3 max-w-3xl text-base-content/70">
-                Connect Twitch so Backlog Wheel can create and remove temporary channel point rewards for voting sessions.
+                Connect Twitch so Backlog Wheel can manage a channel point voting reward and send feedback in chat.
               </p>
             </div>
 
@@ -60,7 +60,7 @@ defmodule BacklogWheelWeb.TwitchLive do
               </dd>
             </dl>
             <p id="twitch-settings-capability" class="mt-4 text-sm leading-6 text-base-content/70">
-              Backlog Wheel can manage temporary custom rewards for game-voting sessions.
+              Viewers enter a game number in the session's voting reward. Invalid entries are refunded and explained in chat.
             </p>
           </section>
 
@@ -82,7 +82,7 @@ defmodule BacklogWheelWeb.TwitchLive do
               phx-submit="save"
             >
               <p id="twitch-settings-reward-cost-help" class="text-sm leading-6 text-base-content/70">
-                The number of channel points viewers spend for each temporary game-voting reward.
+                The number of channel points viewers spend for each vote.
               </p>
               <.input
                 field={@form[:twitch_reward_cost]}
@@ -99,6 +99,9 @@ defmodule BacklogWheelWeb.TwitchLive do
 
           <section class="mt-8 border-t border-base-300 pt-8">
             <h2 class="text-xl font-bold">Connection management</h2>
+            <p class="mt-2 text-sm text-base-content/70">
+              If you connected before chat feedback was added, disconnect and reconnect to grant the new chat permission.
+            </p>
             <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <.button
                 id="connect-twitch"

@@ -38,6 +38,8 @@ defmodule BacklogWheelWeb.WheelLiveTest do
     assert has_element?(view, "#wheel-total-weight", "Total weight: 6")
     assert has_element?(view, "#wheel-candidate-#{first_pool_item.id}", "1")
     assert has_element?(view, "#wheel-candidate-#{second_pool_item.id}", "5")
+    assert has_element?(view, "#wheel-candidate-#{first_pool_item.id}", "#1 · Small Slice")
+    assert has_element?(view, "#wheel-candidate-#{second_pool_item.id}", "#2 · Big Slice")
 
     assert has_element?(
              view,

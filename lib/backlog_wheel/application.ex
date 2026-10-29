@@ -14,6 +14,7 @@ defmodule BacklogWheel.Application do
        repos: Application.fetch_env!(:backlog_wheel, :ecto_repos), skip: skip_migrations?()},
       {DNSCluster, query: Application.get_env(:backlog_wheel, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: BacklogWheel.PubSub},
+      BacklogWheel.Voting.TwitchRedemptionWorker,
       # Start a worker by calling: BacklogWheel.Worker.start_link(arg)
       # {BacklogWheel.Worker, arg},
       # Start to serve requests, typically the last entry
