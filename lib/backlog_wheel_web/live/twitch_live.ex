@@ -135,7 +135,7 @@ defmodule BacklogWheelWeb.TwitchLive do
 
   @impl true
   def handle_event("disconnect", _params, socket) do
-    :ok = Twitch.delete_credential()
+    :ok = Twitch.delete_credential(socket.assigns.current_community)
 
     {:noreply,
      socket
@@ -175,7 +175,7 @@ defmodule BacklogWheelWeb.TwitchLive do
 
     socket
     |> assign(:form, to_form(Communities.change_community_twitch_settings(community)))
-    |> assign(:twitch_connected?, Twitch.credential_configured?())
+    |> assign(:twitch_connected?, Twitch.credential_configured?(community))
     |> assign(:twitch_configured?, match?({:ok, _config}, oauth_config))
     |> assign(:missing_config, missing_config(oauth_config))
   end

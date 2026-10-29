@@ -397,7 +397,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     voting_session_fixture()
 
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
@@ -427,7 +427,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     )
 
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
@@ -455,7 +455,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     end
 
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
@@ -479,7 +479,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     {:ok, _session} = Voting.update_voting_session_status(voting_session, "open")
 
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
@@ -505,7 +505,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     )
 
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
@@ -539,7 +539,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     voting_session_game_fixture(voting_session, game)
 
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"

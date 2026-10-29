@@ -4,6 +4,7 @@ defmodule BacklogWheel.TwitchTest do
   alias BacklogWheel.Twitch
   alias BacklogWheel.Twitch.Config
   import BacklogWheel.BacklogFixtures
+  import BacklogWheel.VotingFixtures
 
   setup do
     original_config = Application.get_env(:backlog_wheel, :twitch)
@@ -75,30 +76,103 @@ defmodule BacklogWheel.TwitchTest do
              Twitch.eventsub_config(%{"event" => %{"broadcaster_user_id" => "1234"}})
   end
 
-  test "save_credential/1 persists the latest Twitch OAuth token" do
+  test "connecting and disconnecting one community leaves another channel connected" do
+    first = community_fixture(%{twitch_broadcaster_id: "111"})
+    second = community_fixture(%{twitch_broadcaster_id: "222"})
+
+    assert {:ok, _} =
+             Twitch.save_credential(first, %{
+               access_token: "first-token",
+               scopes: "channel:manage:redemptions"
+             })
+
+    assert {:ok, _} =
+             Twitch.save_credential(second, %{
+               access_token: "second-token",
+               scopes: "channel:manage:redemptions"
+             })
+
+    assert Twitch.get_credential(first).access_token == "first-token"
+    assert Twitch.get_credential(second).access_token == "second-token"
+
+    assert :ok = Twitch.delete_credential(first)
+    refute Twitch.credential_configured?(first)
+    assert Twitch.get_credential(second).access_token == "second-token"
+  end
+
+  test "each community creates its reward with its own Twitch credential" do
+    start_supervised!(BacklogWheel.FakeTwitchClient)
+
+    Application.put_env(:backlog_wheel, :twitch,
+      client_id: "client-id",
+      client_secret: "client-secret"
+    )
+
+    first = community_fixture(%{twitch_broadcaster_id: "111"})
+    second = community_fixture(%{twitch_broadcaster_id: "222"})
+
+    assert {:ok, _} =
+             Twitch.save_credential(first, %{
+               access_token: "first-token",
+               scopes: "channel:manage:redemptions"
+             })
+
+    assert {:ok, _} =
+             Twitch.save_credential(second, %{
+               access_token: "second-token",
+               scopes: "channel:manage:redemptions"
+             })
+
+    for community <- [first, second] do
+      session = voting_session_fixture(%{community: community})
+
+      voting_session_game_fixture(
+        session,
+        game_fixture(%{community: community, external_id: "one"})
+      )
+
+      voting_session_game_fixture(
+        session,
+        game_fixture(%{community: community, external_id: "two"})
+      )
+
+      assert {:ok, _} =
+               BacklogWheel.Voting.start_twitch_voting(session,
+                 client: BacklogWheel.FakeTwitchClient
+               )
+    end
+
+    assert BacklogWheel.FakeTwitchClient.reward_credential("111") == "first-token"
+    assert BacklogWheel.FakeTwitchClient.reward_credential("222") == "second-token"
+  end
+
+  test "save_credential/2 persists the community's latest Twitch OAuth token" do
+    community = community_fixture()
+
     assert {:ok, credential} =
-             Twitch.save_credential(%{
+             Twitch.save_credential(community, %{
                access_token: "access-token",
                refresh_token: "refresh-token",
                scopes: "channel:manage:redemptions"
              })
 
-    assert Twitch.credential_configured?()
-    assert Twitch.get_credential().id == credential.id
+    assert Twitch.credential_configured?(community)
+    assert Twitch.get_credential(community).id == credential.id
 
     assert {:ok, updated_credential} =
-             Twitch.save_credential(%{
+             Twitch.save_credential(community, %{
                access_token: "new-access-token",
                refresh_token: "new-refresh-token",
                scopes: "channel:manage:redemptions"
              })
 
     assert updated_credential.id == credential.id
-    assert Twitch.get_credential().access_token == "new-access-token"
+    assert Twitch.get_credential(community).access_token == "new-access-token"
   end
 
   test "refresh_credential/2 refreshes and stores the OAuth token" do
     start_supervised!(BacklogWheel.FakeTwitchClient)
+    community = community_fixture()
 
     config = %Config{
       client_id: "client-id",
@@ -108,34 +182,36 @@ defmodule BacklogWheel.TwitchTest do
     }
 
     {:ok, credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(community, %{
         access_token: "stale-access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
       })
 
     assert {:ok, refreshed_credential} =
-             Twitch.refresh_credential(config, BacklogWheel.FakeTwitchClient)
+             Twitch.refresh_credential(community, config, BacklogWheel.FakeTwitchClient)
 
     assert refreshed_credential.id == credential.id
     assert refreshed_credential.access_token == "refreshed-stale-access-token"
     assert refreshed_credential.refresh_token == "refresh-token"
-    assert Twitch.get_credential().access_token == "refreshed-stale-access-token"
+    assert Twitch.get_credential(community).access_token == "refreshed-stale-access-token"
   end
 
-  test "delete_credential/0 removes stored Twitch OAuth tokens" do
+  test "delete_credential/1 removes the community's Twitch OAuth token" do
+    community = community_fixture()
+
     assert {:ok, _credential} =
-             Twitch.save_credential(%{
+             Twitch.save_credential(community, %{
                access_token: "access-token",
                refresh_token: "refresh-token",
                scopes: "channel:manage:redemptions"
              })
 
-    assert Twitch.credential_configured?()
+    assert Twitch.credential_configured?(community)
 
-    assert :ok = Twitch.delete_credential()
+    assert :ok = Twitch.delete_credential(community)
 
-    refute Twitch.credential_configured?()
-    assert Twitch.get_credential() == nil
+    refute Twitch.credential_configured?(community)
+    assert Twitch.get_credential(community) == nil
   end
 end

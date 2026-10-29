@@ -43,7 +43,7 @@ defmodule BacklogWheel.TwitchRedemptionsTest do
       )
 
     {:ok, _} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(community, %{
         access_token: "token",
         scopes: "channel:manage:redemptions user:write:chat"
       })

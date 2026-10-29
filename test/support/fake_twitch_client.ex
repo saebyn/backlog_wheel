@@ -47,12 +47,20 @@ defmodule BacklogWheel.FakeTwitchClient do
      }}
   end
 
-  def create_custom_reward(_config, _credential, attrs) do
+  def create_custom_reward(config, credential, attrs) do
     voting_session_game_id =
       Map.get(attrs, :voting_session_game_id) || Map.fetch!(attrs, :voting_session_id)
 
     Agent.update(@agent, fn state ->
-      put_in(state, [:rewards, voting_session_game_id], attrs)
+      state
+      |> put_in([:rewards, voting_session_game_id], attrs)
+      |> Map.update(
+        :reward_credentials,
+        %{config.broadcaster_id => credential.access_token},
+        fn tokens ->
+          Map.put(tokens, config.broadcaster_id, credential.access_token)
+        end
+      )
     end)
 
     {:ok,
@@ -63,6 +71,9 @@ defmodule BacklogWheel.FakeTwitchClient do
        status: "enabled"
      }}
   end
+
+  def reward_credential(broadcaster_id),
+    do: Agent.get(@agent, &get_in(&1, [:reward_credentials, broadcaster_id]))
 
   def delete_custom_reward(_config, _credential, reward_id) do
     if fail_deletion?(reward_id) do

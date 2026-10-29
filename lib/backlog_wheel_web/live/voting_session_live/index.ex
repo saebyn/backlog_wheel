@@ -852,7 +852,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
       :failed_twitch_redemptions,
       BacklogWheel.Voting.TwitchRedemptions.failed_count(selected_session)
     )
-    |> assign(:twitch_connected?, Twitch.credential_configured?())
+    |> assign(:twitch_connected?, Twitch.credential_configured?(socket.assigns.current_community))
     |> assign_twitch_voting_state(pool_items)
     |> assign_lifecycle_actions()
     |> stream(:voting_sessions, sessions, reset: true)

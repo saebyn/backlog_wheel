@@ -15,7 +15,7 @@ defmodule BacklogWheel.Voting.TwitchSessionRewards do
 
     with :ok <- Voting.validate_twitch_reward_creation(session),
          {:ok, config} <- Twitch.config(session.community),
-         {:ok, credential} <- credential(config, client),
+         {:ok, credential} <- credential(session.community, config, client),
          {:ok, session} <- Voting.update_voting_session_status(session, "open"),
          {:ok, reward} <- ensure_reward(session, config, credential, client),
          {:ok, reward} <- update_reward(reward, %{status: "enabling", cleanup_error: nil}),
@@ -55,7 +55,7 @@ defmodule BacklogWheel.Voting.TwitchSessionRewards do
   defp disable(session, reward, client) do
     result =
       with {:ok, config} <- Twitch.config(session.community),
-           {:ok, credential} <- credential(config, client),
+           {:ok, credential} <- credential(session.community, config, client),
            :ok <- client.set_reward_enabled(config, credential, reward.reward_id, false) do
         update_reward(reward, %{status: "disabled", cleanup_error: nil})
       end
@@ -130,11 +130,11 @@ defmodule BacklogWheel.Voting.TwitchSessionRewards do
         {:voting_session_changed, id}
       )
 
-  defp credential(config, client) do
-    case Twitch.get_credential() do
+  defp credential(community, config, client) do
+    case Twitch.get_credential(community) do
       nil -> {:error, :missing_twitch_credential}
       %{refresh_token: token} = credential when token in [nil, ""] -> {:ok, credential}
-      _credential -> Twitch.refresh_credential(config, client)
+      _credential -> Twitch.refresh_credential(community, config, client)
     end
   end
 end

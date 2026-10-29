@@ -7,6 +7,7 @@ defmodule BacklogWheel.Twitch.Credential do
     field :refresh_token, :string
     field :scopes, :string, default: ""
     field :expires_at, :utc_datetime
+    belongs_to :community, BacklogWheel.Communities.Community
 
     timestamps(type: :utc_datetime)
   end
@@ -15,5 +16,6 @@ defmodule BacklogWheel.Twitch.Credential do
     credential
     |> cast(attrs, [:access_token, :refresh_token, :scopes, :expires_at])
     |> validate_required([:access_token, :scopes])
+    |> unique_constraint(:community_id)
   end
 end

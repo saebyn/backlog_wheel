@@ -558,7 +558,7 @@ defmodule BacklogWheel.VotingTest do
       voting_session_game_fixture(voting_session, second_game)
 
       {:ok, _credential} =
-        Twitch.save_credential(%{
+        Twitch.save_credential(Process.get(:test_community), %{
           access_token: "access-token",
           refresh_token: "refresh-token",
           scopes: "channel:manage:redemptions"
@@ -601,7 +601,7 @@ defmodule BacklogWheel.VotingTest do
       end
 
       {:ok, _credential} =
-        Twitch.save_credential(%{
+        Twitch.save_credential(Process.get(:test_community), %{
           access_token: "access-token",
           refresh_token: "refresh-token",
           scopes: "channel:manage:redemptions"
@@ -625,7 +625,7 @@ defmodule BacklogWheel.VotingTest do
       )
 
       {:ok, _credential} =
-        Twitch.save_credential(%{
+        Twitch.save_credential(Process.get(:test_community), %{
           access_token: "access-token",
           refresh_token: "refresh-token",
           scopes: "channel:manage:redemptions"
@@ -648,7 +648,7 @@ defmodule BacklogWheel.VotingTest do
       )
 
       {:ok, _credential} =
-        Twitch.save_credential(%{
+        Twitch.save_credential(Process.get(:test_community), %{
           access_token: "access-token",
           refresh_token: "refresh-token",
           scopes: "channel:manage:redemptions"
@@ -678,7 +678,7 @@ defmodule BacklogWheel.VotingTest do
       )
 
       {:ok, _credential} =
-        Twitch.save_credential(%{
+        Twitch.save_credential(Process.get(:test_community), %{
           access_token: "access-token",
           refresh_token: "refresh-token",
           scopes: "channel:manage:redemptions"
@@ -710,7 +710,7 @@ defmodule BacklogWheel.VotingTest do
       )
 
       {:ok, _credential} =
-        Twitch.save_credential(%{
+        Twitch.save_credential(Process.get(:test_community), %{
           access_token: "access-token",
           refresh_token: "refresh-token",
           scopes: "channel:manage:redemptions"
@@ -746,7 +746,7 @@ defmodule BacklogWheel.VotingTest do
       voting_session_game_fixture(voting_session, game_fixture())
 
       {:ok, _credential} =
-        Twitch.save_credential(%{
+        Twitch.save_credential(Process.get(:test_community), %{
           access_token: "access-token",
           refresh_token: "refresh-token",
           scopes: "channel:manage:redemptions"

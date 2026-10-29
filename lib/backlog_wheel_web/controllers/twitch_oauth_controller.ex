@@ -3,6 +3,8 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
 
   alias BacklogWheel.Communities
   alias BacklogWheel.Twitch
+  alias BacklogWheel.Twitch.Credential
+  alias BacklogWheel.Repo
 
   def start(conn, _params) do
     case Twitch.oauth_config() do
@@ -26,10 +28,13 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
          {:ok, oauth_config} <- Twitch.oauth_config(),
          {:ok, token_attrs} <-
            Twitch.client().exchange_code(oauth_config, code, Twitch.redirect_uri(conn)),
-         {:ok, credential} <- Twitch.save_credential(token_attrs),
+         {:ok, credential} <-
+           %Credential{}
+           |> Credential.changeset(token_attrs)
+           |> Ecto.Changeset.apply_action(:insert),
          {:ok, twitch_user} <- Twitch.client().fetch_current_user(oauth_config, credential),
          {:ok, community} <-
-           save_connection_settings(conn.assigns.current_community, twitch_user),
+           save_connection(conn.assigns.current_community, twitch_user, token_attrs),
          {:ok, config} <- Twitch.config(community) do
       maybe_create_eventsub_subscription(conn, community, config)
 
@@ -84,6 +89,17 @@ defmodule BacklogWheelWeb.TwitchOAuthController do
       twitch_broadcaster_display_name: twitch_user.display_name,
       twitch_eventsub_secret: secret
     })
+  end
+
+  defp save_connection(community, twitch_user, token_attrs) do
+    Repo.transaction(fn ->
+      with {:ok, community} <- save_connection_settings(community, twitch_user),
+           {:ok, _credential} <- Twitch.save_credential(community, token_attrs) do
+        community
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
   end
 
   defp maybe_create_eventsub_subscription(conn, community, config) do

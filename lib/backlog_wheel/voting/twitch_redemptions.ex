@@ -127,7 +127,7 @@ defmodule BacklogWheel.Voting.TwitchRedemptions do
 
     result =
       with {:ok, config} <- Twitch.config(session.community),
-           {:ok, credential} <- credential(config, client),
+           {:ok, credential} <- credential(session.community, config, client),
            {:ok, events} <-
              client.list_unfulfilled_redemptions(config, credential, reward.reward_id) do
         ingest_reconciled(events, reward.reward_id)
@@ -229,7 +229,7 @@ defmodule BacklogWheel.Voting.TwitchRedemptions do
 
     result =
       with {:ok, config} <- Twitch.config(session.community),
-           {:ok, credential} <- credential(config, client) do
+           {:ok, credential} <- credential(session.community, config, client) do
         resolve(redemption, reward, config, credential, client)
       end
 
@@ -243,20 +243,20 @@ defmodule BacklogWheel.Voting.TwitchRedemptions do
     session.id
   end
 
-  defp credential(config, client) do
-    case Twitch.get_credential() do
+  defp credential(community, config, client) do
+    case Twitch.get_credential(community) do
       nil -> {:error, :missing_twitch_credential}
       %{expires_at: nil} = credential -> {:ok, credential}
-      credential -> maybe_refresh_credential(credential, config, client)
+      credential -> maybe_refresh_credential(credential, community, config, client)
     end
   end
 
-  defp maybe_refresh_credential(credential, config, client) do
+  defp maybe_refresh_credential(credential, community, config, client) do
     if DateTime.compare(credential.expires_at, DateTime.add(DateTime.utc_now(), 60, :second)) ==
          :gt do
       {:ok, credential}
     else
-      Twitch.refresh_credential(config, client)
+      Twitch.refresh_credential(community, config, client)
     end
   end
 
