@@ -113,6 +113,15 @@ defmodule BacklogWheelWeb.Router do
     # as long as you are also using SSL (which you should anyway).
     import Phoenix.LiveDashboard.Router
 
+    scope "/dev", BacklogWheelWeb do
+      pipe_through [:browser, :authenticated_browser]
+
+      live_session :twitch_simulator,
+        on_mount: [{BacklogWheelWeb.UserAuth, :require_authenticated_user}] do
+        live "/twitch-simulator", TwitchSimulatorLive, :index
+      end
+    end
+
     scope "/dev" do
       pipe_through :browser
 

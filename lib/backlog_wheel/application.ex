@@ -7,24 +7,34 @@ defmodule BacklogWheel.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      BacklogWheelWeb.Telemetry,
-      BacklogWheel.Repo,
-      {Ecto.Migrator,
-       repos: Application.fetch_env!(:backlog_wheel, :ecto_repos), skip: skip_migrations?()},
-      {DNSCluster, query: Application.get_env(:backlog_wheel, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: BacklogWheel.PubSub},
-      BacklogWheel.Voting.TwitchRedemptionWorker,
-      # Start a worker by calling: BacklogWheel.Worker.start_link(arg)
-      # {BacklogWheel.Worker, arg},
-      # Start to serve requests, typically the last entry
-      BacklogWheelWeb.Endpoint
-    ]
+    children =
+      [
+        BacklogWheelWeb.Telemetry,
+        BacklogWheel.Repo,
+        {Ecto.Migrator,
+         repos: Application.fetch_env!(:backlog_wheel, :ecto_repos), skip: skip_migrations?()},
+        {DNSCluster, query: Application.get_env(:backlog_wheel, :dns_cluster_query) || :ignore},
+        {Phoenix.PubSub, name: BacklogWheel.PubSub}
+      ] ++
+        simulator_children() ++
+        [
+          BacklogWheel.Voting.TwitchRedemptionWorker,
+          # Start a worker by calling: BacklogWheel.Worker.start_link(arg)
+          # {BacklogWheel.Worker, arg},
+          # Start to serve requests, typically the last entry
+          BacklogWheelWeb.Endpoint
+        ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: BacklogWheel.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  defp simulator_children do
+    if Application.get_env(:backlog_wheel, :twitch_simulator, false),
+      do: [BacklogWheel.Twitch.SimulatorClient],
+      else: []
   end
 
   # Tell Phoenix to update the endpoint configuration

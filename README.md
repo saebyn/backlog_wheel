@@ -94,6 +94,27 @@ iex -S mix phx.server
 
 Visit <http://localhost:4000> in your browser. The games CRUD page is available at <http://localhost:4000/games>, the wheel page is available at <http://localhost:4000/wheel>, and spin history is available at <http://localhost:4000/history>.
 
+### Local Twitch simulator
+
+To test voting without contacting Twitch or spending channel points, start the opt-in simulator:
+
+```sh
+docker compose -f compose.yaml -f compose.simulator.yaml up -d web
+```
+
+This runs the app on <http://localhost:4000> using the separate `backlog_wheel_simulator` database and a separate persistent simulator-state volume. The normal `backlog_wheel_dev` database and its Twitch credentials are not used. Sign in with Discord and complete onboarding for the sandbox community, then open <http://localhost:4000/dev/twitch-simulator>.
+
+1. Click **Connect simulated channel** and **Create sample vote**, then open the sample vote.
+2. Open voting and start Twitch voting. Return to the simulator page to redeem a game number as a viewer.
+3. Try an invalid number to see a simulated cancellation and chat explanation. Check **Delay webhook delivery** to deliver or replay a notification later; reconciliation can also discover delayed redemptions.
+4. Use the failure controls and **Run retries now** to exercise recovery. Finished reward deletions appear in simulator history.
+
+The simulator dispatches signed requests through the app's EventSub endpoint and simulates Twitch's reward and redemption API; it does not validate a real Twitch integration. To switch back to the ordinary development database and real Twitch client, run:
+
+```sh
+docker compose -f compose.yaml up -d --force-recreate web
+```
+
 ## Steam Import
 
 Steam library import uses the official Steam Web API. Visit <http://localhost:4000/games/import/steam>, save the community's Steam API key and SteamID64, then click `Import Steam Library`.

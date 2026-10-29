@@ -1,0 +1,10 @@
+services:
+  web:
+    environment:
+      TWITCH_SIMULATOR: "true"
+      TWITCH_SIMULATOR_STATE_PATH: /simulator-state/remote-state.bin
+    volumes:
+      - simulator-state:/simulator-state
+
+volumes:
+  simulator-state:
