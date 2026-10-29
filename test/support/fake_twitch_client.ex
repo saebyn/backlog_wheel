@@ -110,8 +110,16 @@ defmodule BacklogWheel.FakeTwitchClient do
     end
   end
 
-  def update_redemption(_config, _credential, reward_id, redemption_id, status) do
+  def update_redemption(_config, credential, reward_id, redemption_id, status) do
     Agent.get_and_update(@agent, fn state ->
+      state =
+        Map.update(
+          state,
+          :resolution_credentials,
+          %{redemption_id => credential.access_token},
+          &Map.put(&1, redemption_id, credential.access_token)
+        )
+
       if Map.get(state, :fail_resolution, false) do
         {{:error, :resolution_failed}, state}
       else
@@ -158,6 +166,7 @@ defmodule BacklogWheel.FakeTwitchClient do
   def fail_chat(value), do: Agent.update(@agent, &Map.put(&1, :fail_chat, value))
   def chat_messages, do: Agent.get(@agent, &Map.get(&1, :chat_messages, []))
   def redemption_status(id), do: Agent.get(@agent, &get_in(&1, [:redemptions, id]))
+  def resolution_credential(id), do: Agent.get(@agent, &get_in(&1, [:resolution_credentials, id]))
 
   def set_reward_enabled(_config, _credential, reward_id, enabled) do
     if not enabled and fail_deletion?(reward_id) do
@@ -176,8 +185,16 @@ defmodule BacklogWheel.FakeTwitchClient do
 
   def reward_enabled?(reward_id), do: Agent.get(@agent, &get_in(&1, [:reward_enabled, reward_id]))
 
-  def list_unfulfilled_redemptions(_config, _credential, reward_id) do
+  def list_unfulfilled_redemptions(_config, credential, reward_id) do
     Agent.get_and_update(@agent, fn state ->
+      state =
+        Map.update(
+          state,
+          :list_credentials,
+          %{reward_id => credential.access_token},
+          &Map.put(&1, reward_id, credential.access_token)
+        )
+
       calls = Map.update(Map.get(state, :list_calls, %{}), reward_id, 1, &(&1 + 1))
 
       result =
@@ -195,6 +212,8 @@ defmodule BacklogWheel.FakeTwitchClient do
       {result, Map.put(state, :list_calls, calls)}
     end)
   end
+
+  def list_credential(id), do: Agent.get(@agent, &get_in(&1, [:list_credentials, id]))
 
   def list_calls(reward_id), do: Agent.get(@agent, &(get_in(&1, [:list_calls, reward_id]) || 0))
 

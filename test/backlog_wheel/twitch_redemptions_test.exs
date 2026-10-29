@@ -362,6 +362,7 @@ defmodule BacklogWheel.TwitchRedemptionsTest do
              Voting.close_voting_session(session, "closed", client: FakeTwitchClient)
 
     assert :ok = Voting.cleanup_finished_twitch_rewards(client: FakeTwitchClient)
+    assert {:ignored, :unknown_twitch_reward} = Voting.ingest_twitch_reward_redemption(old_event)
     assert {:ok, _} = Voting.update_voting_session_status(finished, "draft")
     assert Voting.voting_session_game_weight(first).channel_point_vote_total == 0
     assert {:ok, reopened} = Voting.start_twitch_voting(finished, client: FakeTwitchClient)
@@ -394,6 +395,112 @@ defmodule BacklogWheel.TwitchRedemptionsTest do
     assert Voting.voting_session_game_weight(first).channel_point_vote_total == 0
   end
 
+  test "resetting a finished session does not clear votes in another session", %{
+    session: session,
+    first: first
+  } do
+    other = voting_session_fixture(%{community: session.community})
+
+    other_game =
+      voting_session_game_fixture(
+        other,
+        BacklogWheel.Backlog.get_game!(session.community, first.game_id)
+      )
+
+    assert {:ok, _} = Voting.record_vote(other_game, %{source: "local", strength: 1})
+    assert {:ok, _} = Voting.record_vote(first, %{source: "local", strength: 1})
+
+    assert {:ok, finished} =
+             Voting.close_voting_session(session, "closed", client: FakeTwitchClient)
+
+    assert :ok = Voting.cleanup_finished_twitch_rewards(client: FakeTwitchClient)
+    assert {:ok, _} = Voting.update_voting_session_status(finished, "draft")
+    assert Voting.voting_session_game_weight(first).channel_point_vote_total == 0
+    assert Voting.voting_session_game_weight(other_game).channel_point_vote_total == 1
+  end
+
+  test "freezing one session leaves another channel's voting window open", %{
+    session: first_session
+  } do
+    second_community = community_fixture(%{twitch_broadcaster_id: "987654"})
+
+    assert {:ok, _} =
+             Twitch.save_credential(second_community, %{
+               access_token: "other-token",
+               scopes: "channel:manage:redemptions"
+             })
+
+    second_session = voting_session_fixture(%{community: second_community})
+
+    second_game =
+      voting_session_game_fixture(
+        second_session,
+        game_fixture(%{community: second_community, external_id: "other-first"})
+      )
+
+    voting_session_game_fixture(
+      second_session,
+      game_fixture(%{community: second_community, external_id: "other-second"})
+    )
+
+    assert {:ok, second_session} =
+             Voting.start_twitch_voting(second_session, client: FakeTwitchClient)
+
+    assert {:ok, _} =
+             Voting.close_voting_session(first_session, "locked", client: FakeTwitchClient)
+
+    assert {:ok, %{decision: "valid"}} =
+             Voting.ingest_twitch_reward_redemption(event(second_session, "other-channel", "1"))
+
+    assert Voting.voting_session_game_weight(second_game).channel_point_vote_total == 1
+  end
+
+  test "reconciliation and refunds use each channel's own credential", %{session: first_session} do
+    second_community = community_fixture(%{twitch_broadcaster_id: "777777"})
+
+    assert {:ok, _} =
+             Twitch.save_credential(second_community, %{
+               access_token: "other-token",
+               scopes: "channel:manage:redemptions"
+             })
+
+    second_session = voting_session_fixture(%{community: second_community})
+
+    voting_session_game_fixture(
+      second_session,
+      game_fixture(%{community: second_community, external_id: "one"})
+    )
+
+    voting_session_game_fixture(
+      second_session,
+      game_fixture(%{community: second_community, external_id: "two"})
+    )
+
+    assert {:ok, second_session} =
+             Voting.start_twitch_voting(second_session, client: FakeTwitchClient)
+
+    first_id = first_session.twitch_voting_reward.reward_id
+    second_id = second_session.twitch_voting_reward.reward_id
+    FakeTwitchClient.set_unfulfilled(first_id, [event(first_session, "first-refund", "bad")])
+    FakeTwitchClient.set_unfulfilled(second_id, [event(second_session, "second-refund", "bad")])
+    TwitchRedemptions.reconcile_rewards(FakeTwitchClient)
+    TwitchRedemptions.process_pending(FakeTwitchClient)
+    assert FakeTwitchClient.list_credential(first_id) == "token"
+    assert FakeTwitchClient.list_credential(second_id) == "other-token"
+    assert FakeTwitchClient.resolution_credential("first-refund") == "token"
+    assert FakeTwitchClient.resolution_credential("second-refund") == "other-token"
+  end
+
+  test "an unreconciled window in another session does not block pool editing", %{
+    session: session,
+    first: first
+  } do
+    other = voting_session_fixture(%{community: session.community, status: "open"})
+    assert {:ok, _} = Voting.update_voting_session_status(other, "draft")
+    assert {:ok, _} = Voting.close_voting_session(session, "draft", client: FakeTwitchClient)
+    assert {:ok, _} = Voting.remove_game_from_session(first)
+  end
+
   test "a manually deleted finished reward is not reconciled repeatedly", %{session: session} do
     reward_id = session.twitch_voting_reward.reward_id
     assert {:ok, _} = Voting.close_voting_session(session, "closed", client: FakeTwitchClient)
@@ -408,8 +515,67 @@ defmodule BacklogWheel.TwitchRedemptionsTest do
              "deleted"
   end
 
-  test "a manually deleted finished reward is recognized after disabling failed", %{
+  test "manually deleted finished rewards do not prevent reusing the session", %{
+    session: session,
+    first: first
+  } do
+    reward_id = session.twitch_voting_reward.reward_id
+
+    assert {:ok, finished} =
+             Voting.close_voting_session(session, "closed", client: FakeTwitchClient)
+
+    assert :ok = FakeTwitchClient.delete_custom_reward(nil, nil, reward_id)
+    assert :ok = TwitchRedemptions.reconcile_session(finished, FakeTwitchClient)
+    assert {:ok, _} = Voting.update_voting_session_status(finished, "draft")
+    assert {:ok, _} = Voting.remove_game_from_session(first)
+  end
+
+  test "recognizing a missing reward does not mark another session reconciled", %{
     session: session
+  } do
+    other_community = community_fixture(%{twitch_broadcaster_id: "234567"})
+
+    assert {:ok, _} =
+             Twitch.save_credential(other_community, %{
+               access_token: "other",
+               scopes: "channel:manage:redemptions"
+             })
+
+    other = voting_session_fixture(%{community: other_community})
+
+    other_first =
+      voting_session_game_fixture(
+        other,
+        game_fixture(%{community: other_community, external_id: "first"})
+      )
+
+    voting_session_game_fixture(
+      other,
+      game_fixture(%{community: other_community, external_id: "second"})
+    )
+
+    assert {:ok, other} = Voting.start_twitch_voting(other, client: FakeTwitchClient)
+    assert {:ok, _} = Voting.close_voting_session(other, "locked", client: FakeTwitchClient)
+
+    assert {:ok, finished} =
+             Voting.close_voting_session(session, "closed", client: FakeTwitchClient)
+
+    assert :ok =
+             FakeTwitchClient.delete_custom_reward(
+               nil,
+               nil,
+               session.twitch_voting_reward.reward_id
+             )
+
+    assert :ok = TwitchRedemptions.reconcile_session(finished, FakeTwitchClient)
+
+    assert {:error, :twitch_reconciliation_required} =
+             Voting.remove_game_from_session(other_first)
+  end
+
+  test "a manually deleted finished reward is recognized after disabling failed", %{
+    session: session,
+    first: first
   } do
     reward_id = session.twitch_voting_reward.reward_id
     FakeTwitchClient.fail_deletion(reward_id)
@@ -426,6 +592,9 @@ defmodule BacklogWheel.TwitchRedemptionsTest do
 
     assert Voting.get_voting_session!(session.community, session.id).twitch_voting_reward.status ==
              "deleted"
+
+    assert {:ok, _} = Voting.update_voting_session_status(session, "draft")
+    assert {:ok, _} = Voting.remove_game_from_session(first)
   end
 
   test "cleanup waits until an invalid redemption has been refunded", %{session: session} do
