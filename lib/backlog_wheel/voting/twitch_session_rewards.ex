@@ -86,15 +86,6 @@ defmodule BacklogWheel.Voting.TwitchSessionRewards do
         if session.status in ["completed", "closed", "cancelled"] and reward.status != "deleted" and
              not unresolved_redemptions?(reward) do
           {:ok, _} = mark_deleted(reward)
-          now = DateTime.utc_now()
-
-          from(window in TwitchVotingWindow,
-            where:
-              window.voting_session_id == ^session.id and not is_nil(window.closed_at) and
-                is_nil(window.reconciled_at)
-          )
-          |> Repo.update_all(set: [reconciled_at: now, updated_at: now])
-
           :ok
         else
           Repo.rollback(:unresolved_redemptions)
@@ -178,8 +169,25 @@ defmodule BacklogWheel.Voting.TwitchSessionRewards do
     end
   end
 
-  defp mark_deleted(reward),
-    do: update_reward(reward, %{status: "deleted", cleanup_error: nil, reconciliation_error: nil})
+  defp mark_deleted(reward) do
+    with {:ok, reward} <-
+           update_reward(reward, %{
+             status: "deleted",
+             cleanup_error: nil,
+             reconciliation_error: nil
+           }) do
+      now = DateTime.utc_now()
+
+      from(window in TwitchVotingWindow,
+        where:
+          window.voting_session_id == ^reward.voting_session_id and not is_nil(window.closed_at) and
+            is_nil(window.reconciled_at)
+      )
+      |> Repo.update_all(set: [reconciled_at: now, updated_at: now])
+
+      {:ok, reward}
+    end
+  end
 
   defp disable(session, reward, client) do
     result =

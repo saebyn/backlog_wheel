@@ -375,6 +375,18 @@ defmodule BacklogWheel.TwitchRedemptionsTest do
     assert Voting.voting_session_game_weight(first).channel_point_vote_total == 1
   end
 
+  test "a finished session's pool can be edited after automatic reward cleanup", %{
+    session: session,
+    first: first
+  } do
+    assert {:ok, finished} =
+             Voting.close_voting_session(session, "closed", client: FakeTwitchClient)
+
+    assert :ok = Voting.cleanup_finished_twitch_rewards(client: FakeTwitchClient)
+    assert {:ok, _} = Voting.update_voting_session_status(finished, "draft")
+    assert {:ok, _} = Voting.remove_game_from_session(first)
+  end
+
   test "a finished session cannot reset votes until its previous reward is cleaned up", %{
     session: session,
     first: first
