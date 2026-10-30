@@ -60,19 +60,49 @@ defmodule BacklogWheelWeb.WheelLive do
                       stroke="rgba(255,255,255,0.72)"
                       stroke-width="0.35"
                     />
-                    <text
-                      x="50"
-                      y="50"
-                      fill="white"
-                      font-size={label_size(@candidate_count)}
-                      font-weight="800"
-                      text-anchor="middle"
-                      dominant-baseline="middle"
-                      transform={label_transform(candidate)}
-                      class="select-none [paint-order:stroke] [stroke:rgba(0,0,0,0.55)] [stroke-width:0.45px]"
-                    >
-                      {truncate_title("##{candidate.pool_item.option_number} #{candidate.title}")}
-                    </text>
+                    <g transform={label_transform(candidate)} class="select-none">
+                      <rect
+                        x="33"
+                        y="47.9"
+                        width="8.4"
+                        height="4.2"
+                        rx="1.6"
+                        fill="rgba(0,0,0,0.78)"
+                        stroke="rgba(255,255,255,0.8)"
+                        stroke-width="0.25"
+                      />
+                      <text
+                        id={"wheel-option-number-#{candidate.pool_item.id}"}
+                        x="37.2"
+                        y="50"
+                        fill="white"
+                        font-size={label_size(@candidate_count)}
+                        font-weight="900"
+                        text-anchor="middle"
+                        dominant-baseline="middle"
+                        textLength={
+                          if String.length(Integer.to_string(candidate.pool_item.option_number)) > 3,
+                            do: "7",
+                            else: nil
+                        }
+                        lengthAdjust="spacingAndGlyphs"
+                      >
+                        #{candidate.pool_item.option_number}
+                      </text>
+                      <text
+                        id={"wheel-option-title-#{candidate.pool_item.id}"}
+                        x="42.5"
+                        y="50"
+                        fill="white"
+                        font-size={label_size(@candidate_count)}
+                        font-weight="800"
+                        text-anchor="start"
+                        dominant-baseline="middle"
+                        class="[paint-order:stroke] [stroke:rgba(0,0,0,0.55)] [stroke-width:0.45px]"
+                      >
+                        {truncate_title(candidate.title)}
+                      </text>
+                    </g>
                   <% end %>
                 </g>
                 <circle
@@ -158,10 +188,16 @@ defmodule BacklogWheelWeb.WheelLive do
                   class="rounded-xl bg-base-100 p-3"
                 >
                   <div class="flex items-center justify-between gap-3">
-                    <p class="font-semibold leading-tight">
-                      #{candidate.pool_item.option_number} · {candidate.title}
-                    </p>
-                    <p class="text-sm font-black text-primary">{candidate.weight}</p>
+                    <div class="flex min-w-0 items-center gap-3">
+                      <span
+                        id={"wheel-candidate-option-#{candidate.pool_item.id}"}
+                        class="inline-flex min-w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 px-2 py-1 text-sm font-black text-primary"
+                      >
+                        #{candidate.pool_item.option_number}
+                      </span>
+                      <p class="min-w-0 break-words font-semibold leading-tight">{candidate.title}</p>
+                    </div>
+                    <p class="shrink-0 text-sm font-black text-primary">{candidate.weight}</p>
                   </div>
                   <div class="mt-2 h-2 overflow-hidden rounded-full bg-base-300">
                     <div
