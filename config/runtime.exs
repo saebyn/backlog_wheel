@@ -34,6 +34,20 @@ config :backlog_wheel,
     eventsub_callback_url: System.get_env("TWITCH_EVENTSUB_CALLBACK_URL")
   ]
 
+if config_env() == :dev and System.get_env("TWITCH_SIMULATOR") == "true" do
+  database_url = System.get_env("DATABASE_URL") || ""
+
+  unless URI.parse(database_url).path == "/backlog_wheel_simulator" do
+    raise "TWITCH_SIMULATOR requires a separate backlog_wheel_simulator database"
+  end
+
+  config :backlog_wheel,
+    twitch_simulator: true,
+    twitch_client: BacklogWheel.Twitch.SimulatorClient,
+    twitch_simulator_state_path: System.get_env("TWITCH_SIMULATOR_STATE_PATH"),
+    twitch: [client_id: "simulator", client_secret: "simulator", eventsub_callback_url: nil]
+end
+
 if signup_allowed_discord_ids = System.get_env("SIGNUP_ALLOWED_DISCORD_IDS") do
   config :backlog_wheel, signup_allowed_discord_ids: signup_allowed_discord_ids
 end

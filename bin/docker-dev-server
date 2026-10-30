@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+simulator_mode="${TWITCH_SIMULATOR:-false}"
+
 if [ -f .envrc ]; then
   while IFS= read -r line; do
     case "$line" in
@@ -9,7 +11,13 @@ if [ -f .envrc ]; then
   done < .envrc
 fi
 
-export DATABASE_URL="ecto://postgres:postgres@postgres:5432/backlog_wheel_dev"
+export TWITCH_SIMULATOR="$simulator_mode"
+
+if [ "$simulator_mode" = "true" ]; then
+  export DATABASE_URL="ecto://postgres:postgres@postgres:5432/backlog_wheel_simulator"
+else
+  export DATABASE_URL="ecto://postgres:postgres@postgres:5432/backlog_wheel_dev"
+fi
 
 mix deps.get
 mix ecto.create

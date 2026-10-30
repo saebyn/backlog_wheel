@@ -287,7 +287,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
            )
   end
 
-  test "blocks opening voting when the pool is too large", %{conn: conn} do
+  test "allows opening voting with more than fifty games", %{conn: conn} do
     voting_session = voting_session_fixture()
 
     for index <- 1..51 do
@@ -302,13 +302,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/voting")
 
-    refute has_element?(view, "#set-session-open")
-
-    assert has_element?(
-             view,
-             "#voting-session-blocking-issue",
-             "Voting sessions can include at most 50 games"
-           )
+    assert has_element?(view, "#set-session-open")
   end
 
   test "shows ready-to-spin next action", %{conn: conn} do
@@ -339,6 +333,13 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
 
     assert has_element?(view, "#view-session-recap", "View recap")
     assert has_element?(view, "#set-session-draft", "Back to draft")
+
+    assert has_element?(
+             view,
+             "#voting-session-secondary-actions",
+             "previous votes will be cleared"
+           )
+
     refute has_element?(view, "#set-session-cancelled")
   end
 
@@ -368,6 +369,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     {:ok, view, _html} = live(conn, ~p"/voting")
 
     assert has_element?(view, "#pool-game-base-weight-#{pool_item.id}", "2")
+    assert has_element?(view, "#voting-session-pool", "#1 · Voteable Game")
     assert has_element?(view, "#pool-game-channel-point-vote-total-#{pool_item.id}", "+0")
     assert has_element?(view, "#pool-game-final-weight-#{pool_item.id}", "2")
     refute has_element?(view, "#remove-pool-game-#{pool_item.id}")
@@ -402,7 +404,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     voting_session_fixture()
 
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
@@ -432,7 +434,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     )
 
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
@@ -446,7 +448,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     refute has_element?(view, "#voting-session-blocking-issue")
   end
 
-  test "blocks starting Twitch voting when pool is too large", %{conn: conn} do
+  test "allows starting Twitch voting with more than fifty games", %{conn: conn} do
     voting_session = voting_session_fixture(%{status: "open"})
 
     for index <- 1..51 do
@@ -460,7 +462,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     end
 
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
@@ -468,13 +470,8 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/voting")
 
-    refute has_element?(view, "#start-twitch-voting")
-
-    assert has_element?(
-             view,
-             "#voting-session-blocking-issue",
-             "Voting sessions can include at most 50 games"
-           )
+    assert has_element?(view, "#start-twitch-voting")
+    refute has_element?(view, "#voting-session-blocking-issue")
   end
 
   test "keeps start Twitch voting enabled for open sessions without rewards", %{conn: conn} do
@@ -489,7 +486,7 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     {:ok, _session} = Voting.update_voting_session_status(voting_session, "open")
 
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
@@ -507,38 +504,28 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
   test "enables removing Twitch rewards after rewards exist", %{conn: conn} do
     voting_session = voting_session_fixture(%{status: "open"})
     game = game_fixture(%{title: "Rewarded Game"})
-    pool_item = voting_session_game_fixture(voting_session, game)
+    voting_session_game_fixture(voting_session, game)
 
-    second_pool_item =
-      voting_session_game_fixture(
-        voting_session,
-        game_fixture(%{title: "Rewarded Game 2", external_id: "rewarded-game-2"})
-      )
+    voting_session_game_fixture(
+      voting_session,
+      game_fixture(%{title: "Rewarded Game 2", external_id: "rewarded-game-2"})
+    )
 
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
       })
 
-    pool_item
-    |> BacklogWheel.Voting.VotingSessionGame.twitch_reward_changeset(%{
-      twitch_reward_id: "reward-#{pool_item.id}",
-      twitch_reward_title: "Vote ##{pool_item.id}: Rewarded Game",
-      twitch_reward_cost: 100,
-      twitch_reward_status: "enabled"
+    %BacklogWheel.Voting.TwitchVotingReward{voting_session_id: voting_session.id}
+    |> BacklogWheel.Voting.TwitchVotingReward.changeset(%{
+      reward_id: "reward-#{voting_session.id}",
+      title: "Vote",
+      cost: 100,
+      status: "enabled"
     })
-    |> BacklogWheel.Repo.update!()
-
-    second_pool_item
-    |> BacklogWheel.Voting.VotingSessionGame.twitch_reward_changeset(%{
-      twitch_reward_id: "reward-#{second_pool_item.id}",
-      twitch_reward_title: "Vote ##{second_pool_item.id}: Rewarded Game 2",
-      twitch_reward_cost: 100,
-      twitch_reward_status: "enabled"
-    })
-    |> BacklogWheel.Repo.update!()
+    |> BacklogWheel.Repo.insert!()
 
     {:ok, view, _html} = live(conn, ~p"/voting")
 
@@ -549,32 +536,31 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
     assert has_element?(
              view,
              "#voting-session-blocking-issue",
-             "Twitch voting rewards are already created"
+             "The Twitch voting reward is already active"
            )
   end
 
   test "shows failed Twitch reward cleanup as retryable", %{conn: conn} do
     voting_session = voting_session_fixture(%{status: "closed"})
     game = game_fixture(%{title: "Failed Cleanup Game"})
-    pool_item = voting_session_game_fixture(voting_session, game)
+    voting_session_game_fixture(voting_session, game)
 
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
       })
 
-    pool_item
-    |> BacklogWheel.Voting.VotingSessionGame.twitch_reward_changeset(%{
-      twitch_reward_id: "reward-#{pool_item.id}",
-      twitch_reward_title: "Vote ##{pool_item.id}: Failed Cleanup Game",
-      twitch_reward_cost: 100,
-      twitch_reward_status: "enabled",
-      twitch_reward_deletion_status: "failed",
-      twitch_reward_deletion_error: ":delete_failed"
+    %BacklogWheel.Voting.TwitchVotingReward{voting_session_id: voting_session.id}
+    |> BacklogWheel.Voting.TwitchVotingReward.changeset(%{
+      reward_id: "reward-#{voting_session.id}",
+      title: "Vote",
+      cost: 100,
+      status: "enabled",
+      cleanup_error: ":disable_failed"
     })
-    |> BacklogWheel.Repo.update!()
+    |> BacklogWheel.Repo.insert!()
 
     {:ok, view, _html} = live(conn, ~p"/voting")
 
@@ -584,8 +570,8 @@ defmodule BacklogWheelWeb.VotingSessionLiveTest do
 
     assert has_element?(
              view,
-             "#pool-game-twitch-reward-cleanup-error-#{pool_item.id}",
-             "Cleanup failed: :delete_failed"
+             "#session-twitch-reward",
+             "Reward cleanup failed: :disable_failed"
            )
   end
 

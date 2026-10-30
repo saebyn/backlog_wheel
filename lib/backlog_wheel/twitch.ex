@@ -6,6 +6,8 @@ defmodule BacklogWheel.Twitch do
   OAuth, EventSub, reward creation, and live Twitch API calls are out of scope.
   """
 
+  import Ecto.Query
+
   alias BacklogWheel.Twitch.Config
   alias BacklogWheel.Twitch.Credential
   alias BacklogWheel.Communities
@@ -82,7 +84,7 @@ defmodule BacklogWheel.Twitch do
   def ensure_redemption_eventsub_subscription(conn, %Community{} = community) do
     with {:ok, config} <- config(community),
          {:ok, secret} <- eventsub_secret(config),
-         credential when not is_nil(credential) <- get_credential() do
+         credential when not is_nil(credential) <- get_credential(community) do
       client().create_redemption_eventsub_subscription(
         config,
         credential,
@@ -95,42 +97,42 @@ defmodule BacklogWheel.Twitch do
     end
   end
 
-  @spec get_credential() :: Credential.t() | nil
-  def get_credential do
-    Credential
-    |> Ecto.Query.last(:inserted_at)
-    |> Repo.one()
+  @spec get_credential(Community.t()) :: Credential.t() | nil
+  def get_credential(%Community{id: community_id}) do
+    Repo.get_by(Credential, community_id: community_id)
   end
 
-  @spec credential_configured?() :: boolean()
-  def credential_configured?, do: not is_nil(get_credential())
+  @spec credential_configured?(Community.t()) :: boolean()
+  def credential_configured?(%Community{} = community), do: not is_nil(get_credential(community))
 
-  @spec save_credential(map()) :: {:ok, Credential.t()} | {:error, Ecto.Changeset.t()}
-  def save_credential(attrs) do
-    case get_credential() do
-      nil -> %Credential{}
-      credential -> credential
-    end
+  @spec save_credential(Community.t(), map()) ::
+          {:ok, Credential.t()} | {:error, Ecto.Changeset.t()}
+  def save_credential(%Community{} = community, attrs) do
+    (get_credential(community) || %Credential{community_id: community.id})
     |> Credential.changeset(attrs)
     |> Repo.insert_or_update()
   end
 
-  @spec refresh_credential(Config.t(), module()) :: {:ok, Credential.t()} | {:error, term()}
-  def refresh_credential(%Config{} = config, client \\ client()) do
-    with %Credential{} = credential <- get_credential(),
+  @spec refresh_credential(Community.t(), Config.t(), module()) ::
+          {:ok, Credential.t()} | {:error, term()}
+  def refresh_credential(%Community{} = community, %Config{} = config, client) do
+    with %Credential{} = credential <- get_credential(community),
          {:ok, token_attrs} <- client.refresh_access_token(config, credential) do
       token_attrs
       |> preserve_refresh_token(credential)
-      |> save_credential()
+      |> then(&save_credential(community, &1))
     else
       nil -> {:error, :missing_twitch_credential}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  @spec delete_credential() :: :ok
-  def delete_credential do
-    Repo.delete_all(Credential)
+  @spec delete_credential(Community.t()) :: :ok
+  def delete_credential(%Community{id: community_id}) do
+    Repo.delete_all(
+      from credential in Credential, where: credential.community_id == ^community_id
+    )
+
     :ok
   end
 

@@ -190,6 +190,38 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
               </div>
             </div>
 
+            <div
+              :if={@selected_session.twitch_voting_reward}
+              id="session-twitch-reward"
+              class="rounded-2xl border border-primary/20 bg-primary/5 p-4"
+            >
+              <p class="font-bold">{@selected_session.twitch_voting_reward.title}</p>
+              <p class="mt-1 text-sm text-base-content/70">
+                {@selected_session.twitch_voting_reward.cost} points · {@selected_session.twitch_voting_reward.status}.
+                Viewers enter a game number from the list below.
+              </p>
+              <p
+                :if={@selected_session.twitch_voting_reward.cleanup_error}
+                class="mt-2 text-sm text-error"
+              >
+                Reward cleanup failed: {@selected_session.twitch_voting_reward.cleanup_error}
+              </p>
+              <p
+                :if={@selected_session.twitch_voting_reward.reconciliation_error}
+                id="twitch-reconciliation-error"
+                class="mt-2 text-sm font-semibold text-error"
+              >
+                Unable to check Twitch for missed redemptions. Retrying automatically; check the Twitch connection and reward.
+              </p>
+              <p
+                :if={@failed_twitch_redemptions > 0}
+                id="failed-twitch-redemptions"
+                class="mt-2 text-sm font-semibold text-error"
+              >
+                {@failed_twitch_redemptions} redemption(s) could not be resolved or messaged. Retrying automatically; check the Twitch connection and permissions.
+              </p>
+            </div>
+
             <section
               id="voting-session-next-action"
               class="overflow-hidden rounded-[1.75rem] border border-primary/20 bg-gradient-to-br from-primary/10 via-base-100 to-base-200 p-5 shadow-sm"
@@ -324,7 +356,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                     class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <p class="text-sm text-base-content/70">
-                      Create Twitch channel point rewards so viewers can vote from chat.
+                      Create one Twitch reward; viewers enter the number of the game they want.
                     </p>
                     <.button id="start-twitch-voting" phx-click="start_twitch_voting">
                       Start Twitch voting
@@ -335,16 +367,16 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                     class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <p class="text-sm text-base-content/70">
-                      Remove Twitch rewards for this vote while keeping the session status unchanged.
+                      Disable the Twitch reward while keeping the session status unchanged.
                     </p>
                     <.button
                       id="remove-twitch-rewards"
                       phx-click="remove_twitch_rewards"
-                      data-confirm="Remove Twitch channel point rewards for this session? Voting stays open."
+                      data-confirm="Disable the Twitch voting reward? Voting stays open."
                     >
                       {if @failed_twitch_reward_deletions > 0,
                         do: "Retry reward cleanup",
-                        else: "Remove Twitch rewards"}
+                        else: "Disable Twitch reward"}
                     </.button>
                   </div>
                   <div
@@ -352,7 +384,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                     class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <p class="text-sm text-base-content/70">
-                      Freeze voting, snapshot the pool, and spin without starting Twitch rewards.
+                      Freeze voting, snapshot the pool, and spin without starting Twitch voting.
                     </p>
                     <.button
                       id="spin-selected-voting-session"
@@ -414,7 +446,10 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                     class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <p class="text-sm text-base-content/70">
-                      Return to setup mode so you can freely revise the vote.
+                      {if @selected_session.status in ["completed", "closed", "cancelled"],
+                        do:
+                          "Start a new round with the same games and numbers; previous votes will be cleared.",
+                        else: "Return to setup mode so you can revise the vote."}
                     </p>
                     <.button id="set-session-draft" phx-click="set_status" phx-value-status="draft">
                       Back to draft
@@ -457,7 +492,9 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                   >
                     <div class="flex items-start justify-between gap-3">
                       <div>
-                        <h3 class="font-bold leading-tight">{pool_item.game.title}</h3>
+                        <h3 class="font-bold leading-tight">
+                          #{pool_item.option_number} · {pool_item.game.title}
+                        </h3>
                         <div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
                           <div class="rounded-xl bg-base-100 p-2">
                             <p class="font-semibold uppercase tracking-wide text-base-content/50">
@@ -489,34 +526,6 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
                               {pool_item.final_weight}
                             </p>
                           </div>
-                        </div>
-                        <div
-                          :if={pool_item.twitch_reward_id}
-                          class="mt-3 rounded-xl bg-base-100 p-3 text-xs"
-                        >
-                          <p class="font-semibold uppercase tracking-wide text-base-content/50">
-                            Twitch Reward
-                          </p>
-                          <p id={"pool-game-twitch-reward-#{pool_item.id}"} class="mt-1 font-bold">
-                            {pool_item.twitch_reward_title}
-                          </p>
-                          <p class="text-base-content/60">
-                            {pool_item.twitch_reward_cost} points · {pool_item.twitch_reward_status}
-                          </p>
-                          <p
-                            :if={pool_item.twitch_reward_deletion_status == "failed"}
-                            id={"pool-game-twitch-reward-cleanup-error-#{pool_item.id}"}
-                            class="mt-2 rounded-lg bg-error/10 px-2 py-1 font-semibold text-error"
-                          >
-                            Cleanup failed: {pool_item.twitch_reward_deletion_error}
-                          </p>
-                          <p
-                            :if={pool_item.twitch_reward_deletion_status == "deleted"}
-                            id={"pool-game-twitch-reward-cleanup-deleted-#{pool_item.id}"}
-                            class="mt-2 rounded-lg bg-success/10 px-2 py-1 font-semibold text-success"
-                          >
-                            Twitch reward deleted
-                          </p>
                         </div>
                       </div>
                       <div class="flex shrink-0 flex-col gap-2">
@@ -668,7 +677,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
   def handle_event("set_status", %{"status" => status}, socket) do
     result =
-      if status in ["completed", "closed", "cancelled"] do
+      if status in ["draft", "locked", "completed", "closed", "cancelled"] do
         Voting.close_voting_session(socket.assigns.selected_session, status)
       else
         Voting.update_voting_session_status(socket.assigns.selected_session, status)
@@ -689,13 +698,26 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
          |> put_flash(:error, "Session marked #{status}, but #{twitch_error(reason)}")
          |> refresh()}
 
-      {:error, {:voting_session_pool_too_small, _count, _min_count} = reason} ->
+      {:error, {:twitch_reconciliation_failed, session, _reason}} ->
         {:noreply,
          socket
-         |> put_flash(:error, voting_session_pool_error(reason))
+         |> assign(:selected_session_id, session.id)
+         |> put_flash(
+           :error,
+           "Twitch votes could not be reconciled. Retry before editing the pool."
+         )
          |> refresh()}
 
-      {:error, {:voting_session_pool_too_large, _count, _max_count} = reason} ->
+      {:error, :twitch_cleanup_pending} ->
+        {:noreply,
+         socket
+         |> put_flash(
+           :error,
+           "The previous Twitch reward is still being cleaned up. Retry when cleanup finishes."
+         )
+         |> refresh()}
+
+      {:error, {:voting_session_pool_too_small, _count, _min_count} = reason} ->
         {:noreply,
          socket
          |> put_flash(:error, voting_session_pool_error(reason))
@@ -728,7 +750,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
         {:noreply,
          socket
          |> assign(:selected_session_id, session.id)
-         |> put_flash(:info, "Twitch rewards removed; voting status unchanged")
+         |> put_flash(:info, "Twitch reward disabled; voting status unchanged")
          |> refresh()}
 
       {:error, reason} ->
@@ -768,9 +790,21 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
   def handle_event("remove_pool_game", %{"id" => id}, socket) do
     pool_item = Enum.find(socket.assigns.pool_items, &(&1.id == String.to_integer(id)))
-    {:ok, _pool_item} = Voting.remove_game_from_session(pool_item)
 
-    {:noreply, refresh(socket)}
+    case Voting.remove_game_from_session(pool_item) do
+      {:ok, _pool_item} ->
+        {:noreply, refresh(socket)}
+
+      {:error, :game_has_twitch_votes} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Games with Twitch votes cannot be removed from this session.")
+         |> refresh()}
+
+      {:error, :twitch_reconciliation_required} ->
+        {:noreply,
+         socket |> put_flash(:error, "Reconcile Twitch votes before removing games.") |> refresh()}
+    end
   end
 
   def handle_event("vote_pool_game", %{"id" => id}, socket) do
@@ -838,9 +872,13 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
         socket.assigns.available_games_filter
       )
     )
-    |> assign(:has_twitch_rewards?, has_twitch_rewards?(pool_items))
-    |> assign(:failed_twitch_reward_deletions, failed_twitch_reward_deletions(pool_items))
-    |> assign(:twitch_connected?, Twitch.credential_configured?())
+    |> assign(:has_twitch_rewards?, has_twitch_rewards?(selected_session))
+    |> assign(:failed_twitch_reward_deletions, failed_twitch_reward_deletions(selected_session))
+    |> assign(
+      :failed_twitch_redemptions,
+      BacklogWheel.Voting.TwitchRedemptions.failed_count(selected_session)
+    )
+    |> assign(:twitch_connected?, Twitch.credential_configured?(socket.assigns.current_community))
     |> assign_twitch_voting_state(pool_items)
     |> assign_lifecycle_actions()
     |> stream(:voting_sessions, sessions, reset: true)
@@ -966,16 +1004,17 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   defp available_games_empty_message(_unfiltered_available_games, _available_games, _filter),
     do: "Every game is already in this vote."
 
-  defp has_twitch_rewards?(pool_items) do
-    Enum.any?(pool_items, fn pool_item ->
-      pool_item.twitch_reward_id not in [nil, ""] and
-        pool_item.twitch_reward_deletion_status != "deleted"
-    end)
-  end
+  defp has_twitch_rewards?(%{twitch_voting_reward: %{status: status}})
+       when status in ["enabled", "enabling"],
+       do: true
 
-  defp failed_twitch_reward_deletions(pool_items) do
-    Enum.count(pool_items, &(&1.twitch_reward_deletion_status == "failed"))
-  end
+  defp has_twitch_rewards?(_session), do: false
+
+  defp failed_twitch_reward_deletions(%{twitch_voting_reward: %{cleanup_error: error}})
+       when is_binary(error),
+       do: 1
+
+  defp failed_twitch_reward_deletions(_session), do: 0
 
   defp assign_twitch_voting_state(socket, pool_items) do
     hint =
@@ -1007,12 +1046,9 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   defp twitch_voting_hint(_connected?, _selected_session, []),
     do: "Add games to this vote before starting Twitch voting."
 
-  defp twitch_voting_hint(_connected?, selected_session, pool_items) do
-    if Enum.all?(pool_items, fn pool_item ->
-         pool_item.twitch_reward_id not in [nil, ""] and
-           pool_item.twitch_reward_deletion_status != "deleted"
-       end) do
-      "Twitch voting rewards are already created for this session."
+  defp twitch_voting_hint(_connected?, selected_session, _pool_items) do
+    if match?(%{twitch_voting_reward: %{status: "enabled"}}, selected_session) do
+      "The Twitch voting reward is already active for this session."
     else
       case Voting.validate_twitch_reward_creation(selected_session) do
         :ok -> nil
@@ -1098,7 +1134,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   defp lifecycle(%{selected_session: %{status: "open"}, has_twitch_rewards?: true}) do
     %{
       state_label: "Open",
-      state_description: "This is the active vote. Twitch voting rewards are collecting votes.",
+      state_description: "This is the active vote. The Twitch voting reward is collecting votes.",
       next_action_copy: "Mark voting ready to spin when voting is finished.",
       blocking_issue: nil,
       primary_action: :ready_to_spin
@@ -1152,7 +1188,7 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
   defp open_blocked_next_action("Add games" <> _rest),
     do: "Add games before starting Twitch voting."
 
-  defp open_blocked_next_action("Twitch voting rewards are already created" <> _rest),
+  defp open_blocked_next_action("The Twitch voting reward is already active" <> _rest),
     do: "Mark voting ready to spin when voting is finished."
 
   defp open_blocked_next_action(_hint),
@@ -1219,26 +1255,13 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
     do: "Reconnect Twitch before starting Twitch voting"
 
   defp twitch_error(:empty_pool), do: "Add games to this vote before starting Twitch voting"
-  defp twitch_error(:no_twitch_rewards), do: "No Twitch rewards to remove"
+  defp twitch_error(:no_twitch_rewards), do: "No active Twitch reward to disable"
+
+  defp twitch_error(:twitch_cleanup_pending),
+    do: "The previous Twitch reward is still being cleaned up. Retry when cleanup finishes."
 
   defp twitch_error({:voting_session_pool_too_small, _count, _min_count} = reason),
     do: voting_session_pool_error(reason)
-
-  defp twitch_error({:voting_session_pool_too_large, _count, _max_count} = reason),
-    do: voting_session_pool_error(reason)
-
-  defp twitch_error({:twitch_reward_pool_too_large, count, max_count}),
-    do:
-      "Twitch can create at most #{max_count} reward titles for one vote; this vote has #{count} games."
-
-  defp twitch_error({:twitch_reward_title_too_long, title, max_length}),
-    do: "Twitch reward title is too long (max #{max_length} characters): #{title}"
-
-  defp twitch_error({:duplicate_twitch_reward_titles, [title | _titles]}),
-    do: "Twitch reward titles must be unique; duplicate title: #{title}"
-
-  defp twitch_error({:twitch_reward_deletion_failed, count}),
-    do: "#{count} Twitch reward cleanup failed"
 
   defp twitch_error({:twitch_http_error, status, body}) do
     message = twitch_http_error_message(body)
@@ -1256,10 +1279,6 @@ defmodule BacklogWheelWeb.VotingSessionLive.Index do
 
   defp voting_session_pool_error({:voting_session_pool_too_small, count, min_count}) do
     "Add at least #{min_count} games before opening voting; this vote has #{count}."
-  end
-
-  defp voting_session_pool_error({:voting_session_pool_too_large, count, max_count}) do
-    "Voting sessions can include at most #{max_count} games; this vote has #{count}."
   end
 
   defp twitch_http_error_message(%{"message" => message}) when is_binary(message), do: message

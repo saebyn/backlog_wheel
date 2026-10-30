@@ -2,6 +2,7 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
   use BacklogWheelWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+  import BacklogWheel.BacklogFixtures
 
   alias BacklogWheel.Twitch
   alias BacklogWheel.Communities
@@ -71,6 +72,23 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
     refute has_element?(view, "#rotate-eventsub-secret")
   end
 
+  test "another community's Twitch connection does not mark this community connected", %{
+    conn: conn
+  } do
+    current = Process.get(:test_community)
+    other = community_fixture(%{twitch_broadcaster_id: "222"})
+    Process.put(:test_community, current)
+
+    assert {:ok, _} =
+             Twitch.save_credential(other, %{
+               access_token: "other-token",
+               scopes: "channel:manage:redemptions"
+             })
+
+    {:ok, view, _html} = live(conn, ~p"/settings/twitch")
+    assert has_element?(view, "#twitch-settings-connection-status", "Not connected")
+  end
+
   test "saves editable community Twitch settings without exposing EventSub secret", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/settings/twitch")
 
@@ -94,7 +112,7 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
 
   test "shows reconnect and disconnect when Twitch is connected", %{conn: conn} do
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
@@ -123,7 +141,7 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
 
   test "disconnect removes stored Twitch credential", %{conn: conn} do
     {:ok, _credential} =
-      Twitch.save_credential(%{
+      Twitch.save_credential(Process.get(:test_community), %{
         access_token: "access-token",
         refresh_token: "refresh-token",
         scopes: "channel:manage:redemptions"
@@ -133,7 +151,7 @@ defmodule BacklogWheelWeb.TwitchLiveTest do
 
     assert view |> element("#disconnect-twitch") |> render_click()
 
-    refute Twitch.credential_configured?()
+    refute Twitch.credential_configured?(Process.get(:test_community))
     assert has_element?(view, "#twitch-settings-connection-status", "Not connected")
     assert has_element?(view, "#connect-twitch", "Connect Twitch")
   end

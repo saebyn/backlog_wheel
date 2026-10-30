@@ -94,6 +94,27 @@ iex -S mix phx.server
 
 Visit <http://localhost:4000> in your browser. The games CRUD page is available at <http://localhost:4000/games>, the wheel page is available at <http://localhost:4000/wheel>, and spin history is available at <http://localhost:4000/history>.
 
+### Local Twitch simulator
+
+To test voting without contacting Twitch or spending channel points, start the opt-in simulator:
+
+```sh
+docker compose -f compose.yaml -f compose.simulator.yaml up -d web
+```
+
+This runs the app on <http://localhost:4000> using the separate `backlog_wheel_simulator` database and a separate persistent simulator-state volume. The normal `backlog_wheel_dev` database and its Twitch credentials are not used. Sign in with Discord and complete onboarding for the sandbox community, then open <http://localhost:4000/dev/twitch-simulator>.
+
+1. Click **Connect simulated channel** and **Create sample vote**, then open the sample vote.
+2. Open voting and start Twitch voting. Return to the simulator page to redeem a game number as a viewer.
+3. Try an invalid number to see a simulated cancellation and chat explanation. Check **Delay webhook delivery** to deliver or replay a notification later; reconciliation can also discover delayed redemptions.
+4. Use the failure controls and **Run retries now** to exercise recovery. Finished reward deletions appear in simulator history.
+
+The simulator dispatches signed requests through the app's EventSub endpoint and simulates Twitch's reward and redemption API; it does not validate a real Twitch integration. To switch back to the ordinary development database and real Twitch client, run:
+
+```sh
+docker compose -f compose.yaml up -d --force-recreate web
+```
+
 ## Steam Import
 
 Steam library import uses the official Steam Web API. Visit <http://localhost:4000/games/import/steam>, save the community's Steam API key and SteamID64, then click `Import Steam Library`.
@@ -162,7 +183,13 @@ Behavior today:
 - Twitch broadcaster ID and reward cost are saved per community in Settings > Twitch. Broadcaster ID is detected when Twitch is connected.
 - EventSub webhook signing is configured automatically when Twitch is connected or reconnected.
 - If required config is missing, `BacklogWheel.Twitch.config/1` returns `{:error, {:missing_config, keys}}` and `BacklogWheel.Twitch.configured?/1` returns `false`.
-- Starting Twitch voting creates one positive channel point vote reward per game in the voting session.
+- Starting Twitch voting creates one channel point reward for the session. Viewers enter the game number shown in the voting pool and wheel; each valid redemption adds one vote.
+- Game numbers are assigned permanently within a session, including after a game is removed. Twitch's redemption time determines whether a vote was made while voting was open, even if its notification arrives later. Invalid numbers and redemptions made outside a voting window are canceled to refund points, with an addressed chat message explaining the refund.
+- Resolution and feedback failures are retained and retried; the session page reports redemptions that need attention. The app also checks Twitch for unfulfilled redemptions to recover missed EventSub deliveries. Check the Twitch connection and permissions if retries continue to fail.
+- Freezing records a cutoff and disables the reward. Before spinning, the app reconciles Twitch's unfulfilled redemptions; if Twitch cannot be reached, the spin is blocked until reconciliation succeeds.
+- For finished sessions, the app automatically deletes the reward after Twitch's unfulfilled queue is empty and local redemption resolutions are complete. Subsequent notifications for that deleted reward are ignored. Legacy per-game rewards are not managed and can be removed manually.
+- A finished session can be reused after reward cleanup. Returning it to draft or reopening it clears the previous round's votes while keeping its games and option numbers; starting Twitch voting creates a new reward.
+- OAuth requests `channel:manage:redemptions` and `user:write:chat`; credentials are stored per community. Existing users must reconnect Twitch once because older global credentials cannot be safely attributed to a particular community.
 - EventSub signature verification uses the secret saved for the event's broadcaster community.
 
 ## Terminology

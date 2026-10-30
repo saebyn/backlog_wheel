@@ -1,5 +1,19 @@
 This is a web application written using the Phoenix web framework.
 
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues for saebyn/backlog_wheel. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout. See `docs/agents/domain.md`.
+
 ## Project guidelines
 
 - Use `mix precommit` alias when you are done with all changes and fix any pending issues

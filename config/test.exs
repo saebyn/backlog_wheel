@@ -43,3 +43,4 @@ config :phoenix,
 config :backlog_wheel, signup_allowed_discord_ids: :all
 
 config :backlog_wheel, analytics_enabled: false
+config :backlog_wheel, dev_routes: true

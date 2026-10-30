@@ -40,7 +40,7 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
 
     assert redirected_to(conn) == ~p"/settings/twitch"
     assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Twitch connected"
-    assert Twitch.get_credential().access_token == "access-token"
+    assert Twitch.get_credential(Process.get(:test_community)).access_token == "access-token"
 
     community = Communities.get_community!(Process.get(:test_community).id)
     assert community.twitch_broadcaster_id == "28728577"
@@ -70,7 +70,7 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
       |> get(~p"/twitch/oauth/callback?#{[code: "valid-code", state: "state-1"]}")
 
     assert redirected_to(conn) == ~p"/settings/twitch"
-    assert Twitch.get_credential().access_token == "access-token"
+    assert Twitch.get_credential(Process.get(:test_community)).access_token == "access-token"
 
     community = Communities.get_community!(Process.get(:test_community).id)
     assert community.twitch_broadcaster_id == "28728577"
@@ -80,6 +80,23 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
 
     assert BacklogWheel.FakeTwitchClient.eventsub_callback_url() ==
              "https://example.com/twitch/eventsub"
+  end
+
+  test "reconnecting the same channel preserves the EventSub signing secret", %{conn: conn} do
+    {:ok, community} =
+      Communities.update_community_twitch_settings(Process.get(:test_community), %{
+        twitch_broadcaster_id: "28728577",
+        twitch_eventsub_secret: "existing-eventsub-secret"
+      })
+
+    Process.put(:test_community, community)
+
+    conn
+    |> Plug.Test.init_test_session(twitch_oauth_state: "state-1")
+    |> get(~p"/twitch/oauth/callback?#{[code: "valid-code", state: "state-1"]}")
+
+    assert Communities.get_community!(community.id).twitch_eventsub_secret ==
+             "existing-eventsub-secret"
   end
 
   test "callback rejects mismatched state", %{conn: conn} do
@@ -93,7 +110,7 @@ defmodule BacklogWheelWeb.TwitchOAuthControllerTest do
     assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
              "Twitch authorization state did not match"
 
-    refute Twitch.get_credential()
+    refute Twitch.get_credential(Process.get(:test_community))
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:backlog_wheel, key)
