@@ -3,6 +3,7 @@
 /deps
 /doc
 /tmp
+/cdk.out
 /assets/node_modules
 /priv/static/assets
 /priv/static/cache_manifest.json
@@ -11,5 +12,4 @@
 .envrc
 .git
 .github
-infra/.venv
-infra/cdk.out
+/infra

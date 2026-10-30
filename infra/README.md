@@ -16,7 +16,7 @@ The CDK app also creates `BacklogWheelEc2Stack`, which owns:
 - A generated local Postgres credentials secret with a retain policy.
 - A production Docker image asset published through the CDK bootstrap ECR repository.
 
-The instance runs Docker containers for Phoenix, Postgres, and Caddy. Caddy terminates HTTPS directly on the instance. Postgres data lives on the instance's Docker volume. On first boot, the instance starts Postgres and restores the latest retained S3 backup before starting Phoenix if the database has no public tables. App deploys upload a `pg_dump -Fc` backup to the retained backup bucket before replacing the app container. Backups also run hourly through a systemd timer and during graceful instance shutdown through a systemd service stop hook.
+The instance runs Docker containers for Phoenix, Postgres, and Caddy. Caddy terminates HTTPS directly on the instance. Postgres data lives on the instance's Docker volume. On first boot, user data starts Postgres and restores the latest retained S3 backup if the database has no public tables. The SSM app deployment waits for user data to complete before starting Phoenix. App deploys upload a `pg_dump -Fc` backup to the retained backup bucket before replacing the app container. Backups also run hourly through a systemd timer and during graceful instance shutdown through a systemd service stop hook.
 
 ## Prerequisites
 
@@ -86,7 +86,7 @@ AWS_PROFILE="$PROFILE" cdk deploy BacklogWheelBackupStack \
   --context ec2InstanceRoleArn="$ROLE_ARN"
 ```
 
-Then deploy the EC2 stack only after `cdk diff BacklogWheelEc2Stack` confirms the instance will not be replaced:
+Review `cdk diff BacklogWheelEc2Stack` before deploying the EC2 stack. The initial change to image-independent user data may replace the instance; prepare a fresh backup before proceeding. Subsequent app-only image changes should update the SSM association without changing the instance:
 
 ```sh
 AWS_PROFILE=your-profile cdk deploy BacklogWheelEc2Stack
@@ -106,7 +106,9 @@ AWS_PROFILE=your-profile cdk deploy BacklogWheelEc2Stack \
   --context ec2SshCidr=203.0.113.10/32
 ```
 
-Each deploy publishes a new Docker image asset when application files change. The stack also updates a managed SSM association with that image URI, causing the EC2 instance to pull the image and recreate the `backlog-wheel-app` container automatically.
+Each deploy publishes a new Docker image asset when application files change. The stack also updates a managed SSM association with that image URI, causing the EC2 instance to pull the image and recreate the `backlog-wheel-app` container automatically. The association also starts the app on a new instance after `cloud-init` reports that user data completed successfully. It waits up to 30 minutes for bootstrap and fails rather than starting the app if bootstrap fails or times out. `cdk deploy` does not wait for the association to complete; check its execution history in Systems Manager and verify the application after deploying.
+
+User data changes and other infrastructure changes can still cause an instance restart or replacement. The stack tracks the latest Amazon Linux 2023 AMI, so an AMI update can also replace the instance. During replacement, the new instance can restore a backup before the old instance shuts down; writes after that backup may not be present on the new instance.
 
 ## Runtime Configuration
 
@@ -136,7 +138,7 @@ The app container also sets these non-secret runtime values:
 
 The Phoenix release runs migrations automatically on startup.
 
-On new EC2 instance bootstrap, the stack starts Postgres and runs `/usr/local/bin/backlog-wheel-restore-latest-db` before starting Phoenix. The restore script skips restore when the database already has public tables, restores the newest `database/*.dump` object from the backup bucket when the database is empty, and continues with an empty database only when no backup exists.
+On new EC2 instance bootstrap, the stack starts Postgres and runs `/usr/local/bin/backlog-wheel-restore-latest-db` before the SSM association starts Phoenix. The restore script skips restore when the database already has public tables, restores the newest `database/*.dump` object from the backup bucket when the database is empty, and continues with an empty database only when no backup exists.
 
 The host backup/restore scripts live in `infra/scripts/`, and their systemd units live in `infra/systemd/`. CDK reads these files at synth time and writes them onto the EC2 host through user data and the app deploy SSM document.
 
@@ -242,7 +244,7 @@ sudo docker cp ./BACKUP_FILE.dump backlog-wheel-postgres:/tmp/restore.dump
 sudo docker exec backlog-wheel-postgres pg_restore -U "$DB_USERNAME" -d backlog_wheel --clean --if-exists /tmp/restore.dump
 ```
 
-For app updates after the initial EC2 provision, run `cdk deploy BacklogWheelEc2Stack`. The CDK-managed `BacklogWheelDeployApp` SSM association pulls the new image and recreates the app container.
+For app updates after the initial EC2 provision, run `cdk deploy BacklogWheelEc2Stack`. The CDK-managed `BacklogWheelDeployApp` SSM association pulls the new image and recreates the app container. Check the association execution history in Systems Manager; if bootstrap or deployment fails, correct the problem and run the association again.
 
 ## Docker
 

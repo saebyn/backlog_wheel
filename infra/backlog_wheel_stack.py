@@ -198,7 +198,6 @@ class BacklogWheelEc2Stack(Stack):
         ]
 
         instance.add_user_data(
-            "# force recreate",
             "set -euxo pipefail",
             "dnf update -y",
             "dnf install -y awscli docker",
@@ -246,10 +245,6 @@ class BacklogWheelEc2Stack(Stack):
             "docker run -d --name backlog-wheel-postgres --restart unless-stopped --network backlog-wheel --network-alias postgres -e POSTGRES_USER=\"$DB_USERNAME\" -e POSTGRES_PASSWORD=\"$DB_PASSWORD\" -e POSTGRES_DB=backlog_wheel -v backlog-wheel-postgres:/var/lib/postgresql/data postgres:17-alpine",
             "until docker exec backlog-wheel-postgres pg_isready -U \"$DB_USERNAME\" -d backlog_wheel; do sleep 2; done",
             *restore_bootstrap_commands,
-            *instance_id_commands,
-            f"docker pull {image.image_uri}",
-            "docker rm -f backlog-wheel-app || true",
-            f"docker run -d --name backlog-wheel-app --restart unless-stopped --network backlog-wheel {application_log_options} --env-file /opt/backlog-wheel/app.env {image.image_uri}",
             f"cat > /opt/backlog-wheel/Caddyfile <<'CADDY'\n{domain_name} {{\n  encode zstd gzip\n  reverse_proxy backlog-wheel-app:4000\n}}\nCADDY",
             "docker rm -f backlog-wheel-caddy || true",
             "docker run -d --name backlog-wheel-caddy --restart unless-stopped --network backlog-wheel -p 80:80 -p 443:443 -v /opt/backlog-wheel/Caddyfile:/etc/caddy/Caddyfile:ro -v backlog-wheel-caddy-data:/data -v backlog-wheel-caddy-config:/config caddy:2-alpine",
@@ -336,7 +331,7 @@ class BacklogWheelEc2Stack(Stack):
                             "runCommand": [
                                 "set -euxo pipefail",
                                 *instance_id_commands,
-                                "for i in {1..60}; do test -f /opt/backlog-wheel/app.env && docker network inspect backlog-wheel >/dev/null 2>&1 && break; sleep 5; done",
+                                "timeout 1800 cloud-init status --wait",
                                 "test -f /opt/backlog-wheel/app.env",
                                 "docker network inspect backlog-wheel >/dev/null",
                                 *backup_install_commands,
