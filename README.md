@@ -167,7 +167,7 @@ Behavior today:
 
 ## Terminology
 
-Current code should use product language like voting sessions, wheel candidates, votes, and channel point votes. Prefer `ChannelPointVote`, `record_vote/2`, `record_vote/3`, and `channel_point_vote_total` in new code.
+See [Ubiquitous Language](UBIQUITOUS_LANGUAGE.md) for the shared product vocabulary and intended multi-round wheel workflow. The current implementation still uses voting session terminology. Prefer `ChannelPointVote`, `record_vote/2`, `record_vote/3`, and `channel_point_vote_total` in new code.
 
 ## Tests
 
