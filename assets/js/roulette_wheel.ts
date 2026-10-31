@@ -1,12 +1,46 @@
-import {readWheelVolume, volumeEvent} from "./wheel_volume.js"
+import type {HookInterface} from "phoenix_live_view"
+import {readWheelVolume, volumeEvent} from "./wheel_volume.ts"
 
-const normalizeDegrees = (degrees) => ((degrees % 360) + 360) % 360
+type Segment = {start_degrees: number, end_degrees: number}
+type Spin = {landingDegrees: number, segments: Segment[], spinId: string | number, durationMs: number, fullTurns: number}
+type RouletteWheelMethods = {
+  mounted(): void
+  updated(): void
+  destroyed(): void
+  edgeCrossingsForSpin(segments: Segment[], startingRotation: number, endingRotation: number): number[]
+  startPointerTicks(startingRotation: number, endingRotation: number, edgeCrossings: number[], durationMs: number): void
+  stopPointerTicks(): void
+  applyRotation(): void
+  initialRotation(): number
+  tickPointerEdge(now?: number): void
+  getAudioContext(): AudioContext | null
+  playTone(frequency: number, durationSeconds: number, volume?: number): void
+  playFlourish(): void
+}
 
-const cubicBezier = (x1, y1, x2, y2) => {
-  const sampleCurve = (a1, a2, t) => 3 * a1 * (1 - t) * (1 - t) * t + 3 * a2 * (1 - t) * t * t + t * t * t
-  const sampleDerivative = (a1, a2, t) => 3 * a1 * (1 - t) * (1 - 3 * t) + 3 * a2 * t * (2 - 3 * t) + 3 * t * t
+export type RouletteWheelInstance = RouletteWheelMethods & Pick<HookInterface, "el" | "handleEvent" | "pushEvent"> & {
+  rotation: number
+  timeout: number | null
+  pointerFrame: number | null
+  lastPointerFlipAt: number
+  audioContext: AudioContext | null
+  masterGain: GainNode | null
+  volume: number
+  onVolume: (event: CustomEvent<{volume: number}>) => void
+  spinning: boolean
+  rotor: HTMLElement | null
+  pointer: HTMLElement | null
+  votingSessionId: string | undefined
+  flourishTimeouts?: number[]
+}
 
-  return (progress) => {
+const normalizeDegrees = (degrees: number) => ((degrees % 360) + 360) % 360
+
+const cubicBezier = (x1: number, y1: number, x2: number, y2: number) => {
+  const sampleCurve = (a1: number, a2: number, t: number) => 3 * a1 * (1 - t) * (1 - t) * t + 3 * a2 * (1 - t) * t * t + t * t * t
+  const sampleDerivative = (a1: number, a2: number, t: number) => 3 * a1 * (1 - t) * (1 - 3 * t) + 3 * a2 * t * (2 - 3 * t) + 3 * t * t
+
+  return (progress: number) => {
     let t = progress
 
     for (let i = 0; i < 5; i++) {
@@ -23,7 +57,7 @@ const cubicBezier = (x1, y1, x2, y2) => {
 const spinEasing = cubicBezier(0.08, 0.72, 0.12, 1)
 const minPointerFlipIntervalMs = 130
 
-const RouletteWheel = {
+const RouletteWheel: RouletteWheelMethods & ThisType<RouletteWheelInstance> = {
   mounted() {
     this.rotation = 0
     this.timeout = null
@@ -35,7 +69,7 @@ const RouletteWheel = {
     this.onVolume = ({detail: {volume}}) => {
       this.volume = volume
       if (this.masterGain) {
-        this.masterGain.gain.setValueAtTime(volume, this.audioContext.currentTime)
+        this.masterGain.gain.setValueAtTime(volume, this.audioContext!.currentTime)
       }
     }
     window.addEventListener(volumeEvent, this.onVolume)
@@ -46,10 +80,10 @@ const RouletteWheel = {
     this.rotation = this.initialRotation()
     this.applyRotation()
 
-    this.handleEvent("roulette:spin", ({landingDegrees, segments, spinId, durationMs, fullTurns}) => {
+    this.handleEvent("roulette:spin", ({landingDegrees, segments, spinId, durationMs, fullTurns}: Spin) => {
       if (!this.rotor || !segments || segments.length < 1) return
 
-      window.clearTimeout(this.timeout)
+      window.clearTimeout(this.timeout!)
       this.stopPointerTicks()
 
       const currentPosition = normalizeDegrees(this.rotation + landingDegrees)
@@ -88,7 +122,7 @@ const RouletteWheel = {
   },
 
   destroyed() {
-    window.clearTimeout(this.timeout)
+    window.clearTimeout(this.timeout!)
     this.stopPointerTicks()
     window.removeEventListener(volumeEvent, this.onVolume)
     this.flourishTimeouts?.forEach(timeout => window.clearTimeout(timeout))
@@ -101,7 +135,7 @@ const RouletteWheel = {
         .flatMap(({start_degrees, end_degrees}) => [start_degrees, end_degrees])
         .map(edgeDegrees => normalizeDegrees(edgeDegrees))
     )]
-    const crossings = []
+    const crossings: number[] = []
 
     edges.forEach(edgeDegrees => {
       const firstTurn = Math.floor((startingRotation + edgeDegrees) / 360)
@@ -125,7 +159,7 @@ const RouletteWheel = {
     const rotationDelta = endingRotation - startingRotation
     let nextEdgeIndex = 0
 
-    const tick = (now) => {
+    const tick = (now: number) => {
       const progress = Math.min((now - startedAt) / durationMs, 1)
       const easedRotation = startingRotation + rotationDelta * spinEasing(progress)
 
@@ -155,7 +189,7 @@ const RouletteWheel = {
   },
 
   initialRotation() {
-    const rotation = Number.parseFloat(this.el.dataset.initialRotation)
+    const rotation = Number.parseFloat(this.el.dataset.initialRotation!)
     return Number.isFinite(rotation) ? rotation : 0
   },
 
@@ -163,9 +197,9 @@ const RouletteWheel = {
     if (now - this.lastPointerFlipAt < minPointerFlipIntervalMs) return
 
     this.lastPointerFlipAt = now
-    this.pointer.classList.remove("wheel-pointer-flip")
-    void this.pointer.offsetWidth
-    this.pointer.classList.add("wheel-pointer-flip")
+    this.pointer!.classList.remove("wheel-pointer-flip")
+    void this.pointer!.offsetWidth
+    this.pointer!.classList.add("wheel-pointer-flip")
     this.playTone(520, 0.028, 0.045)
   },
 
@@ -197,7 +231,7 @@ const RouletteWheel = {
     gain.gain.setValueAtTime(volume, start)
     gain.gain.exponentialRampToValueAtTime(0.001, start + durationSeconds)
     oscillator.connect(gain)
-    gain.connect(this.masterGain)
+    gain.connect(this.masterGain!)
     oscillator.start(start)
     oscillator.stop(start + durationSeconds)
   },

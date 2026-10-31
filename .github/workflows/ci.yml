@@ -43,6 +43,11 @@ jobs:
           elixir-version: 1.18.4
           otp-version: 28.0
 
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
       - name: Restore dependencies cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
@@ -55,13 +60,8 @@ jobs:
       - name: Install dependencies
         run: mix deps.get
 
+      - name: Install frontend dependencies
+        run: npm ci --prefix assets
+
       - name: Run precommit checks
         run: mix precommit
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 24
-
-      - name: Run frontend tests
-        run: node --test assets/test/*.test.mjs

@@ -23,13 +23,13 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/backlog_wheel"
-import topbar from "../vendor/topbar"
-import QuickWheelEntryForm from "./quick_wheel_entry_form"
-import RouletteWheel from "./roulette_wheel"
-import ThemeColorPicker from "./theme_color_picker"
-import WheelVolume from "./wheel_volume"
+import topbar from "../vendor/topbar.js"
+import QuickWheelEntryForm from "./quick_wheel_entry_form.ts"
+import RouletteWheel from "./roulette_wheel.ts"
+import ThemeColorPicker from "./theme_color_picker.ts"
+import WheelVolume from "./wheel_volume.ts"
 
-const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
+const csrfToken = document.querySelector("meta[name='csrf-token']")!.getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
@@ -75,7 +75,7 @@ if (process.env.NODE_ENV === "development") {
     //
     //   * click with "c" key pressed to open at caller location
     //   * click with "d" key pressed to open at function component definition location
-    let keyDown
+    let keyDown: string | null | undefined
     window.addEventListener("keydown", e => keyDown = e.key)
     window.addEventListener("keyup", _e => keyDown = null)
     window.addEventListener("click", e => {

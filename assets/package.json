@@ -1,0 +1,17 @@
+{
+  "name": "backlog-wheel-assets",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/phoenix": "1.6.8",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,12 +1,19 @@
 import {test, beforeEach} from "node:test"
 import assert from "node:assert/strict"
-import WheelVolume, {readWheelVolume} from "../js/wheel_volume.js"
-import RouletteWheel from "../js/roulette_wheel.js"
+import WheelVolume, {readWheelVolume, type WheelVolumeInstance} from "../js/wheel_volume.ts"
+import RouletteWheel, {type RouletteWheelInstance} from "../js/roulette_wheel.ts"
 
-let stored
-let gains
-let oscillators
-let closed
+type FakeGain = {
+  gain: {value: number, setValueAtTime(value: number): void, exponentialRampToValueAtTime(): void}
+  target?: unknown
+  connect(target: unknown): void
+}
+type FakeOscillator = {frequency: {setValueAtTime(): void}, target?: unknown, connect(target: unknown): void, start(): void, stop(): void}
+
+let stored: string | null
+let gains: FakeGain[]
+let oscillators: FakeOscillator[]
+let closed: boolean
 
 beforeEach(() => {
   stored = null
@@ -16,7 +23,7 @@ beforeEach(() => {
   globalThis.window = Object.assign(new EventTarget(), {
     localStorage: {
       getItem: () => stored,
-      setItem: (_key, value) => { stored = value },
+      setItem: (_key: string, value: string) => { stored = value },
     },
     clearTimeout,
     AudioContext: class {
@@ -24,8 +31,9 @@ beforeEach(() => {
       state = "running"
       destination = {}
       createGain() {
-        const node = {
+        const node: FakeGain = {
           gain: {
+            value: 0,
             setValueAtTime(value) { this.value = value },
             exponentialRampToValueAtTime() {},
           },
@@ -35,7 +43,7 @@ beforeEach(() => {
         return node
       }
       createOscillator() {
-        const oscillator = {
+        const oscillator: FakeOscillator = {
           frequency: {setValueAtTime() {}},
           connect(target) { this.target = target },
           start() {},
@@ -46,19 +54,19 @@ beforeEach(() => {
       }
       close() { closed = true }
     },
-  })
+  }) as unknown as Window & typeof globalThis
 })
 
 const mountControls = () => {
   const input = Object.assign(new EventTarget(), {
     value: "100",
-    setAttribute(name, value) { this[name] = value },
-  })
+    setAttribute(name: string, value: string) { (this as unknown as Record<string, unknown>)[name] = value },
+  }) as EventTarget & {value: string, setAttribute(name: string, value: string): void, [key: string]: unknown}
   const output = {}
   const hook = {
     ...WheelVolume,
-    el: {querySelector: selector => selector === "input" ? input : output},
-  }
+    el: {querySelector: (selector: string) => selector === "input" ? input : output},
+  } as unknown as WheelVolumeInstance
   hook.mounted()
   return hook
 }
@@ -68,19 +76,19 @@ const mountWheel = () => {
     ...RouletteWheel,
     el: {dataset: {}, querySelector: () => null},
     handleEvent() {},
-  }
+  } as unknown as RouletteWheelInstance
   wheel.mounted()
   return wheel
 }
 
-const setVolume = (controls, percent) => {
+const setVolume = (controls: WheelVolumeInstance, percent: number) => {
   controls.input.value = String(percent)
   controls.input.dispatchEvent(new Event("input"))
 }
 
 test("restores saved volume, validates storage, and tolerates blocked storage", () => {
   for (const [value, expected] of [[null, 1], ["", 1], ["invalid", 1], ["Infinity", 1],
-    ["-1", 0], ["2", 1], ["0", 0], ["0.37", 0.37]]) {
+    ["-1", 0], ["2", 1], ["0", 0], ["0.37", 0.37]] as [string | null, number][]) {
     stored = value
     assert.equal(readWheelVolume(), expected)
   }
@@ -92,7 +100,7 @@ test("restores saved volume, validates storage, and tolerates blocked storage", 
   window.localStorage = {
     getItem() { throw new Error("blocked") },
     setItem() { throw new Error("blocked") },
-  }
+  } as unknown as Storage
   const blockedControls = mountControls()
   const wheel = mountWheel()
   setVolume(blockedControls, 25)
@@ -107,7 +115,7 @@ test("scales every tone through master gain and mutes sounds already playing", (
   wheel.playTone(520, 0.028, 0.045)
   assert.equal(gains[0].gain.value, 1)
   assert.equal(gains[1].target, gains[0])
-  assert.equal(gains[0].target, wheel.audioContext.destination)
+  assert.equal(gains[0].target, wheel.audioContext!.destination)
 
   setVolume(controls, 40)
   assert.equal(gains[0].gain.value, 0.4)
@@ -115,7 +123,7 @@ test("scales every tone through master gain and mutes sounds already playing", (
   setVolume(controls, 0)
   assert.equal(gains[0].gain.value, 0)
   assert.equal(controls.output.textContent, "Muted")
-  assert.equal(controls.input["aria-valuetext"], "Muted")
+  assert.equal((controls.input as unknown as Record<string, unknown>)["aria-valuetext"], "Muted")
   wheel.playTone(880, 0.12, 0.07)
   assert.equal(oscillators.length, 1)
 
@@ -148,21 +156,21 @@ test("mute persists across wheel navigation and does not create an audio context
 })
 
 test("winner notes use the current volume and pending notes are cancelled on navigation", () => {
-  const pending = new Map()
+  const pending = new Map<number, () => void>()
   let timerId = 0
-  window.setTimeout = callback => {
+  window.setTimeout = ((callback: () => void) => {
     pending.set(++timerId, callback)
     return timerId
-  }
-  window.clearTimeout = id => pending.delete(id)
+  }) as typeof window.setTimeout
+  window.clearTimeout = ((id: number) => pending.delete(id)) as typeof window.clearTimeout
   const controls = mountControls()
   const wheel = mountWheel()
   wheel.playFlourish()
   assert.equal(pending.size, 4)
-  pending.get(1)()
+  pending.get(1)!()
   assert.equal(oscillators.length, 1)
   setVolume(controls, 0)
-  pending.get(2)()
+  pending.get(2)!()
   assert.equal(oscillators.length, 1)
   wheel.destroyed()
   assert.equal(pending.size, 0)
