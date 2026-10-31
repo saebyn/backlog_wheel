@@ -35,16 +35,16 @@ jobs:
       POSTGRES_HOST: localhost
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Elixir
-        uses: erlef/setup-beam@v1
+        uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
         with:
           elixir-version: 1.18.4
           otp-version: 28.0
 
       - name: Restore dependencies cache
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             deps
@@ -59,9 +59,9 @@ jobs:
         run: mix precommit
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
 
-      - name: Test wheel sound controls
+      - name: Run frontend tests
         run: node --test assets/test/*.test.mjs
