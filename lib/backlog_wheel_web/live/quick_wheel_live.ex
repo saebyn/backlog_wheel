@@ -137,6 +137,8 @@ defmodule BacklogWheelWeb.QuickWheelLive do
               {if @spinning?, do: "Spinning...", else: "Spin Quick Wheel"}
             </.button>
 
+            <.wheel_volume id="quick-wheel-volume" />
+
             <div
               :if={@selected_entry}
               id="quick-wheel-result"

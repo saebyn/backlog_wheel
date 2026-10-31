@@ -1,3 +1,5 @@
+import {readWheelVolume, volumeEvent} from "./wheel_volume.js"
+
 const normalizeDegrees = (degrees) => ((degrees % 360) + 360) % 360
 
 const cubicBezier = (x1, y1, x2, y2) => {
@@ -28,6 +30,15 @@ const RouletteWheel = {
     this.pointerFrame = null
     this.lastPointerFlipAt = 0
     this.audioContext = null
+    this.masterGain = null
+    this.volume = readWheelVolume()
+    this.onVolume = ({detail: {volume}}) => {
+      this.volume = volume
+      if (this.masterGain) {
+        this.masterGain.gain.setValueAtTime(volume, this.audioContext.currentTime)
+      }
+    }
+    window.addEventListener(volumeEvent, this.onVolume)
     this.spinning = false
     this.rotor = this.el.querySelector("[data-wheel-rotor]")
     this.pointer = this.el.querySelector("[data-wheel-pointer]")
@@ -79,6 +90,9 @@ const RouletteWheel = {
   destroyed() {
     window.clearTimeout(this.timeout)
     this.stopPointerTicks()
+    window.removeEventListener(volumeEvent, this.onVolume)
+    this.flourishTimeouts?.forEach(timeout => window.clearTimeout(timeout))
+    if (this.audioContext) this.audioContext.close()
   },
 
   edgeCrossingsForSpin(segments, startingRotation, endingRotation) {
@@ -160,6 +174,9 @@ const RouletteWheel = {
       const AudioContext = window.AudioContext || window.webkitAudioContext
       if (!AudioContext) return null
       this.audioContext = new AudioContext()
+      this.masterGain = this.audioContext.createGain()
+      this.masterGain.gain.setValueAtTime(this.volume, this.audioContext.currentTime)
+      this.masterGain.connect(this.audioContext.destination)
     }
 
     if (this.audioContext.state === "suspended") this.audioContext.resume()
@@ -167,6 +184,7 @@ const RouletteWheel = {
   },
 
   playTone(frequency, durationSeconds, volume = 0.08) {
+    if (this.volume === 0) return
     const context = this.getAudioContext()
     if (!context) return
 
@@ -179,15 +197,15 @@ const RouletteWheel = {
     gain.gain.setValueAtTime(volume, start)
     gain.gain.exponentialRampToValueAtTime(0.001, start + durationSeconds)
     oscillator.connect(gain)
-    gain.connect(context.destination)
+    gain.connect(this.masterGain)
     oscillator.start(start)
     oscillator.stop(start + durationSeconds)
   },
 
   playFlourish() {
-    ;[440, 554, 659, 880].forEach((frequency, index) => {
+    this.flourishTimeouts = [440, 554, 659, 880].map((frequency, index) =>
       window.setTimeout(() => this.playTone(frequency, 0.12, 0.07), index * 85)
-    })
+    )
   }
 }
 

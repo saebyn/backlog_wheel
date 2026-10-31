@@ -7,6 +7,8 @@ defmodule BacklogWheelWeb.QuickWheelLiveTest do
     {:ok, view, _html} = live(conn, ~p"/quick-wheel")
 
     assert has_element?(view, "#quick-wheel-page")
+    assert has_element?(view, "#quick-wheel-volume[phx-update='ignore']")
+    assert has_element?(view, "#quick-wheel-volume-slider[type='range'][min='0'][max='100']")
     assert has_element?(view, "#quick-wheel-title-form")
     assert has_element?(view, "#quick-wheel-entry-form")
     assert has_element?(view, "#quick-wheel-paste-form")
