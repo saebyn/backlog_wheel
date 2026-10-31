@@ -10,8 +10,10 @@
     "test": "node --test test/*.test.ts"
   },
   "devDependencies": {
+    "@types/jsdom": "27.0.0",
     "@types/node": "24.19.2",
     "@types/phoenix": "1.6.8",
+    "jsdom": "27.0.1",
     "typescript": "5.9.3"
   }
 }
