@@ -1,7 +1,7 @@
 const storageKey = "backlog-wheel:sfx-volume"
 export const volumeEvent = "wheel:volume"
 
-const normalizeVolume = value => {
+const normalizeVolume = (value: string | number | null) => {
   const volume = Number(value)
   return value === null || value === "" || !Number.isFinite(volume)
     ? 1
@@ -16,10 +16,23 @@ export const readWheelVolume = () => {
   }
 }
 
-const WheelVolume = {
+type WheelVolumeMethods = {
+  mounted(): void
+  showVolume(volume: number): void
+  destroyed(): void
+}
+
+export type WheelVolumeInstance = WheelVolumeMethods & {
+  el: HTMLElement
+  input: HTMLInputElement
+  output: HTMLOutputElement
+  onInput: EventListener
+}
+
+const WheelVolume: WheelVolumeMethods & ThisType<WheelVolumeInstance> = {
   mounted() {
-    this.input = this.el.querySelector("input")
-    this.output = this.el.querySelector("output")
+    this.input = this.el.querySelector("input")!
+    this.output = this.el.querySelector("output")!
     this.showVolume(readWheelVolume())
     this.onInput = () => {
       const volume = normalizeVolume(Number(this.input.value) / 100)

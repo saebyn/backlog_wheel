@@ -26,7 +26,9 @@ If the shell is already allowed, entering the project directory should load the 
 
 If you aren't on NixOS, you may wish to follow the instructions at https://phoenix.hexdocs.pm/installation.html to get your environment set up.
 
-The app expects PostgreSQL for development and tests. The default local database credentials are:
+Frontend development and checks require Node.js 24 or newer and npm. The Nix shell
+provides Node.js 24; other environments should install it separately. The app
+expects PostgreSQL for development and tests. The default local database credentials are:
 
 ```text
 user: postgres
@@ -46,7 +48,8 @@ This publishes Postgres on `localhost:5432`, so commands run outside Docker such
 
 ## Setup
 
-Install dependencies, create the PostgreSQL database, run migrations, and build assets:
+Install Elixir and frontend dependencies, create the PostgreSQL database, run migrations,
+and build assets:
 
 ```sh
 mix setup
@@ -208,6 +211,14 @@ Run the project precommit alias:
 
 ```sh
 mix precommit
+```
+
+This includes strict TypeScript checking and the frontend tests. To run either
+frontend check separately:
+
+```sh
+npm --prefix assets run typecheck
+npm --prefix assets test
 ```
 
 ## Prototype Deployment

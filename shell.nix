@@ -11,6 +11,7 @@ pkgs.mkShellNoCC {
     pre-commit
     tailwindcss_4
     watchman
+    nodejs_24
 
     # Deployment / AWS CDK
     awscli2
