@@ -175,6 +175,8 @@ defmodule BacklogWheelWeb.WheelLive do
               {if @spinning?, do: "Spinning...", else: "Spin Wheel"}
             </.button>
 
+            <.wheel_volume id="wheel-volume" />
+
             <section
               :if={@selected_session}
               id="wheel-weight-summary"

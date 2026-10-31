@@ -8,7 +8,10 @@ defmodule BacklogWheelWeb.WheelLiveTest do
   alias BacklogWheel.Backlog
 
   test "renders voting wheel with no sessions", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/wheel")
+    {:ok, view, html} = live(conn, ~p"/wheel")
+
+    assert has_element?(view, "#wheel-volume[phx-update='ignore']")
+    assert has_element?(view, "#wheel-volume-slider[type='range'][min='0'][max='100']")
 
     assert html =~ "Voting Wheel"
     assert html =~ "Create a voting session before spinning the wheel."

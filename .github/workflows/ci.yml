@@ -57,3 +57,11 @@ jobs:
 
       - name: Run precommit checks
         run: mix precommit
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Test wheel sound controls
+        run: node --test assets/test/*.test.mjs

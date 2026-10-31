@@ -31,6 +31,38 @@ defmodule BacklogWheelWeb.CoreComponents do
 
   alias Phoenix.LiveView.JS
 
+  @doc "Renders browser-local volume control for wheel sound effects."
+  attr :id, :string, required: true
+
+  def wheel_volume(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      phx-hook="WheelVolume"
+      phx-update="ignore"
+      class="space-y-2 rounded-2xl border border-base-300 bg-base-200 p-4"
+    >
+      <div class="flex items-center justify-between gap-3 text-sm font-semibold">
+        <label for={"#{@id}-slider"}>Wheel / SFX volume</label>
+        <output id={"#{@id}-value"} for={"#{@id}-slider"} class="tabular-nums">100%</output>
+      </div>
+      <input
+        id={"#{@id}-slider"}
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        value="100"
+        aria-describedby={"#{@id}-hint"}
+        class="w-full cursor-pointer accent-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+      />
+      <p id={"#{@id}-hint"} class="text-xs text-base-content/70">
+        Pointer ticks and winner sound. Set to 0 to mute.
+      </p>
+    </div>
+    """
+  end
+
   @doc """
   Renders flash notices.
 
