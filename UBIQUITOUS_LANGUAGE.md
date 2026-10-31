@@ -5,6 +5,24 @@ Backlog Wheel. UI labels may differ where another phrase is clearer in context.
 The definitions describe the intended domain; not all relationships are
 implemented yet, and they do not prescribe a database model.
 
+- **User**: A person who interacts with the application directly or through an
+  integration. A user may have an application account, but one is not required.
+- **Community**: A group and the context for its activity in the application,
+  including its game library, voting sessions, and settings.
+- **Participant**: A user who takes part in a community's activities, such as
+  voting. A participant may interact through an integration or directly with
+  the application.
+- **Community administrator**: A user authorized to manage a particular
+  community. A community administrator can also perform participant actions
+  in that community, without requiring a separate participant role.
+- **Site administrator**: A user authorized to administer the application as
+  a whole. Site administration is independent of involvement in any
+  particular community.
+
+A user can administer one community, participate in another, and be a site
+administrator. Site administration does not require involvement in a
+community.
+
 - **Game library**: The collection of games available to a community. A game
   can have attributes, including its wheel-inclusion setting, used to select
   candidates for a voting session.
