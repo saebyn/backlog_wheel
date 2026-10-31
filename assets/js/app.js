@@ -27,12 +27,13 @@ import topbar from "../vendor/topbar"
 import QuickWheelEntryForm from "./quick_wheel_entry_form"
 import RouletteWheel from "./roulette_wheel"
 import ThemeColorPicker from "./theme_color_picker"
+import WheelVolume from "./wheel_volume"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, QuickWheelEntryForm, RouletteWheel, ThemeColorPicker},
+  hooks: {...colocatedHooks, QuickWheelEntryForm, RouletteWheel, ThemeColorPicker, WheelVolume},
 })
 
 // Show progress bar on live navigation and form submits
