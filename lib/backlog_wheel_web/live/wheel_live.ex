@@ -43,7 +43,9 @@ defmodule BacklogWheelWeb.WheelLive do
               </div>
 
               <svg
+                id="voting-wheel-rotor"
                 data-wheel-rotor
+                phx-mounted={JS.ignore_attributes("style")}
                 viewBox="0 0 100 100"
                 class="h-full w-full drop-shadow-2xl will-change-transform"
               >
