@@ -55,6 +55,28 @@ defmodule BacklogWheelWeb.QuickWheelLiveTest do
     assert has_element?(view, "#quick-wheel-entry-title-3[value='Gamma']")
   end
 
+  test "editing a wedge during a spin leaves its rotation under client control", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/quick-wheel")
+
+    view
+    |> form("#quick-wheel-entry-form", entry: %{title: "Original"})
+    |> render_submit()
+
+    view |> element("#quick-wheel-spin-button") |> render_click()
+    assert_push_event(view, "roulette:spin", %{})
+
+    view
+    |> form("#quick-wheel-edit-entry-form-1", entry: %{id: "1", title: "Updated"})
+    |> render_change()
+
+    assert has_element?(view, "#quick-wheel-rotor text", "Updated")
+
+    assert has_element?(
+             view,
+             ~s(#quick-wheel-rotor[phx-mounted*='"ignore_attrs"'][phx-mounted*='"style"'])
+           )
+  end
+
   test "spins to select a winner after animation", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/quick-wheel")
 

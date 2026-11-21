@@ -142,6 +142,36 @@ defmodule BacklogWheelWeb.WheelLiveTest do
     assert first_payload == second_payload
   end
 
+  test "a vote update during a spin leaves the wheel rotation under client control", %{
+    conn: conn
+  } do
+    voting_session = voting_session_fixture()
+    first_game = game_fixture(%{title: "First wedge"})
+    second_game = game_fixture(%{title: "Second wedge", external_id: "second-wedge"})
+    pool_item = voting_session_game_fixture(voting_session, first_game, %{base_weight: 1})
+    voting_session_game_fixture(voting_session, second_game, %{base_weight: 1})
+
+    {:ok, view, _html} = live(conn, ~p"/wheel?voting_session_id=#{voting_session.id}")
+
+    view |> element("#spin-wheel-button") |> render_click()
+    assert_push_event(view, "roulette:spin", %{})
+
+    channel_point_vote_fixture(pool_item, nil, %{strength: 1})
+
+    assert has_element?(view, "#wheel-total-weight", "Total weight: 3")
+    assert has_element?(view, "#wheel-spinning")
+
+    assert has_element?(
+             view,
+             "#voting-wheel-rotor g[transform^='rotate(120.000 50 50)'] > #wheel-option-title-#{pool_item.id}"
+           )
+
+    assert has_element?(
+             view,
+             ~s(#voting-wheel-rotor[phx-mounted*='"ignore_attrs"'][phx-mounted*='"style"'])
+           )
+  end
+
   test "refreshes selected voting session weights from pubsub", %{conn: conn} do
     voting_session = voting_session_fixture()
     game = game_fixture(%{title: "Live Vote Game"})
