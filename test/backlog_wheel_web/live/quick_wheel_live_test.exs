@@ -12,10 +12,10 @@ defmodule BacklogWheelWeb.QuickWheelLiveTest do
 
     [path] =
       current
-      |> element("button", "Save as preset")
+      |> element("#quick-wheel-entry-form ~ button", "Save as preset")
       |> render_click()
       |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#quick-wheel-navigation a:not([target])")
+      |> LazyHTML.query("#quick-wheel-entry-form ~ #quick-wheel-navigation a:not([target])")
       |> LazyHTML.attribute("href")
 
     {:ok, editor, _} = live(conn, path)
@@ -30,7 +30,7 @@ defmodule BacklogWheelWeb.QuickWheelLiveTest do
 
     {:ok, before_save, _} = live(conn, path)
     assert textarea_value(before_save) == "Alpha\nBeta"
-    editor |> element("button", "Save changes") |> render_click()
+    editor |> element("#quick-wheel-entry-form ~ button", "Save changes") |> render_click()
     {:ok, after_save, _} = live(conn, path)
     assert textarea_value(after_save) == "Beta"
     assert has_element?(after_save, "#quick-wheel-entry-count", "1")
@@ -55,10 +55,17 @@ defmodule BacklogWheelWeb.QuickWheelLiveTest do
     assert has_element?(view, "#quick-wheel-spin-button[disabled]")
   end
 
-  test "places the spin button first in the sidebar", %{conn: conn} do
+  test "starts the sidebar with the spin button and no introductory heading", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/quick-wheel")
 
     assert has_element?(view, "#quick-wheel-page aside > #quick-wheel-spin-button:first-child")
+    refute has_element?(view, "#quick-wheel-page aside h1")
+
+    refute has_element?(
+             view,
+             "#quick-wheel-page aside p",
+             "Spin any free-form list without touching games, votes, or Twitch."
+           )
   end
 
   test "typing, editing, and deleting lines updates the wheel without submitting", %{conn: conn} do

@@ -103,13 +103,18 @@ defmodule BacklogWheelWeb.QuickWheelLive do
               {if @spinning?, do: "Spinning...", else: "Spin Quick Wheel"}
             </.button>
 
-            <.header>
-              {if @wheel.preset, do: @title, else: "Quick Wheel"}
-              <:subtitle>Spin any free-form list without touching games, votes, or Twitch.</:subtitle>
-            </.header>
-
             <.form for={@title_form} id="quick-wheel-title-form" phx-change="update_title">
               <.input field={@title_form[:title]} label="Wheel title" />
+            </.form>
+
+            <.form for={@entry_form} id="quick-wheel-entry-form" phx-change="update_entries">
+              <.input
+                field={@entry_form[:entries]}
+                type="textarea"
+                label="Entries (one per line)"
+                rows="8"
+                placeholder="Movie night"
+              />
             </.form>
 
             <button :if={!@wheel.preset} class="btn" phx-click="create_preset">Save as preset</button>
@@ -135,16 +140,6 @@ defmodule BacklogWheelWeb.QuickWheelLive do
                 </a>
               </div>
             </div>
-
-            <.form for={@entry_form} id="quick-wheel-entry-form" phx-change="update_entries">
-              <.input
-                field={@entry_form[:entries]}
-                type="textarea"
-                label="Entries (one per line)"
-                rows="8"
-                placeholder="Movie night"
-              />
-            </.form>
 
             <.wheel_volume id="quick-wheel-volume" />
 
