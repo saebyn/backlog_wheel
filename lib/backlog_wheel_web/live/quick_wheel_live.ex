@@ -1,6 +1,8 @@
 defmodule BacklogWheelWeb.QuickWheelLive do
   use BacklogWheelWeb, :live_view
 
+  alias BacklogWheel.QuickWheels
+
   @wheel_colors [
     "#f97316",
     "#7c3aed",
@@ -92,13 +94,37 @@ defmodule BacklogWheelWeb.QuickWheelLive do
 
           <aside class="flex flex-col gap-4 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl">
             <.header>
-              Quick Wheel
+              {if @wheel.preset, do: @title, else: "Quick Wheel"}
               <:subtitle>Spin any free-form list without touching games, votes, or Twitch.</:subtitle>
             </.header>
 
             <.form for={@title_form} id="quick-wheel-title-form" phx-change="update_title">
               <.input field={@title_form[:title]} label="Wheel title" />
             </.form>
+
+            <button :if={!@wheel.preset} class="btn" phx-click="create_preset">Save as preset</button>
+            <button :if={@wheel.preset} class="btn" disabled={!@dirty} phx-click="save_preset">
+              Save changes
+            </button>
+            <div
+              id="quick-wheel-navigation"
+              phx-hook="QuickWheelNavigation"
+              data-dirty={to_string(@dirty and @wheel.preset)}
+            >
+              <a :if={@wheel.preset} href={~p"/quick-wheel"} class="link">Current Quick Wheel</a>
+              <h2 :if={@presets != []} class="font-bold">Saved wheels</h2>
+              <div :for={preset <- @presets} class="flex items-center gap-2">
+                <a href={~p"/quick-wheel/presets/#{preset.id}"} class="link">{preset.title}</a>
+                <a
+                  href={~p"/quick-wheel/presets/#{preset.id}"}
+                  target="_blank"
+                  rel="noopener"
+                  aria-label={"Open #{preset.title} in a new tab"}
+                >
+                  <.icon name="hero-arrow-top-right-on-square" class="size-4" />
+                </a>
+              </div>
+            </div>
 
             <.form
               for={@entry_form}
@@ -235,13 +261,29 @@ defmodule BacklogWheelWeb.QuickWheelLive do
   end
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
+    user_id = socket.assigns.current_user.id
+
+    wheel =
+      case params do
+        %{"id" => id} -> QuickWheels.preset!(user_id, id)
+        _ -> QuickWheels.current(user_id)
+      end
+
+    entries =
+      wheel.entries
+      |> Enum.with_index(1)
+      |> Enum.map(fn {title, id} -> %{title: title, id: id} end)
+
     {:ok,
      socket
      |> assign(:page_title, "Quick Wheel")
-     |> assign(:title, "Quick Wheel")
-     |> assign(:entries, [])
-     |> assign(:next_entry_id, 1)
+     |> assign(:wheel, wheel)
+     |> assign(:dirty, false)
+     |> assign(:presets, QuickWheels.presets(user_id))
+     |> assign(:title, wheel.title)
+     |> assign(:entries, with_wheel_geometry(entries))
+     |> assign(:next_entry_id, length(entries) + 1)
      |> assign(:selected_entry, nil)
      |> assign(:pending_entry, nil)
      |> assign(:pending_spin_id, nil)
@@ -252,17 +294,29 @@ defmodule BacklogWheelWeb.QuickWheelLive do
   end
 
   @impl true
+  def handle_event("create_preset", _, %{assigns: %{wheel: %{preset: false}}} = socket) do
+    %{wheel: wheel, title: title} = socket.assigns
+    QuickWheels.create_preset(wheel.user_id, title, titles(socket))
+    {:noreply, assign(socket, :presets, QuickWheels.presets(wheel.user_id))}
+  end
+
+  def handle_event("save_preset", _, %{assigns: %{wheel: %{preset: true}}} = socket) do
+    socket = persist(socket)
+    {:noreply, assign(socket, :presets, QuickWheels.presets(socket.assigns.wheel.user_id))}
+  end
+
   def handle_event("update_title", %{"quick_wheel" => %{"title" => title}}, socket) do
     title = title |> String.trim() |> blank_to_default("Quick Wheel")
 
     {:noreply,
      socket
      |> assign(:title, title)
-     |> refresh_forms()}
+     |> refresh_forms()
+     |> edited()}
   end
 
   def handle_event("add_entry", %{"entry" => %{"title" => title}}, socket) do
-    {:noreply, add_entry(socket, title, focus_entry_input?: true)}
+    {:noreply, socket |> add_entry(title, focus_entry_input?: true) |> edited()}
   end
 
   def handle_event("paste_entries", %{"paste" => %{"entries" => pasted_entries}}, socket) do
@@ -271,7 +325,7 @@ defmodule BacklogWheelWeb.QuickWheelLive do
       |> split_entries()
       |> Enum.reduce(socket, &add_entry(&2, &1))
 
-    {:noreply, refresh_forms(socket)}
+    {:noreply, socket |> refresh_forms() |> edited()}
   end
 
   def handle_event("update_entry", %{"entry" => %{"id" => id, "title" => title}}, socket) do
@@ -288,7 +342,8 @@ defmodule BacklogWheelWeb.QuickWheelLive do
      socket
      |> assign(:entries, with_wheel_geometry(entries))
      |> assign(:selected_entry, nil)
-     |> refresh_entry_count()}
+     |> refresh_entry_count()
+     |> edited()}
   end
 
   def handle_event("remove_entry", %{"id" => id}, socket) do
@@ -298,7 +353,8 @@ defmodule BacklogWheelWeb.QuickWheelLive do
      socket
      |> assign(:entries, with_wheel_geometry(entries))
      |> assign(:selected_entry, nil)
-     |> refresh_entry_count()}
+     |> refresh_entry_count()
+     |> edited()}
   end
 
   def handle_event("spin", _params, %{assigns: %{entries: []}} = socket) do
@@ -355,6 +411,25 @@ defmodule BacklogWheelWeb.QuickWheelLive do
 
   def handle_event("dismiss_winner", _params, socket) do
     {:noreply, assign(socket, :selected_entry, nil)}
+  end
+
+  defp titles(socket), do: Enum.map(socket.assigns.entries, & &1.title)
+
+  defp edited(socket) do
+    wheel = socket.assigns.wheel
+    dirty = socket.assigns.title != wheel.title or titles(socket) != wheel.entries
+    socket = assign(socket, :dirty, dirty)
+    if dirty and !wheel.preset, do: persist(socket), else: socket
+  end
+
+  defp persist(socket) do
+    case QuickWheels.save(socket.assigns.wheel, socket.assigns.title, titles(socket)) do
+      {:ok, wheel} ->
+        assign(socket, wheel: wheel, dirty: false)
+
+      :stale ->
+        put_flash(socket, :error, "Another tab changed this wheel. Copy your edits and reload.")
+    end
   end
 
   defp add_entry(socket, title, opts \\ []) do
