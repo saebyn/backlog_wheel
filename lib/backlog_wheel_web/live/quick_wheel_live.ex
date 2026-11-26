@@ -93,6 +93,16 @@ defmodule BacklogWheelWeb.QuickWheelLive do
           </div>
 
           <aside class="flex flex-col gap-4 rounded-[2rem] border border-base-300 bg-base-100 p-5 shadow-xl">
+            <.button
+              id="quick-wheel-spin-button"
+              variant="primary"
+              phx-click="spin"
+              disabled={@entry_count == 0 || @spinning?}
+              class="btn btn-primary btn-lg w-full"
+            >
+              {if @spinning?, do: "Spinning...", else: "Spin Quick Wheel"}
+            </.button>
+
             <.header>
               {if @wheel.preset, do: @title, else: "Quick Wheel"}
               <:subtitle>Spin any free-form list without touching games, votes, or Twitch.</:subtitle>
@@ -126,44 +136,15 @@ defmodule BacklogWheelWeb.QuickWheelLive do
               </div>
             </div>
 
-            <.form
-              for={@entry_form}
-              id="quick-wheel-entry-form"
-              phx-submit="add_entry"
-              phx-hook="QuickWheelEntryForm"
-            >
+            <.form for={@entry_form} id="quick-wheel-entry-form" phx-change="update_entries">
               <.input
-                field={@entry_form[:title]}
-                label="Add an entry"
-                placeholder="Movie night, lunch spot, side quest..."
-              />
-              <.button id="quick-wheel-add-entry" variant="primary" class="btn btn-primary w-full">
-                Add Entry
-              </.button>
-            </.form>
-
-            <.form for={@paste_form} id="quick-wheel-paste-form" phx-submit="paste_entries">
-              <.input
-                field={@paste_form[:entries]}
+                field={@entry_form[:entries]}
                 type="textarea"
-                label="Paste multiple entries"
-                rows="5"
-                placeholder={paste_entries_placeholder()}
+                label="Entries (one per line)"
+                rows="8"
+                placeholder="Movie night"
               />
-              <.button id="quick-wheel-paste-entries" class="btn w-full">
-                Add Pasted Entries
-              </.button>
             </.form>
-
-            <.button
-              id="quick-wheel-spin-button"
-              variant="primary"
-              phx-click="spin"
-              disabled={@entry_count == 0 || @spinning?}
-              class="btn btn-primary btn-lg w-full"
-            >
-              {if @spinning?, do: "Spinning...", else: "Spin Quick Wheel"}
-            </.button>
 
             <.wheel_volume id="quick-wheel-volume" />
 
@@ -175,59 +156,6 @@ defmodule BacklogWheelWeb.QuickWheelLive do
               <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Winner</p>
               <h2 class="mt-3 text-3xl font-black tracking-tight">{@selected_entry.title}</h2>
             </div>
-
-            <section id="quick-wheel-entries-section" class="min-h-0 flex-1 space-y-3">
-              <div class="flex items-center justify-between gap-3">
-                <h2 class="text-xl font-bold">Entries</h2>
-                <span class="badge badge-ghost">{@entry_count}</span>
-              </div>
-              <p
-                :if={@entries == []}
-                id="quick-wheel-empty"
-                class="rounded-xl bg-base-200 p-4 text-base-content/70"
-              >
-                Add entries to start spinning.
-              </p>
-              <div id="quick-wheel-entries" class="space-y-2">
-                <div
-                  :for={entry <- @entries}
-                  id={"quick-wheel-entry-#{entry.id}"}
-                  class="rounded-xl border border-base-300 bg-base-200 p-3"
-                >
-                  <form
-                    id={"quick-wheel-edit-entry-form-#{entry.id}"}
-                    phx-change="update_entry"
-                    class="flex items-center gap-2"
-                  >
-                    <.input
-                      type="hidden"
-                      id={"quick-wheel-entry-id-#{entry.id}"}
-                      name="entry[id]"
-                      value={entry.id}
-                    />
-                    <div class="flex-1">
-                      <.input
-                        id={"quick-wheel-entry-title-#{entry.id}"}
-                        name="entry[title]"
-                        value={entry.title}
-                        class="input w-full"
-                        aria-label="Entry title"
-                      />
-                    </div>
-                    <button
-                      id={"quick-wheel-remove-entry-#{entry.id}"}
-                      type="button"
-                      phx-click="remove_entry"
-                      phx-value-id={entry.id}
-                      class="btn btn-circle btn-ghost"
-                      aria-label="Remove entry"
-                    >
-                      <.icon name="hero-x-mark" class="size-5" />
-                    </button>
-                  </form>
-                </div>
-              </div>
-            </section>
           </aside>
         </div>
 
@@ -270,11 +198,6 @@ defmodule BacklogWheelWeb.QuickWheelLive do
         _ -> QuickWheels.current(user_id)
       end
 
-    entries =
-      wheel.entries
-      |> Enum.with_index(1)
-      |> Enum.map(fn {title, id} -> %{title: title, id: id} end)
-
     {:ok,
      socket
      |> assign(:page_title, "Quick Wheel")
@@ -282,15 +205,14 @@ defmodule BacklogWheelWeb.QuickWheelLive do
      |> assign(:dirty, false)
      |> assign(:presets, QuickWheels.presets(user_id))
      |> assign(:title, wheel.title)
-     |> assign(:entries, with_wheel_geometry(entries))
-     |> assign(:next_entry_id, length(entries) + 1)
+     |> assign_entries(wheel.entries)
      |> assign(:selected_entry, nil)
      |> assign(:pending_entry, nil)
      |> assign(:pending_spin_id, nil)
      |> assign(:initial_rotation, 0)
      |> assign(:spinning?, false)
-     |> refresh_forms()
-     |> refresh_entry_count()}
+     |> assign_title_form()
+     |> assign_entry_form(Enum.join(wheel.entries, "\n"))}
   end
 
   @impl true
@@ -311,49 +233,16 @@ defmodule BacklogWheelWeb.QuickWheelLive do
     {:noreply,
      socket
      |> assign(:title, title)
-     |> refresh_forms()
+     |> assign_title_form()
      |> edited()}
   end
 
-  def handle_event("add_entry", %{"entry" => %{"title" => title}}, socket) do
-    {:noreply, socket |> add_entry(title, focus_entry_input?: true) |> edited()}
-  end
-
-  def handle_event("paste_entries", %{"paste" => %{"entries" => pasted_entries}}, socket) do
-    socket =
-      pasted_entries
-      |> split_entries()
-      |> Enum.reduce(socket, &add_entry(&2, &1))
-
-    {:noreply, socket |> refresh_forms() |> edited()}
-  end
-
-  def handle_event("update_entry", %{"entry" => %{"id" => id, "title" => title}}, socket) do
-    entries =
-      Enum.map(socket.assigns.entries, fn entry ->
-        if Integer.to_string(entry.id) == id do
-          %{entry | title: String.trim(title)}
-        else
-          entry
-        end
-      end)
-
+  def handle_event("update_entries", %{"entry" => %{"entries" => value}}, socket) do
     {:noreply,
      socket
-     |> assign(:entries, with_wheel_geometry(entries))
+     |> assign_entry_form(value)
+     |> assign_entries(split_entries(value))
      |> assign(:selected_entry, nil)
-     |> refresh_entry_count()
-     |> edited()}
-  end
-
-  def handle_event("remove_entry", %{"id" => id}, socket) do
-    entries = Enum.reject(socket.assigns.entries, &(Integer.to_string(&1.id) == id))
-
-    {:noreply,
-     socket
-     |> assign(:entries, with_wheel_geometry(entries))
-     |> assign(:selected_entry, nil)
-     |> refresh_entry_count()
      |> edited()}
   end
 
@@ -432,44 +321,14 @@ defmodule BacklogWheelWeb.QuickWheelLive do
     end
   end
 
-  defp add_entry(socket, title, opts \\ []) do
-    title = String.trim(title)
+  defp assign_title_form(socket),
+    do: assign(socket, :title_form, to_form(%{"title" => socket.assigns.title}, as: :quick_wheel))
 
-    if title == "" do
-      refresh_forms(socket)
-    else
-      entry = %{id: socket.assigns.next_entry_id, title: title}
+  defp assign_entry_form(socket, value),
+    do: assign(socket, :entry_form, to_form(%{"entries" => value}, as: :entry))
 
-      socket
-      |> assign(:entries, with_wheel_geometry(socket.assigns.entries ++ [entry]))
-      |> assign(:next_entry_id, socket.assigns.next_entry_id + 1)
-      |> assign(:selected_entry, nil)
-      |> refresh_forms()
-      |> refresh_entry_count()
-      |> maybe_focus_entry_input(opts)
-    end
-  end
-
-  defp maybe_focus_entry_input(socket, opts) do
-    if Keyword.get(opts, :focus_entry_input?, false) do
-      push_event(socket, "quick-wheel:entry-added", %{})
-    else
-      socket
-    end
-  end
-
-  defp refresh_forms(socket) do
-    socket
-    |> assign(:title_form, to_form(%{"title" => socket.assigns.title}, as: :quick_wheel))
-    |> assign(:entry_form, to_form(%{"title" => ""}, as: :entry))
-    |> assign(:paste_form, to_form(%{"entries" => ""}, as: :paste))
-  end
-
-  defp refresh_entry_count(socket),
-    do: assign(socket, :entry_count, length(socket.assigns.entries))
-
-  defp paste_entries_placeholder do
-    Enum.join(["One entry per line", "Another entry", "A third option"], "\n")
+  defp assign_entries(socket, titles) do
+    assign(socket, entries: with_wheel_geometry(titles), entry_count: length(titles))
   end
 
   defp split_entries(value) do
@@ -484,15 +343,18 @@ defmodule BacklogWheelWeb.QuickWheelLive do
 
   defp with_wheel_geometry([]), do: []
 
-  defp with_wheel_geometry(entries) do
-    segment_size = 360 / length(entries)
+  defp with_wheel_geometry(titles) do
+    segment_size = 360 / length(titles)
 
-    entries
-    |> Enum.with_index()
-    |> Enum.map(fn {entry, index} ->
-      entry
-      |> Map.put(:start_degrees, index * segment_size)
-      |> Map.put(:end_degrees, (index + 1) * segment_size)
+    titles
+    |> Enum.with_index(1)
+    |> Enum.map(fn {title, id} ->
+      %{
+        id: id,
+        title: title,
+        start_degrees: (id - 1) * segment_size,
+        end_degrees: id * segment_size
+      }
     end)
   end
 
