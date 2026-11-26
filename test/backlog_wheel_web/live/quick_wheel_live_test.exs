@@ -5,14 +5,18 @@ defmodule BacklogWheelWeb.QuickWheelLiveTest do
 
   test "current wheel autosaves and presets retain edits only after explicit save", %{conn: conn} do
     {:ok, current, _} = live(conn, ~p"/quick-wheel")
-    current |> form("#quick-wheel-paste-form", paste: %{entries: "Alpha\nBeta"}) |> render_submit()
+
+    current
+    |> form("#quick-wheel-paste-form", paste: %{entries: "Alpha\nBeta"})
+    |> render_submit()
+
     current |> element("button", "Save as preset") |> render_click()
     [preset] = BacklogWheel.QuickWheels.presets(Plug.Conn.get_session(conn, :user_id))
     path = ~p"/quick-wheel/presets/#{preset.id}"
     {:ok, editor, _} = live(conn, path)
     editor |> element("#quick-wheel-remove-entry-1") |> render_click()
     editor |> element("#quick-wheel-spin-button") |> render_click()
-    assert_push_event(editor, "roulette:spin", %{segments: [_]})
+    assert_push_event(editor, "roulette:spin", %{"segments" => [_]})
 
     {:ok, before_save, _} = live(conn, path)
     assert has_element?(before_save, "#quick-wheel-entry-count", "2")

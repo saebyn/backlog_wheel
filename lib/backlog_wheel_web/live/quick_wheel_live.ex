@@ -106,12 +106,21 @@ defmodule BacklogWheelWeb.QuickWheelLive do
             <button :if={@wheel.preset} class="btn" disabled={!@dirty} phx-click="save_preset">
               Save changes
             </button>
-            <div id="quick-wheel-navigation" phx-hook="QuickWheelNavigation" data-dirty={to_string(@dirty and @wheel.preset)}>
+            <div
+              id="quick-wheel-navigation"
+              phx-hook="QuickWheelNavigation"
+              data-dirty={to_string(@dirty and @wheel.preset)}
+            >
               <a :if={@wheel.preset} href={~p"/quick-wheel"} class="link">Current Quick Wheel</a>
               <h2 :if={@presets != []} class="font-bold">Saved wheels</h2>
               <div :for={preset <- @presets} class="flex items-center gap-2">
                 <a href={~p"/quick-wheel/presets/#{preset.id}"} class="link">{preset.title}</a>
-                <a href={~p"/quick-wheel/presets/#{preset.id}"} target="_blank" rel="noopener" aria-label={"Open #{preset.title} in a new tab"}>
+                <a
+                  href={~p"/quick-wheel/presets/#{preset.id}"}
+                  target="_blank"
+                  rel="noopener"
+                  aria-label={"Open #{preset.title} in a new tab"}
+                >
                   <.icon name="hero-arrow-top-right-on-square" class="size-4" />
                 </a>
               </div>
@@ -266,7 +275,6 @@ defmodule BacklogWheelWeb.QuickWheelLive do
       |> Enum.with_index(1)
       |> Enum.map(fn {title, id} -> %{title: title, id: id} end)
 
-
     {:ok,
      socket
      |> assign(:page_title, "Quick Wheel")
@@ -416,8 +424,11 @@ defmodule BacklogWheelWeb.QuickWheelLive do
 
   defp persist(socket) do
     case QuickWheels.save(socket.assigns.wheel, socket.assigns.title, titles(socket)) do
-      {:ok, wheel} -> assign(socket, wheel: wheel, dirty: false)
-      :stale -> put_flash(socket, :error, "Another tab changed this wheel. Copy your edits and reload.")
+      {:ok, wheel} ->
+        assign(socket, wheel: wheel, dirty: false)
+
+      :stale ->
+        put_flash(socket, :error, "Another tab changed this wheel. Copy your edits and reload.")
     end
   end
 
